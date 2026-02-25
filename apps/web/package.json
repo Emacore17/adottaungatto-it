@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@adottaungatto/config": "workspace:*",
+    "@adottaungatto/sdk": "workspace:*",
+    "@adottaungatto/types": "workspace:*",
     "@adottaungatto/ui": "workspace:*",
     "framer-motion": "^12.5.0",
     "next": "^15.2.0",

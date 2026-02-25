@@ -13,9 +13,18 @@
     }
   },
   "files": {
-    "ignore": ["**/.next/**", "**/dist/**", "**/coverage/**", "**/node_modules/**"]
+    "ignore": [
+      "**/.next/**",
+      "**/dist/**",
+      "**/coverage/**",
+      "**/node_modules/**",
+      "**/data/geography/istat-current.json"
+    ]
   },
   "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
     "formatter": {
       "quoteStyle": "single",
       "trailingCommas": "all"

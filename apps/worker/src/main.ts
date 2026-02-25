@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { config as loadDotEnv } from 'dotenv';
 import Redis from 'ioredis';
+import { createWorkerMinioClient, pingWorkerMinioBucket } from './minio-client';
 import { WorkerModule } from './worker.module';
 
 const bootstrap = async () => {
@@ -29,6 +30,18 @@ const bootstrap = async () => {
     logger.warn(`Worker started without Redis connection (${(error as Error).message}).`);
   } finally {
     await redis.disconnect();
+  }
+
+  const minioClient = createWorkerMinioClient(env);
+  try {
+    await pingWorkerMinioBucket(minioClient, env.MINIO_BUCKET_LISTING_ORIGINALS);
+    logger.log(
+      `Worker "${env.WORKER_NAME}" connected to MinIO bucket ${env.MINIO_BUCKET_LISTING_ORIGINALS}`,
+    );
+  } catch (error) {
+    logger.warn(`Worker started without MinIO bucket check (${(error as Error).message}).`);
+  } finally {
+    minioClient.destroy();
   }
 
   logger.log(`Worker "${env.WORKER_NAME}" is up`);

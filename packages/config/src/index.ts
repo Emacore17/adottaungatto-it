@@ -12,12 +12,36 @@ const webSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_WEB_URL: z.string().url('NEXT_PUBLIC_WEB_URL must be a valid URL'),
   NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
+  KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
+  KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
+  KEYCLOAK_CLIENT_ID_WEB: z
+    .string()
+    .min(1, 'KEYCLOAK_CLIENT_ID_WEB is required')
+    .optional()
+    .default('adottaungatto-web'),
+  WEB_SESSION_COOKIE_NAME: z
+    .string()
+    .min(1, 'WEB_SESSION_COOKIE_NAME is required')
+    .optional()
+    .default('adottaungatto_web_token'),
 });
 
 const adminSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_ADMIN_URL: z.string().url('NEXT_PUBLIC_ADMIN_URL must be a valid URL'),
   NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
+  KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
+  KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
+  KEYCLOAK_CLIENT_ID_ADMIN: z
+    .string()
+    .min(1, 'KEYCLOAK_CLIENT_ID_ADMIN is required')
+    .optional()
+    .default('adottaungatto-admin'),
+  ADMIN_SESSION_COOKIE_NAME: z
+    .string()
+    .min(1, 'ADMIN_SESSION_COOKIE_NAME is required')
+    .optional()
+    .default('adottaungatto_admin_token'),
 });
 
 const apiSchema = baseSchema.extend({
@@ -29,14 +53,81 @@ const apiSchema = baseSchema.extend({
   MINIO_ENDPOINT: z.string().url('MINIO_ENDPOINT must be a valid URL'),
   MINIO_ACCESS_KEY: z.string().min(1, 'MINIO_ACCESS_KEY is required'),
   MINIO_SECRET_KEY: z.string().min(1, 'MINIO_SECRET_KEY is required'),
+  MINIO_BUCKET_LISTING_ORIGINALS: z
+    .string()
+    .min(1, 'MINIO_BUCKET_LISTING_ORIGINALS is required')
+    .optional()
+    .default('listing-originals'),
+  MINIO_BUCKET_LISTING_THUMBS: z
+    .string()
+    .min(1, 'MINIO_BUCKET_LISTING_THUMBS is required')
+    .optional()
+    .default('listing-thumbs'),
+  MEDIA_UPLOAD_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .optional()
+    .default(10 * 1024 * 1024),
+  MEDIA_ALLOWED_MIME_TYPES: z
+    .string()
+    .optional()
+    .default('image/jpeg,image/png,image/webp')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => item.length > 0),
+    ),
   KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
   KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
+  KEYCLOAK_CLIENT_ID_WEB: z
+    .string()
+    .min(1, 'KEYCLOAK_CLIENT_ID_WEB is required')
+    .optional()
+    .default('adottaungatto-web'),
+  KEYCLOAK_CLIENT_ID_ADMIN: z
+    .string()
+    .min(1, 'KEYCLOAK_CLIENT_ID_ADMIN is required')
+    .optional()
+    .default('adottaungatto-admin'),
+  KEYCLOAK_CLIENT_ID_MOBILE: z
+    .string()
+    .min(1, 'KEYCLOAK_CLIENT_ID_MOBILE is required')
+    .optional()
+    .default('adottaungatto-mobile'),
+  AUTH_DEV_HEADERS_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
 });
 
 const workerSchema = baseSchema.extend({
   WORKER_NAME: z.string().min(1, 'WORKER_NAME is required'),
   REDIS_URL: z.string().url('REDIS_URL must be a valid URL'),
   OPENSEARCH_URL: z.string().url('OPENSEARCH_URL must be a valid URL'),
+  MINIO_ENDPOINT: z
+    .string()
+    .url('MINIO_ENDPOINT must be a valid URL')
+    .optional()
+    .default('http://localhost:9000'),
+  MINIO_ACCESS_KEY: z.string().min(1, 'MINIO_ACCESS_KEY is required').optional().default('minio'),
+  MINIO_SECRET_KEY: z
+    .string()
+    .min(1, 'MINIO_SECRET_KEY is required')
+    .optional()
+    .default('minio123'),
+  MINIO_BUCKET_LISTING_ORIGINALS: z
+    .string()
+    .min(1, 'MINIO_BUCKET_LISTING_ORIGINALS is required')
+    .optional()
+    .default('listing-originals'),
+  MINIO_BUCKET_LISTING_THUMBS: z
+    .string()
+    .min(1, 'MINIO_BUCKET_LISTING_THUMBS is required')
+    .optional()
+    .default('listing-thumbs'),
 });
 
 const formatZodError = (scope: string, issues: z.ZodIssue[]) => {

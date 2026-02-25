@@ -272,24 +272,27 @@ M0 completato
 - [ ] `GET /v1/geography/regions`
 - [ ] `GET /v1/geography/provinces?regionId=...`
 - [ ] `GET /v1/geography/comuni?provinceId=...`
-- [ ] `GET /v1/geography/search?q=...` (autocomplete base)
+- [ ] `GET /v1/geography/search?q=...` (suggerimenti semantici)
+- [ ] payload `locationIntent` nei suggerimenti (`region|province|comune|comune_plus_province|italy`)
 - [ ] test integration endpoint
 
 **Done quando**
-- UI può costruire selettore cascata regione/provincia/comune
+- UI può costruire selettore search-first con intent geografico esplicito
 
 ---
 
-### M1.7 — UI selezione luogo (componente riusabile)
+### M1.7 — UI location search (componente riusabile)
 - [ ] componente `LocationSelector` in `packages/ui` o `web` shared
-- [ ] select cascata regione → provincia → comune
+- [ ] input testuale con suggerimenti
+- [ ] disambiguazione tipo area (`Regione`, `Provincia`, `Comune`, `Comune + provincia`, `Italia`)
+- [ ] comuni con sigla provincia in etichetta (es. `Chieri (TO)`)
 - [ ] stato loading/skeleton
-- [ ] reset coerente sui cambi di parent
-- [ ] gestione errori fetch
+- [ ] gestione tastiera (`ArrowUp/Down`, `Enter`, `Esc`)
+- [ ] gestione errori fetch + retry
 
 **Done quando**
 - componente integrato in pagina demo `web`
-- selezione persistita in form state
+- selezione persistita in form state come `LocationIntent`
 
 ---
 
@@ -306,7 +309,7 @@ M0 completato
 ## Checkpoint demo M1
 - [ ] login utente/admin funzionante
 - [ ] API geography risponde
-- [ ] selezione regione/provincia/comune funziona in UI demo
+- [ ] selezione luogo search-first funziona in UI demo con tipo area chiaro
 
 ---
 
@@ -386,7 +389,7 @@ M1 completato
 ### M2.6 — Form creazione annuncio (web)
 - [ ] pagina “Nuovo annuncio”
 - [ ] form RHF + Zod
-- [ ] integrazione `LocationSelector`
+- [ ] integrazione `LocationSelector` search-first (`LocationIntent`)
 - [ ] upload immagini (drag&drop o picker)
 - [ ] validazioni UX (errori inline)
 - [ ] submit con stato loading/success/error
@@ -480,6 +483,7 @@ M2 completato
 
 ### M3.1 — Schema/contratto ricerca (backend)
 - [ ] definire DTO query ricerca (`SearchListingsQueryDto`)
+- [ ] integrare `LocationIntent` nel contratto query
 - [ ] filtri MVP: luogo, tipo, prezzo, età, sesso, razza, sort
 - [ ] risposta paginata standard
 - [ ] metadata fallback (`fallbackApplied`, `fallbackLevel`, `fallbackReason`)
@@ -547,7 +551,7 @@ Implementare la sequenza:
 ---
 
 ### M3.6 — UI ricerca/lista con filtri (web)
-- [ ] barra ricerca luogo (Italia/regione/provincia/comune)
+- [ ] barra ricerca luogo search-first basata su suggerimenti semantici
 - [ ] filtri sidebar/drawer mobile
 - [ ] chips filtri attivi
 - [ ] ordinamento

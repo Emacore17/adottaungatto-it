@@ -80,7 +80,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.1
     container_name: adottaungatto-keycloak
-    command: start-dev --http-port=8080
+    command: start-dev --http-port=8080 --import-realm
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -91,6 +91,7 @@ services:
       - '${KEYCLOAK_PORT:-8080}:8080'
     volumes:
       - keycloak-data:/opt/keycloak/data
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
       test:
         [

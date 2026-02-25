@@ -140,6 +140,7 @@ L’interfaccia deve essere **moderna, animata, responsive, premium**, con focus
 - **Accessibilità minima**: focus states, contrasto, label, tastiera
 - **Prestazioni percepite**: skeleton, lazy loading, immagini ottimizzate
 - **Feedback visivo** per filtri attivi, fallback geografico, moderazione stato annuncio
+- **Selettore luogo search-first** con suggerimenti semantici chiari (`Regione`, `Provincia`, `Comune`, `Comune + provincia`, `Italia`)
 
 ### Linee guida UX (vincolanti)
 - Mai mostrare “0 risultati” senza alternative/fallback
@@ -237,6 +238,7 @@ UI obbligatoria:
 - Filtri basati su struttura amministrativa italiana
 - Relazioni gerarchiche corrette (comune → provincia → regione)
 - Seed locale con dataset completo o subset dimostrativo + script import
+- Input luogo testuale intelligente con disambiguazione e contesto (es. `Chieri (TO)`, `Torino e provincia (TO)`)
 
 ### v1
 - Sync aggiornamenti periodici dataset

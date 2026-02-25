@@ -1,5 +1,5 @@
-import { AdminHomeContent } from './home-content';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <AdminHomeContent />;
+  redirect('/moderation');
 }

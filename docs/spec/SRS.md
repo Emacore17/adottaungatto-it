@@ -174,6 +174,7 @@ Ruoli futuri previsti:
 - Devono essere presenti skeleton/loading states nelle pagine core
 - Le CTA principali devono essere chiaramente visibili
 - Il dettaglio annuncio su mobile deve avere CTA contatto facilmente accessibile
+- Il selettore luogo deve rendere esplicito il tipo area selezionata (`Regione`, `Provincia`, `Comune`, `Comune + provincia`, `Italia`)
 
 ## 6.2 Interfaccia API (backend)
 - REST API versionata (`/v1`)
@@ -302,6 +303,20 @@ Ogni annuncio deve essere associato ad almeno un comune e, implicitamente, a pro
 ### FR-GEO-005 — Predisposizione aggiornamento dataset
 Il sistema deve prevedere import/update del dataset geografico tramite script/job ripetibile.
 
+### FR-GEO-006 — Location intent semantico (CR-001)
+Il sistema deve supportare un contratto unico `LocationIntent` per UI e API, derivato da input testuale intelligente.
+
+`LocationIntent` minimo:
+- `scope`: `italy | region | province | comune | comune_plus_province`
+- `regionId` opzionale
+- `provinceId` opzionale
+- `comuneId` opzionale
+- `label` e `secondaryLabel` per UI
+
+Il sistema deve proporre suggerimenti disambiguati per query ambigue (esempio `Torino`):
+- `Torino (TO) - Comune`
+- `Torino e provincia (TO)`
+
 ---
 
 ## 7.5 Ricerca annunci e filtri
@@ -345,6 +360,10 @@ Quando il fallback viene applicato, la UI deve comunicarlo esplicitamente all’
 
 ### FR-SEARCH-007 — Metadata fallback API
 L’API di ricerca deve restituire metadata che indichino se il fallback è stato applicato e a quale livello.
+
+### FR-SEARCH-008 — Ricerca guidata da LocationIntent (CR-001)
+L'API ricerca annunci deve accettare `LocationIntent` come input canonico per il filtro geografico.
+La scelta dell'utente (esempio `Comune` vs `Provincia`) deve essere preservata e usata come punto di partenza del fallback.
 
 ---
 
@@ -626,7 +645,7 @@ Stati minimi previsti:
 - `GET /v1/geography/regions`
 - `GET /v1/geography/provinces`
 - `GET /v1/geography/comuni`
-- `GET /v1/geography/search`
+- `GET /v1/geography/search` (suggerimenti semantici con payload `locationIntent`)
 
 ### Listings
 - `POST /v1/listings`
