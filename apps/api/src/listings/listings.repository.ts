@@ -6,6 +6,7 @@ import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
 import type { CreateListingMediaInput, ListingMediaRecord } from './models/listing-media.model';
 import type {
+  ContactListingInput,
   CreateListingInput,
   ListingRecord,
   ListingStatus,
@@ -29,6 +30,14 @@ export interface PublicListingDetailRecord extends PublicListingSummaryRecord {
   contactPhone: string | null;
   contactEmail: string | null;
   media: PublicListingMediaRecord[];
+}
+
+export interface PublishedListingContactRecord {
+  id: string;
+  title: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
 }
 
 type OwnerRow = {
@@ -118,10 +127,35 @@ type SearchPublishedListingRow = PublishedListingRow & {
   totalCount: string;
 };
 
+type PublishedListingContactRow = {
+  id: string;
+  title: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+};
+
+type CountRow = {
+  totalCount: string;
+};
+
+type ListingContactRequestRow = {
+  id: string;
+  listingId: string;
+  createdAt: string;
+};
+
 export interface SearchPublishedResultRecord {
   items: PublicListingSummaryRecord[];
   total: number;
 }
+
+export type CreateListingContactRequestInput = ContactListingInput & {
+  messageHash: string;
+  senderIp: string | null;
+  userAgent: string | null;
+  metadata: Record<string, unknown>;
+};
 
 type SearchIndexDocumentRow = {
   id: string;
@@ -143,6 +177,8 @@ type SearchIndexDocumentRow = {
   comuneName: string;
   comuneCentroidLat: string | null;
   comuneCentroidLng: string | null;
+  isSponsored: boolean;
+  promotionWeight: string;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -167,6 +203,8 @@ export interface SearchIndexDocumentRecord {
   provinceSigla: string;
   comuneName: string;
   location: { lat: number; lon: number } | null;
+  isSponsored: boolean;
+  promotionWeight: number;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -220,6 +258,26 @@ export interface LocationCentroid {
 
 @Injectable()
 export class ListingsRepository implements OnModuleDestroy {
+  private readonly sponsoredPromotionCap = 1.2;
+
+  private readonly activePromotionJoinSql = `
+    LEFT JOIN LATERAL (
+      SELECT
+        TRUE AS "isSponsored",
+        p.promotion_weight::text AS "promotionWeight"
+      FROM listing_promotions lp
+      INNER JOIN plans p
+        ON p.id = lp.plan_id
+      WHERE lp.listing_id = l.id
+        AND lp.status = 'active'
+        AND lp.starts_at <= NOW()
+        AND lp.ends_at > NOW()
+        AND p.is_active = TRUE
+      ORDER BY p.promotion_weight DESC, lp.ends_at DESC, lp.id DESC
+      LIMIT 1
+    ) active_promotion ON TRUE
+  `;
+
   private readonly env = loadApiEnv();
   private readonly pool = new Pool({
     connectionString: this.env.DATABASE_URL,
@@ -782,6 +840,22 @@ export class ListingsRepository implements OnModuleDestroy {
     }
 
     const distanceOrderSql = this.buildDistanceOrderSql(referencePoint, addValue);
+    const sponsoredPriorityOrderSql = `
+      CASE
+        WHEN active_promotion."isSponsored" IS TRUE THEN 1
+        ELSE 0
+      END
+    `;
+    const sponsoredScoreOrderSql = `
+      CASE
+        WHEN active_promotion."isSponsored" IS TRUE
+        THEN LEAST(
+          COALESCE(active_promotion."promotionWeight"::numeric, 1.000),
+          ${this.sponsoredPromotionCap}
+        )
+        ELSE 1.000
+      END
+    `;
     let orderBySql = 'COALESCE(l.published_at, l.created_at) DESC, l.id DESC';
 
     if (query.sort === 'price_asc') {
@@ -807,6 +881,8 @@ export class ListingsRepository implements OnModuleDestroy {
           WHEN LOWER(l.description) LIKE '%' || ${normalizedQueryPlaceholder} || '%' THEN 2
           ELSE 3
         END ASC,
+        ${sponsoredPriorityOrderSql} DESC,
+        ${sponsoredScoreOrderSql} DESC,
         ${distanceOrderSql ? `${distanceOrderSql} ASC NULLS LAST,` : ''}
         COALESCE(l.published_at, l.created_at) DESC,
         l.id DESC
@@ -814,6 +890,15 @@ export class ListingsRepository implements OnModuleDestroy {
     } else if (query.sort === 'relevance' && distanceOrderSql) {
       orderBySql = `
         ${distanceOrderSql} ASC NULLS LAST,
+        ${sponsoredPriorityOrderSql} DESC,
+        ${sponsoredScoreOrderSql} DESC,
+        COALESCE(l.published_at, l.created_at) DESC,
+        l.id DESC
+      `;
+    } else if (query.sort === 'relevance') {
+      orderBySql = `
+        ${sponsoredPriorityOrderSql} DESC,
+        ${sponsoredScoreOrderSql} DESC,
         COALESCE(l.published_at, l.created_at) DESC,
         l.id DESC
       `;
@@ -886,6 +971,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ORDER BY lm.is_primary DESC, lm.position ASC, lm.created_at ASC
           LIMIT 1
         ) media_preview ON TRUE
+        ${this.activePromotionJoinSql}
         WHERE ${whereClauses.join('\n          AND ')}
         ORDER BY ${orderBySql}
         LIMIT ${limitPlaceholder}::integer
@@ -994,6 +1080,143 @@ export class ListingsRepository implements OnModuleDestroy {
     };
   }
 
+  async findPublishedContactTarget(
+    listingId: string,
+  ): Promise<PublishedListingContactRecord | null> {
+    const result = await this.pool.query<PublishedListingContactRow>(
+      `
+        SELECT
+          l.id::text AS "id",
+          l.title AS "title",
+          l.contact_name AS "contactName",
+          l.contact_phone AS "contactPhone",
+          l.contact_email AS "contactEmail"
+        FROM listings l
+        WHERE l.id = $1::bigint
+          AND l.status = 'published'
+          AND l.deleted_at IS NULL
+        LIMIT 1;
+      `,
+      [listingId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      title: row.title,
+      contactName: row.contactName,
+      contactPhone: row.contactPhone,
+      contactEmail: row.contactEmail,
+    };
+  }
+
+  async countRecentContactRequestsByIp(
+    listingId: string,
+    senderIp: string,
+    fromIso: string,
+  ): Promise<number> {
+    const result = await this.pool.query<CountRow>(
+      `
+        SELECT COUNT(*)::text AS "totalCount"
+        FROM listing_contact_requests
+        WHERE listing_id = $1::bigint
+          AND sender_ip = $2
+          AND created_at >= $3::timestamptz;
+      `,
+      [listingId, senderIp, fromIso],
+    );
+
+    const count = result.rows[0] ? Number.parseInt(result.rows[0].totalCount, 10) : 0;
+    return Number.isFinite(count) ? count : 0;
+  }
+
+  async countRecentDuplicateContactRequests(
+    listingId: string,
+    senderEmail: string,
+    messageHash: string,
+    fromIso: string,
+  ): Promise<number> {
+    const result = await this.pool.query<CountRow>(
+      `
+        SELECT COUNT(*)::text AS "totalCount"
+        FROM listing_contact_requests
+        WHERE listing_id = $1::bigint
+          AND lower(sender_email) = lower($2)
+          AND message_hash = $3
+          AND created_at >= $4::timestamptz;
+      `,
+      [listingId, senderEmail, messageHash, fromIso],
+    );
+
+    const count = result.rows[0] ? Number.parseInt(result.rows[0].totalCount, 10) : 0;
+    return Number.isFinite(count) ? count : 0;
+  }
+
+  async createContactRequest(
+    listingId: string,
+    input: CreateListingContactRequestInput,
+  ): Promise<{ id: string; listingId: string; createdAt: string }> {
+    const result = await this.pool.query<ListingContactRequestRow>(
+      `
+        INSERT INTO listing_contact_requests (
+          listing_id,
+          sender_name,
+          sender_email,
+          sender_phone,
+          message,
+          message_hash,
+          source,
+          sender_ip,
+          user_agent,
+          metadata
+        )
+        VALUES (
+          $1::bigint,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10::jsonb
+        )
+        RETURNING
+          id::text AS "id",
+          listing_id::text AS "listingId",
+          created_at::text AS "createdAt";
+      `,
+      [
+        listingId,
+        input.senderName,
+        input.senderEmail,
+        input.senderPhone,
+        input.message,
+        input.messageHash,
+        input.source,
+        input.senderIp,
+        input.userAgent,
+        JSON.stringify(input.metadata),
+      ],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error('Failed to create listing contact request.');
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listingId,
+      createdAt: row.createdAt,
+    };
+  }
+
   async findPublishedSearchIndexDocumentById(
     listingId: string,
   ): Promise<SearchIndexDocumentRecord | null> {
@@ -1019,6 +1242,8 @@ export class ListingsRepository implements OnModuleDestroy {
           c.name AS "comuneName",
           c.centroid_lat::text AS "comuneCentroidLat",
           c.centroid_lng::text AS "comuneCentroidLng",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored",
+          COALESCE(active_promotion."promotionWeight", '1.000') AS "promotionWeight",
           l.published_at::text AS "publishedAt",
           l.created_at::text AS "createdAt",
           l.updated_at::text AS "updatedAt"
@@ -1029,6 +1254,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ON p.id = l.province_id
         INNER JOIN comuni c
           ON c.id = l.comune_id
+        ${this.activePromotionJoinSql}
         WHERE l.id = $1::bigint
           AND l.status = 'published'
           AND l.deleted_at IS NULL
@@ -1071,6 +1297,8 @@ export class ListingsRepository implements OnModuleDestroy {
           c.name AS "comuneName",
           c.centroid_lat::text AS "comuneCentroidLat",
           c.centroid_lng::text AS "comuneCentroidLng",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored",
+          COALESCE(active_promotion."promotionWeight", '1.000') AS "promotionWeight",
           l.published_at::text AS "publishedAt",
           l.created_at::text AS "createdAt",
           l.updated_at::text AS "updatedAt"
@@ -1081,6 +1309,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ON p.id = l.province_id
         INNER JOIN comuni c
           ON c.id = l.comune_id
+        ${this.activePromotionJoinSql}
         WHERE l.status = 'published'
           AND l.deleted_at IS NULL
         ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
@@ -1677,6 +1906,7 @@ export class ListingsRepository implements OnModuleDestroy {
   private mapSearchIndexDocumentRow(row: SearchIndexDocumentRow): SearchIndexDocumentRecord {
     const lat = row.comuneCentroidLat ? Number.parseFloat(row.comuneCentroidLat) : Number.NaN;
     const lon = row.comuneCentroidLng ? Number.parseFloat(row.comuneCentroidLng) : Number.NaN;
+    const promotionWeight = Number.parseFloat(row.promotionWeight);
 
     return {
       id: row.id,
@@ -1703,6 +1933,8 @@ export class ListingsRepository implements OnModuleDestroy {
               lon,
             }
           : null,
+      isSponsored: row.isSponsored,
+      promotionWeight: Number.isFinite(promotionWeight) ? promotionWeight : 1,
       publishedAt: row.publishedAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

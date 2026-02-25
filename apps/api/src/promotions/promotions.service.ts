@@ -1,5 +1,7 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import type { ListingStatus } from '../listings/models/listing.model';
+import { SearchIndexService } from '../listings/search-index.service';
 import type {
   AssignListingPromotionInput,
   ListingPromotionWithPlan,
@@ -17,9 +19,13 @@ type AssignListingPromotionResult = {
 
 @Injectable()
 export class PromotionsService {
+  private readonly logger = new Logger(PromotionsService.name);
+
   constructor(
     @Inject(PromotionsRepository)
     private readonly promotionsRepository: PromotionsRepository,
+    @Inject(SearchIndexService)
+    private readonly searchIndexService: SearchIndexService,
   ) {}
 
   async listPlans(onlyActive: boolean): Promise<PlanRecord[]> {
@@ -89,6 +95,7 @@ export class PromotionsService {
       metadata,
       activatedAt: status === 'active' ? startsAtDate.toISOString() : null,
     });
+    await this.syncSearchIndexForPromotionChange(listing.id, listing.status);
 
     return {
       promotion: {
@@ -110,5 +117,22 @@ export class PromotionsService {
     }
 
     return parsed;
+  }
+
+  private async syncSearchIndexForPromotionChange(
+    listingId: string,
+    listingStatus: ListingStatus,
+  ): Promise<void> {
+    if (listingStatus !== 'published') {
+      return;
+    }
+
+    try {
+      await this.searchIndexService.indexPublishedListingById(listingId);
+    } catch (error) {
+      this.logger.warn(
+        `OpenSearch sync skipped for promotion on listing ${listingId}: ${(error as Error).message}`,
+      );
+    }
   }
 }

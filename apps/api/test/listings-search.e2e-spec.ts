@@ -2,6 +2,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { vi } from 'vitest';
+import { AnalyticsService } from '../src/analytics/analytics.service';
 import { AppModule } from '../src/app.module';
 import type { SearchListingsQueryDto } from '../src/listings/dto/search-listings-query.dto';
 import { ListingsRepository } from '../src/listings/listings.repository';
@@ -96,6 +97,7 @@ describe('Listings search endpoint', () => {
   const getListingMediaObjectUrl = vi.fn(
     (storageKey: string) => `http://localhost:9000/listing-originals/${storageKey}`,
   );
+  const trackSystemEventSafe = vi.fn(async () => undefined);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -121,6 +123,10 @@ describe('Listings search endpoint', () => {
       .useValue({
         getListingMediaObjectUrl,
       })
+      .overrideProvider(AnalyticsService)
+      .useValue({
+        trackSystemEventSafe,
+      })
       .compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -139,6 +145,7 @@ describe('Listings search endpoint', () => {
     findFallbackProvinceContextById.mockClear();
     listNearbyFallbackProvinces.mockClear();
     resolveLocationCentroid.mockClear();
+    trackSystemEventSafe.mockClear();
   });
 
   it('accepts LocationIntent filters and returns paginated search payload', async () => {
@@ -185,6 +192,11 @@ describe('Listings search endpoint', () => {
       limit: 12,
       offset: 24,
     });
+    expect(trackSystemEventSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'search_performed',
+      }),
+    );
     expect(searchPublishedFallback).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { GeographyModule } from './geography/geography.module';
 import { HealthController } from './health/health.controller';
@@ -11,6 +12,7 @@ import { UsersModule } from './users/users.module';
   imports: [
     UsersModule,
     AuthModule,
+    AnalyticsModule,
     GeographyModule,
     ListingsModule,
     ModerationModule,

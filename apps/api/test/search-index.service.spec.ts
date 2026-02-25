@@ -164,6 +164,87 @@ describe('SearchIndexService', () => {
     expect(result.items.map((item) => item.id)).toEqual(['2', '1']);
   });
 
+  it('applies capped sponsored boost for relevance queries with text', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            hits: {
+              total: { value: 1, relation: 'eq' },
+              hits: [{ _id: '2' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    global.fetch = fetchMock as typeof fetch;
+
+    listPublishedByIds.mockResolvedValueOnce([buildSummaryRecord('2', 'Secondo risultato')]);
+    resolveLocationCentroid.mockResolvedValueOnce({
+      lat: 45.0703,
+      lon: 7.6869,
+    });
+
+    const service = new SearchIndexService(listingsRepositoryMock as never);
+    const query: SearchListingsQueryDto = {
+      queryText: 'gatto nero',
+      locationIntent: null,
+      listingType: null,
+      priceMin: null,
+      priceMax: null,
+      ageText: null,
+      sex: null,
+      breed: null,
+      sort: 'relevance',
+      limit: 24,
+      offset: 0,
+    };
+
+    await service.searchPublished(query);
+
+    const searchRequest = fetchMock.mock.calls[1];
+    const searchOptions = searchRequest?.[1];
+    const requestBody = JSON.parse(String(searchOptions?.body));
+
+    expect(requestBody.query).toMatchObject({
+      function_score: {
+        max_boost: 1.2,
+        score_mode: 'multiply',
+        boost_mode: 'multiply',
+        query: {
+          bool: expect.objectContaining({
+            must: expect.arrayContaining([
+              expect.objectContaining({
+                multi_match: expect.objectContaining({
+                  query: 'gatto nero',
+                }),
+              }),
+            ]),
+          }),
+        },
+        functions: expect.arrayContaining([
+          expect.objectContaining({
+            filter: { term: { isSponsored: true } },
+            field_value_factor: {
+              field: 'promotionWeight',
+              modifier: 'sqrt',
+              missing: 1,
+            },
+          }),
+        ]),
+      },
+    });
+    expect(requestBody.sort).toEqual(
+      expect.arrayContaining([
+        { _score: { order: 'desc' } },
+        { publishedAt: { order: 'desc', missing: '_last' } },
+      ]),
+    );
+  });
+
   it('returns empty results without DB hydration when index has no hits', async () => {
     const fetchMock = vi
       .fn()

@@ -99,7 +99,14 @@ describe('PromotionsService', () => {
     })),
   };
 
-  const service = new PromotionsService(promotionsRepositoryMock as never);
+  const searchIndexServiceMock = {
+    indexPublishedListingById: vi.fn(async (_listingId: string) => undefined),
+  };
+
+  const service = new PromotionsService(
+    promotionsRepositoryMock as never,
+    searchIndexServiceMock as never,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -144,6 +151,7 @@ describe('PromotionsService', () => {
         activatedAt: expect.any(String),
       }),
     );
+    expect(searchIndexServiceMock.indexPublishedListingById).toHaveBeenCalledWith('101');
     expect(result.promotion.plan.code).toBe('boost_24h');
   });
 

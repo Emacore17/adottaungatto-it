@@ -91,10 +91,14 @@ describe('ModerationService', () => {
     indexPublishedListingById: vi.fn(async (_listingId: string) => undefined),
     removeListingById: vi.fn(async (_listingId: string) => undefined),
   };
+  const analyticsServiceMock = {
+    trackSystemEventSafe: vi.fn(async () => undefined),
+  };
 
   const service = new ModerationService(
     moderationRepositoryMock as never,
     searchIndexServiceMock as never,
+    analyticsServiceMock as never,
   );
 
   beforeEach(() => {
@@ -124,6 +128,12 @@ describe('ModerationService', () => {
       }),
     );
     expect(searchIndexServiceMock.indexPublishedListingById).toHaveBeenCalledWith('101');
+    expect(analyticsServiceMock.trackSystemEventSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'listing_published',
+        listingId: '101',
+      }),
+    );
     expect(result?.listing.status).toBe('published');
   });
 

@@ -1,6 +1,5 @@
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -10,6 +9,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ContactActions } from '../../../components/contact-actions';
 import { fetchPublicListingById } from '../../../lib/listings';
 
 interface PublicListingDetailPageProps {
@@ -157,13 +157,12 @@ export default async function PublicListingDetailPage({ params }: PublicListingD
                     ? `Email: ${listing.contactEmail}`
                     : 'Email non disponibile'}
                 </p>
-                <div className="pt-2">
-                  <Button className="hidden w-full md:inline-flex" disabled>
-                    Contatta inserzionista (prossimo step)
-                  </Button>
-                  <p className="text-xs text-slate-500 md:hidden">
-                    Usa il pulsante fisso in basso per avviare il contatto.
-                  </p>
+                <div className="pt-2" id="contatta-inserzionista">
+                  <ContactActions
+                    contactEmail={listing.contactEmail}
+                    contactPhone={listing.contactPhone}
+                    listingId={listing.id}
+                  />
                 </div>
               </div>
             </div>
@@ -176,9 +175,12 @@ export default async function PublicListingDetailPage({ params }: PublicListingD
       </div>
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
         <div className="mx-auto w-full max-w-5xl">
-          <Button className="w-full" disabled>
-            Contatta inserzionista (prossimo step)
-          </Button>
+          <a
+            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+            href="#contatta-inserzionista"
+          >
+            Contatta inserzionista
+          </a>
         </div>
       </div>
     </main>

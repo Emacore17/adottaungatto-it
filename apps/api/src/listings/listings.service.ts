@@ -1,4 +1,15 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { AnalyticsService } from '../analytics/analytics.service';
+import type { AnalyticsEventType } from '../analytics/models/analytics.model';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
 import {
@@ -12,6 +23,9 @@ import { MinioStorageService } from './minio-storage.service';
 import type { ListingMediaView, UploadListingMediaInput } from './models/listing-media.model';
 import type { ListingMediaRecord } from './models/listing-media.model';
 import type {
+  ContactListingContext,
+  ContactListingInput,
+  ContactListingResult,
   CreateListingInput,
   ListingRecord,
   PublicListingDetail,
@@ -25,6 +39,9 @@ import { SearchIndexService } from './search-index.service';
 @Injectable()
 export class ListingsService {
   private readonly logger = new Logger(ListingsService.name);
+  private readonly contactRateLimitWindowMinutes = 15;
+  private readonly contactRateLimitMaxRequests = 3;
+  private readonly contactDuplicateWindowHours = 24;
 
   constructor(
     @Inject(ListingsRepository)
@@ -35,6 +52,8 @@ export class ListingsService {
     private readonly searchIndexService: SearchIndexService,
     @Inject(SearchFallbackService)
     private readonly searchFallbackService: SearchFallbackService,
+    @Inject(AnalyticsService)
+    private readonly analyticsService: AnalyticsService,
   ) {}
 
   async createForUser(user: RequestUser, input: CreateListingInput): Promise<ListingRecord> {
@@ -47,7 +66,19 @@ export class ListingsService {
       archivedAt: undefined,
     };
 
-    return this.listingsRepository.createListing(ownerUserId, normalizedInput);
+    const listing = await this.listingsRepository.createListing(ownerUserId, normalizedInput);
+    await this.trackAnalyticsEvent({
+      eventType: 'listing_created',
+      actor: user,
+      listingId: listing.id,
+      source: 'api_listings_create',
+      metadata: {
+        status: listing.status,
+        listingType: listing.listingType,
+      },
+    });
+
+    return listing;
   }
 
   async listForUser(user: RequestUser): Promise<ListingRecord[]> {
@@ -66,7 +97,109 @@ export class ListingsService {
       return null;
     }
 
+    await this.trackAnalyticsEvent({
+      eventType: 'listing_view',
+      actor: null,
+      listingId,
+      source: 'api_listings_public_detail',
+      metadata: {
+        province: listing.provinceSigla,
+        listingType: listing.listingType,
+      },
+    });
+
     return this.toPublicDetail(listing);
+  }
+
+  async submitPublicContactRequest(
+    listingId: string,
+    input: ContactListingInput,
+    context: ContactListingContext,
+  ): Promise<ContactListingResult | null> {
+    const target = await this.listingsRepository.findPublishedContactTarget(listingId);
+    if (!target) {
+      return null;
+    }
+
+    if (!target.contactEmail && !target.contactPhone) {
+      throw new BadRequestException('Listing contact channels are unavailable.');
+    }
+
+    this.ensureContactMessageNotSpam(input.message);
+
+    const now = new Date();
+    const senderIp = context.senderIp ? context.senderIp.trim() : null;
+    const userAgent = context.userAgent ? context.userAgent.trim() : null;
+
+    if (senderIp) {
+      const rateLimitWindowFrom = new Date(
+        now.getTime() - this.contactRateLimitWindowMinutes * 60 * 1000,
+      ).toISOString();
+      const recentRequests = await this.listingsRepository.countRecentContactRequestsByIp(
+        listingId,
+        senderIp,
+        rateLimitWindowFrom,
+      );
+      if (recentRequests >= this.contactRateLimitMaxRequests) {
+        throw new HttpException(
+          `Contact rate limit exceeded. Retry in ${this.contactRateLimitWindowMinutes} minutes.`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    const messageHash = this.hashMessageFingerprint(input.message);
+    const duplicateWindowFrom = new Date(
+      now.getTime() - this.contactDuplicateWindowHours * 60 * 60 * 1000,
+    ).toISOString();
+    const duplicateRequests = await this.listingsRepository.countRecentDuplicateContactRequests(
+      listingId,
+      input.senderEmail,
+      messageHash,
+      duplicateWindowFrom,
+    );
+    if (duplicateRequests > 0) {
+      throw new HttpException(
+        'Duplicate contact request detected. Retry later with a new message.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const createdRequest = await this.listingsRepository.createContactRequest(listingId, {
+      senderName: input.senderName,
+      senderEmail: input.senderEmail,
+      senderPhone: input.senderPhone,
+      message: input.message,
+      source: input.source,
+      messageHash,
+      senderIp,
+      userAgent,
+      metadata: {
+        hasAdvertiserEmail: Boolean(target.contactEmail),
+        hasAdvertiserPhone: Boolean(target.contactPhone),
+      },
+    });
+
+    await this.trackAnalyticsEvent({
+      eventType: 'contact_sent',
+      actor: null,
+      listingId,
+      source: 'api_listings_contact',
+      metadata: {
+        channel: 'form',
+        hasSenderPhone: Boolean(input.senderPhone),
+        hasAdvertiserEmail: Boolean(target.contactEmail),
+        hasAdvertiserPhone: Boolean(target.contactPhone),
+      },
+    });
+
+    return {
+      requestId: createdRequest.id,
+      listingId: createdRequest.listingId,
+      createdAt: createdRequest.createdAt,
+      confirmationMessage:
+        "Richiesta inviata con successo. L'inserzionista ti contattera tramite i recapiti indicati.",
+    };
   }
 
   async searchPublic(query: SearchListingsQueryDto): Promise<SearchListingsPage> {
@@ -80,6 +213,32 @@ export class ListingsService {
     const items = fallbackSearch.result.items.map((listing) =>
       this.toPublicSummary(listing, effectiveReferencePoint),
     );
+    await this.trackAnalyticsEvent({
+      eventType: 'search_performed',
+      actor: null,
+      source: 'api_listings_search',
+      metadata: {
+        hasQueryText: Boolean(query.queryText),
+        sort: query.sort,
+        locationScope: query.locationIntent?.scope ?? 'italy',
+        total: fallbackSearch.result.total,
+        fallbackApplied: fallbackSearch.metadata.fallbackApplied,
+      },
+    });
+
+    if (fallbackSearch.metadata.fallbackApplied) {
+      await this.trackAnalyticsEvent({
+        eventType: 'search_fallback_applied',
+        actor: null,
+        source: 'api_listings_search_fallback',
+        metadata: {
+          fallbackLevel: fallbackSearch.metadata.fallbackLevel,
+          fallbackReason: fallbackSearch.metadata.fallbackReason,
+          requestedScope: fallbackSearch.metadata.requestedLocationIntent?.scope ?? null,
+          effectiveScope: fallbackSearch.metadata.effectiveLocationIntent?.scope ?? null,
+        },
+      });
+    }
 
     return {
       items,
@@ -99,6 +258,11 @@ export class ListingsService {
     input: UpdateListingInput,
   ): Promise<ListingRecord | null> {
     const ownerUserId = await this.listingsRepository.upsertOwnerUser(user);
+    const previousListing = await this.listingsRepository.findMineById(ownerUserId, listingId);
+    if (!previousListing) {
+      return null;
+    }
+
     const normalizedInput = { ...input };
 
     if (normalizedInput.status === 'published' && normalizedInput.publishedAt === undefined) {
@@ -119,6 +283,19 @@ export class ListingsService {
     }
 
     await this.syncListingSearchIndex(updatedListing);
+    if (updatedListing.status === 'published' && previousListing.status !== 'published') {
+      await this.trackAnalyticsEvent({
+        eventType: 'listing_published',
+        actor: user,
+        listingId: updatedListing.id,
+        source: 'api_listings_update',
+        metadata: {
+          fromStatus: previousListing.status,
+          toStatus: updatedListing.status,
+        },
+      });
+    }
+
     return updatedListing;
   }
 
@@ -383,6 +560,38 @@ export class ListingsService {
         `OpenSearch search unavailable, falling back to Postgres search: ${(error as Error).message}`,
       );
       return this.listingsRepository.searchPublished(query);
+    }
+  }
+
+  private async trackAnalyticsEvent(input: {
+    eventType: AnalyticsEventType;
+    actor: RequestUser | null;
+    listingId?: string | null;
+    source: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.analyticsService.trackSystemEventSafe({
+      eventType: input.eventType,
+      actor: input.actor,
+      listingId: input.listingId ?? null,
+      source: input.source,
+      metadata: input.metadata,
+    });
+  }
+
+  private hashMessageFingerprint(message: string): string {
+    return createHash('sha256').update(message.trim().toLowerCase()).digest('hex');
+  }
+
+  private ensureContactMessageNotSpam(message: string): void {
+    const urlOccurrences = message.match(/https?:\/\//gi)?.length ?? 0;
+    if (urlOccurrences > 2) {
+      throw new BadRequestException('Field "message" contains too many links.');
+    }
+
+    const alphanumericCharacters = message.match(/[a-z0-9]/gi)?.length ?? 0;
+    if (alphanumericCharacters < 10) {
+      throw new BadRequestException('Field "message" must contain more meaningful content.');
     }
   }
 }

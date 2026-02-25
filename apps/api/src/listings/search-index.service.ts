@@ -9,6 +9,7 @@ import {
 } from './listings.repository';
 
 const SEARCH_INDEX_NAME = 'listings_v1';
+const SPONSORED_MAX_BOOST = 1.2;
 
 const SEARCH_INDEX_MAPPING = {
   settings: {
@@ -36,6 +37,8 @@ const SEARCH_INDEX_MAPPING = {
       provinceSigla: { type: 'keyword' },
       comuneName: { type: 'keyword' },
       location: { type: 'geo_point' },
+      isSponsored: { type: 'boolean' },
+      promotionWeight: { type: 'double' },
       publishedAt: { type: 'date' },
       createdAt: { type: 'date' },
       updatedAt: { type: 'date' },
@@ -331,14 +334,47 @@ export class SearchIndexService {
       boolQuery.must = must;
     }
 
+    const shouldApplySponsoredBoost = query.sort === 'relevance' && Boolean(query.queryText);
+
     return {
       from: query.offset,
       size: query.limit,
       track_total_hits: true,
-      query: {
-        bool: boolQuery,
-      },
+      query: shouldApplySponsoredBoost
+        ? this.buildSponsoredFunctionScoreQuery(boolQuery)
+        : {
+            bool: boolQuery,
+          },
       sort: this.buildSortClause(query, referencePoint),
+    };
+  }
+
+  private buildSponsoredFunctionScoreQuery(
+    boolQuery: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      function_score: {
+        query: {
+          bool: boolQuery,
+        },
+        functions: [
+          {
+            filter: {
+              term: {
+                isSponsored: true,
+              },
+            },
+            field_value_factor: {
+              field: 'promotionWeight',
+              modifier: 'sqrt',
+              missing: 1,
+            },
+          },
+        ],
+        score_mode: 'multiply',
+        boost_mode: 'multiply',
+        max_boost: SPONSORED_MAX_BOOST,
+      },
     };
   }
 

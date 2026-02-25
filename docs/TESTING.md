@@ -1,6 +1,6 @@
 # TESTING.md
 
-Baseline test locale per milestone M0-M4.
+Baseline test locale per milestone M0-M5.
 
 ## Check automatici
 
@@ -31,6 +31,10 @@ pnpm test:e2e:web
 - M4.5 a11y pass base: focus-visible coerente, pattern combobox accessibile, keyboard navigation, dialog focus trap
 - M4.6 performance UX pass: immagini `next/image`, lazy component load, caching query con TanStack, check web vitals locali
 - M5.1 promotions data model/API: migration schema piani+promozioni+eventi, endpoint admin assign/list, seed demo plans/promotions
+- M5.2 sponsored ranking: `apps/api/test/search-index.service.spec.ts`, `apps/api/test/promotions.service.spec.ts`
+- M5.3 analytics events + KPI: `apps/api/test/analytics.service.spec.ts`, `apps/api/test/analytics.e2e-spec.ts`, `apps/api/test/listings-search.e2e-spec.ts`
+- M5.4 admin KPI range/moderation/funnel: `apps/api/test/analytics.service.spec.ts`, `apps/api/test/analytics.e2e-spec.ts` + verifica manuale UI `/analytics`
+- M5.5 contatto inserzionista: `apps/api/test/listings-contact.e2e-spec.ts`, `apps/api/test/listings.service.spec.ts` + verifica manuale UI `/annunci/<id>`
 
 ## Smoke command utili
 
@@ -150,6 +154,44 @@ pnpm test:smoke:seed-listings
       - `POST /v1/admin/promotions/listings/<LISTING_ID>/assign`
     - RBAC:
       - con ruolo `user` o `moderator` gli endpoint admin/promotions devono restituire `403`
+25. Ranking sponsored M5.2:
+    - dopo `POST /v1/admin/promotions/listings/<LISTING_ID>/assign` eseguire `pnpm search:reindex` (oppure attendere sync automatico su assegnazione)
+    - query verifica: `GET /v1/listings/search?q=<TERMINE>&sort=relevance&limit=24&offset=0`
+    - atteso:
+      - annunci con promozione attiva possono emergere a parita di pertinenza
+      - boost capped (nessuna inversione sistematica dei risultati chiaramente piu pertinenti)
+      - in caso OpenSearch down, fallback SQL mantiene ordinamento coerente con segnale sponsored controllato
+26. Analytics events + KPI M5.3:
+    - tracciare evento contatto (pubblico):
+      - `POST /v1/analytics/events` con `eventType=contact_clicked` e `listingId` published
+    - leggere KPI admin:
+      - `GET /v1/admin/analytics/kpis?windowDays=30` (role `moderator` o `admin`)
+    - verifiche attese:
+      - payload KPI con almeno 7 metriche (`listingView`, `searchPerformed`, `searchFallbackApplied`, `contactClicked`, `contactSent`, `listingCreated`, `listingPublished`)
+      - endpoint pubblico analytics accetta solo `contact_clicked|contact_sent`
+      - ricerca pubblica registra `search_performed` e, quando applicato, `search_fallback_applied`
+      - pagina admin `http://localhost:3001/analytics` visualizza KPI senza errori bloccanti
+27. KPI admin M5.4 (range + moderazione + funnel):
+    - API con range:
+      - `GET /v1/admin/analytics/kpis?windowDays=7`
+      - `GET /v1/admin/analytics/kpis?windowDays=90`
+    - verificare payload:
+      - blocco `moderation` con `pendingReview`, `approved`, `rejected`
+      - blocco `funnel` con `listingCreated`, `listingPublished`, `contactSent` e relative percentuali
+    - verificare UI admin:
+      - `http://localhost:3001/analytics` mostra selettore range (`7/30/90/180`)
+      - cards moderazione e funnel coerenti con il range selezionato
+      - nessun errore bloccante al refresh pagina o cambio range
+28. Contatto inserzionista M5.5:
+    - API pubblico:
+      - `POST /v1/listings/<LISTING_ID>/contact` con payload valido (`name`, `email`, `message`, `privacyConsent=true`)
+      - invio ripetuto rapido stesso IP/listing -> atteso `429`
+      - payload con honeypot `website` valorizzato -> atteso `400`
+    - verificare effetto analytics:
+      - dopo invio valido compare incremento `contact_sent` in KPI admin (`/v1/admin/analytics/kpis`)
+    - verificare UI web:
+      - su `http://localhost:3000/annunci/<LISTING_ID>` form contatto compilabile e invio con conferma
+      - su mobile CTA sticky `Contatta inserzionista` porta al form
 
 ## Note operative
 

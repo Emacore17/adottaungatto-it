@@ -418,6 +418,7 @@ Comportamento atteso:
 - `items[*].distanceKm` valorizzato quando la ricerca ha un riferimento geografico calcolabile
 - ricerca primaria eseguita su OpenSearch (`listings_v1`)
 - fallback geografico anti-zero-results attivo: comune -> provincia -> nearby -> regione -> Italia
+- su `sort=relevance` con query testuale, ranking sponsored controllato (cap `1.2`) senza sostituire la pertinenza testuale
 
 Config fallback (API env):
 - `SEARCH_FALLBACK_MAX_STEPS` (default `5`, range `1..5`)
@@ -570,3 +571,131 @@ curl -X POST "http://localhost:3002/v1/admin/promotions/listings/<LISTING_ID>/as
 RBAC atteso:
 - ruolo `admin`: `200/201`
 - ruoli `user` e `moderator`: `403`
+
+## 30. Sponsored ranking search (M5.2)
+
+Prerequisiti:
+- almeno una promozione `active` su listing `published`
+- indice OpenSearch aggiornato (`pnpm search:reindex` consigliato dopo upgrade schema/mapping)
+
+Verifica manuale:
+
+```bash
+curl -H "x-auth-user-id: admin-local" -H "x-auth-email: admin-local@example.test" -H "x-auth-roles: admin" \
+  -X POST "http://localhost:3002/v1/admin/promotions/listings/<LISTING_ID>/assign" \
+  -H "Content-Type: application/json" \
+  -d "{\"planCode\":\"boost_24h\"}"
+
+pnpm search:reindex
+
+curl "http://localhost:3002/v1/listings/search?q=torino&sort=relevance&limit=24&offset=0"
+```
+
+Comportamento atteso:
+- listing con promozione attiva puo emergere rispetto a listing con pertinenza simile
+- prominenza sponsorizzata limitata (cap) per evitare ranking artificiale su risultati poco pertinenti
+- se OpenSearch non risponde, API usa fallback SQL con regola sponsored equivalente e ricerca disponibile
+
+## 31. Analytics events + KPI admin (M5.3)
+
+Prerequisiti:
+- migration analytics applicata (`pnpm db:migrate`)
+- API e admin online
+
+Verifica DB eventi:
+
+```bash
+docker exec -it adottaungatto-postgres psql -U adottaungatto -d adottaungatto \
+  -c "SELECT event_type, COUNT(*) FROM analytics_events GROUP BY event_type ORDER BY event_type;"
+```
+
+Traccia evento pubblico contatto:
+
+```bash
+curl -X POST "http://localhost:3002/v1/analytics/events" \
+  -H "Content-Type: application/json" \
+  -d "{\"eventType\":\"contact_clicked\",\"listingId\":\"<LISTING_ID>\",\"source\":\"manual_local\",\"metadata\":{\"channel\":\"email\"}}"
+```
+
+KPI admin via API:
+
+```bash
+curl -H "x-auth-user-id: moderator-local" -H "x-auth-email: moderator-local@example.test" -H "x-auth-roles: moderator" \
+  "http://localhost:3002/v1/admin/analytics/kpis?windowDays=30"
+```
+
+Verifica UI admin:
+- aprire `http://localhost:3001/analytics`
+- confermare cards metriche e ratio (`fallbackRatePct`, `contactRatePct`, `publishRatePct`)
+- verificare navigazione rapida verso `/moderation`
+
+Comportamento atteso:
+- endpoint pubblico analytics accetta solo `contact_clicked|contact_sent`
+- endpoint KPI admin richiede ruolo `moderator` o `admin`
+- ricerca pubblica traccia sempre `search_performed`
+- quando fallback geografico e attivo, viene tracciato anche `search_fallback_applied`
+- creazione annuncio traccia `listing_created`; transizione a pubblicato traccia `listing_published`
+
+## 32. KPI admin range + moderazione/funnel (M5.4)
+
+Prerequisiti:
+- API e admin online
+- almeno un set minimo di eventi analytics e azioni moderazione registrati
+
+Verifica API con range diverso:
+
+```bash
+curl -H "x-auth-user-id: moderator-local" -H "x-auth-email: moderator-local@example.test" -H "x-auth-roles: moderator" \
+  "http://localhost:3002/v1/admin/analytics/kpis?windowDays=7"
+
+curl -H "x-auth-user-id: moderator-local" -H "x-auth-email: moderator-local@example.test" -H "x-auth-roles: moderator" \
+  "http://localhost:3002/v1/admin/analytics/kpis?windowDays=90"
+```
+
+Verifica UI admin:
+- aprire `http://localhost:3001/analytics`
+- cambiare range con le opzioni UI (`7`, `30`, `90`, `180` giorni)
+- verificare cards:
+  - metriche principali (`listingView`, `searchPerformed`, fallback, contatti)
+  - moderazione (`pendingReview`, `approved`, `rejected`)
+  - funnel (`listingCreated`, `listingPublished`, `contactSent` + rate)
+
+Comportamento atteso:
+- cambio range aggiorna KPI/funnel senza errori bloccanti
+- `pendingReview` mostra snapshot coda corrente
+- `approved/rejected` riflettono azioni moderazione nel range selezionato
+- funnel espone chiaramente creazione -> pubblicazione -> contatto
+
+## 33. Contatto inserzionista con rate limit/anti-spam (M5.5)
+
+Prerequisiti:
+- migration contatti applicata (`pnpm db:migrate`)
+- almeno un listing `published` disponibile (`LISTING_ID`)
+
+Invio contatto valido:
+
+```bash
+curl -X POST "http://localhost:3002/v1/listings/<LISTING_ID>/contact" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Mario Rossi\",\"email\":\"mario.rossi@example.test\",\"phone\":\"+393401112233\",\"message\":\"Ciao, sono interessato all'annuncio e vorrei maggiori informazioni sulla disponibilita.\",\"privacyConsent\":true,\"website\":\"\",\"source\":\"manual_local\"}"
+```
+
+Verifica anti-spam honeypot:
+
+```bash
+curl -X POST "http://localhost:3002/v1/listings/<LISTING_ID>/contact" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Mario Rossi\",\"email\":\"mario.rossi@example.test\",\"message\":\"Messaggio abbastanza lungo per validazione.\",\"privacyConsent\":true,\"website\":\"https://spam.example\"}"
+```
+
+Comportamento atteso:
+- primo invio valido: `201` con `contactRequest` + `confirmation.message`
+- payload honeypot: `400`
+- invii troppo frequenti/duplicati: `429`
+- evento analytics `contact_sent` registrato server-side
+
+Verifica UI web:
+- aprire `http://localhost:3000/annunci/<LISTING_ID>`
+- compilare form contatto nella card "Contatto inserzionista"
+- verificare messaggio conferma invio
+- su mobile verificare CTA sticky "Contatta inserzionista" che porta al form

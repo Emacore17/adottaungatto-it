@@ -1,4 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
+import { AnalyticsService } from '../analytics/analytics.service';
+import type { AnalyticsEventType } from '../analytics/models/analytics.model';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import type { ListingStatus } from '../listings/models/listing.model';
 import { SearchIndexService } from '../listings/search-index.service';
@@ -18,6 +20,8 @@ export class ModerationService {
     private readonly moderationRepository: ModerationRepository,
     @Inject(SearchIndexService)
     private readonly searchIndexService: SearchIndexService,
+    @Inject(AnalyticsService)
+    private readonly analyticsService: AnalyticsService,
   ) {}
 
   async listPendingQueue(limit: number): Promise<ModerationQueueItem[]> {
@@ -59,6 +63,24 @@ export class ModerationService {
     }
 
     await this.syncListingSearchIndex(result.listing.id, result.listing.status);
+    if (
+      result.listing.status === 'published' &&
+      result.auditLog.toStatus === 'published' &&
+      result.auditLog.fromStatus !== 'published'
+    ) {
+      await this.trackAnalyticsEvent({
+        eventType: 'listing_published',
+        actor,
+        listingId: result.listing.id,
+        source: 'api_moderation_action',
+        metadata: {
+          action,
+          fromStatus: result.auditLog.fromStatus,
+          toStatus: result.auditLog.toStatus,
+        },
+      });
+    }
+
     return result;
   }
 
@@ -127,5 +149,21 @@ export class ModerationService {
         `OpenSearch sync skipped for moderated listing ${listingId}: ${(error as Error).message}`,
       );
     }
+  }
+
+  private async trackAnalyticsEvent(input: {
+    eventType: AnalyticsEventType;
+    actor: RequestUser | null;
+    listingId?: string | null;
+    source: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.analyticsService.trackSystemEventSafe({
+      eventType: input.eventType,
+      actor: input.actor,
+      listingId: input.listingId ?? null,
+      source: input.source,
+      metadata: input.metadata,
+    });
   }
 }

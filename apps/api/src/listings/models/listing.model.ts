@@ -120,6 +120,26 @@ export interface PublicListingDetail extends PublicListingSummary {
   media: PublicListingMedia[];
 }
 
+export interface ContactListingInput {
+  senderName: string;
+  senderEmail: string;
+  senderPhone: string | null;
+  message: string;
+  source: string;
+}
+
+export interface ContactListingContext {
+  senderIp: string | null;
+  userAgent: string | null;
+}
+
+export interface ContactListingResult {
+  requestId: string;
+  listingId: string;
+  createdAt: string;
+  confirmationMessage: string;
+}
+
 export const searchSortValues = ['relevance', 'newest', 'price_asc', 'price_desc'] as const;
 
 export type SearchSort = SharedSearchSort;

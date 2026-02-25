@@ -119,6 +119,20 @@ describe('ListingsService', () => {
       }),
     ),
     findMineById: vi.fn(async () => buildListingRecord()),
+    findPublishedContactTarget: vi.fn(async () => ({
+      id: '1',
+      title: 'Micio in adozione',
+      contactName: 'Gattile Demo',
+      contactPhone: '+390111234567',
+      contactEmail: 'contatti@gattile.demo',
+    })),
+    countRecentContactRequestsByIp: vi.fn(async () => 0),
+    countRecentDuplicateContactRequests: vi.fn(async () => 0),
+    createContactRequest: vi.fn(async () => ({
+      id: 'contact-1001',
+      listingId: '1',
+      createdAt: new Date().toISOString(),
+    })),
     getNextMediaPosition: vi.fn(async () => 4),
     clearPrimaryMedia: vi.fn(async () => undefined),
     createListingMedia: vi.fn(async () => ({
@@ -257,12 +271,16 @@ describe('ListingsService', () => {
       },
     ),
   };
+  const analyticsServiceMock = {
+    trackSystemEventSafe: vi.fn(async () => undefined),
+  };
 
   const service = new ListingsService(
     listingsRepositoryMock as never,
     minioStorageServiceMock as never,
     searchIndexServiceMock as never,
     searchFallbackServiceMock as never,
+    analyticsServiceMock as never,
   );
 
   beforeEach(() => {
@@ -299,6 +317,12 @@ describe('ListingsService', () => {
     );
     expect(listing.status).toBe('pending_review');
     expect(listing.publishedAt).toBeNull();
+    expect(analyticsServiceMock.trackSystemEventSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'listing_created',
+        listingId: listing.id,
+      }),
+    );
   });
 
   it('lists current user listings', async () => {
@@ -340,6 +364,11 @@ describe('ListingsService', () => {
     expect(result.items[0]?.title).toBe('OpenSearch result');
     expect(result.items[0]?.distanceKm).not.toBeNull();
     expect(result.items[0]?.primaryMedia?.objectUrl).toContain('/listing-originals/listings/2001/');
+    expect(analyticsServiceMock.trackSystemEventSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'search_performed',
+      }),
+    );
   });
 
   it('falls back to SQL search when OpenSearch is unavailable', async () => {
@@ -392,6 +421,93 @@ describe('ListingsService', () => {
     expect(searchIndexServiceMock.removeListingById).toHaveBeenCalledWith('1');
     expect(listing?.status).toBe('archived');
     expect(listing?.deletedAt).toEqual(expect.any(String));
+  });
+
+  it('submits contact request and tracks analytics event', async () => {
+    const result = await service.submitPublicContactRequest(
+      '1',
+      {
+        senderName: 'Mario Rossi',
+        senderEmail: 'mario.rossi@example.test',
+        senderPhone: '+393401112233',
+        message: 'Ciao, sono interessato ad adottare il gatto. Possiamo sentirci domani?',
+        source: 'web_public_form',
+      },
+      {
+        senderIp: '127.0.0.1',
+        userAgent: 'vitest',
+      },
+    );
+
+    expect(listingsRepositoryMock.findPublishedContactTarget).toHaveBeenCalledWith('1');
+    expect(listingsRepositoryMock.countRecentContactRequestsByIp).toHaveBeenCalledTimes(1);
+    expect(listingsRepositoryMock.countRecentDuplicateContactRequests).toHaveBeenCalledTimes(1);
+    expect(listingsRepositoryMock.createContactRequest).toHaveBeenCalledWith(
+      '1',
+      expect.objectContaining({
+        senderName: 'Mario Rossi',
+        senderEmail: 'mario.rossi@example.test',
+        source: 'web_public_form',
+        messageHash: expect.any(String),
+      }),
+    );
+    expect(analyticsServiceMock.trackSystemEventSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'contact_sent',
+        listingId: '1',
+      }),
+    );
+    expect(result?.requestId).toBe('contact-1001');
+  });
+
+  it('rejects contact request when rate limit is exceeded', async () => {
+    listingsRepositoryMock.countRecentContactRequestsByIp.mockResolvedValueOnce(3);
+
+    await expect(
+      service.submitPublicContactRequest(
+        '1',
+        {
+          senderName: 'Mario Rossi',
+          senderEmail: 'mario.rossi@example.test',
+          senderPhone: null,
+          message: 'Messaggio abbastanza lungo per superare la validazione anti-spam base.',
+          source: 'web_public_form',
+        },
+        {
+          senderIp: '127.0.0.1',
+          userAgent: 'vitest',
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+    });
+
+    expect(listingsRepositoryMock.createContactRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicated contact request fingerprint', async () => {
+    listingsRepositoryMock.countRecentDuplicateContactRequests.mockResolvedValueOnce(1);
+
+    await expect(
+      service.submitPublicContactRequest(
+        '1',
+        {
+          senderName: 'Mario Rossi',
+          senderEmail: 'mario.rossi@example.test',
+          senderPhone: null,
+          message: 'Messaggio abbastanza lungo per superare la validazione anti-spam base.',
+          source: 'web_public_form',
+        },
+        {
+          senderIp: '127.0.0.1',
+          userAgent: 'vitest',
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+    });
+
+    expect(listingsRepositoryMock.createContactRequest).not.toHaveBeenCalled();
   });
 
   it('uploads listing media and stores DB reference', async () => {

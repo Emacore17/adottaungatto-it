@@ -90,6 +90,8 @@ Note:
   - `NO_EXACT_MATCH`
   - `NO_LOCATION_FILTER`
 - In M3.5, con `locationIntent` geolocalizzato, l'ordinamento `relevance` usa la distanza (`_geo_distance`) come segnale principale o tie-break.
+- In M5.2, con `sort=relevance` e `q` valorizzato, la search applica un boost sponsored controllato (`isSponsored` + `promotionWeight`) con cap massimo `1.2`, mantenendo la pertinenza testuale come segnale primario.
+- Se OpenSearch non e disponibile, il fallback SQL mantiene una regola equivalente: sponsored come tie-break regolato, senza sovrascrivere i bucket di pertinenza.
 
 ### Errori validazione
 
@@ -188,6 +190,7 @@ Note:
   - `active` se `startsAt <= now`
   - `scheduled` se `startsAt > now`
 - `endsAt` calcolato da `durationHours` del piano
+- per listing `published`, l'assegnazione promozione innesca sync dell'indice search (`listings_v1`) per riflettere subito il ranking sponsored
 
 Response shape:
 
@@ -218,3 +221,166 @@ Errori principali:
 - `401` non autenticato
 - `403` ruolo non autorizzato
 - `404` listing o piano non trovati
+
+## Analytics Events + KPI (M5.3 - M5.4)
+
+Endpoint:
+
+- `POST /v1/analytics/events` (pubblico, ingest eventi contatto)
+- `GET /v1/admin/analytics/kpis` (protetto moderator/admin)
+
+### POST `/v1/analytics/events`
+
+Request body:
+
+```json
+{
+  "eventType": "contact_clicked",
+  "listingId": "101",
+  "source": "web_public",
+  "metadata": {
+    "channel": "email"
+  }
+}
+```
+
+Regole:
+
+- `eventType` consentiti: `contact_clicked | contact_sent`
+- `listingId` obbligatorio (integer string)
+- l'evento viene registrato solo se il listing esiste ed e `published`
+- `source` opzionale (default `web_public`)
+
+Response shape:
+
+```json
+{
+  "event": {
+    "id": "9100",
+    "eventType": "contact_clicked",
+    "actorUserId": null,
+    "listingId": "101",
+    "source": "web_public"
+  }
+}
+```
+
+### GET `/v1/admin/analytics/kpis`
+
+Query params:
+
+- `windowDays` opzionale (`1..365`, default `30`)
+
+Response shape:
+
+```json
+{
+  "windowDays": 30,
+  "from": "2026-01-26T00:00:00.000Z",
+  "to": "2026-02-25T00:00:00.000Z",
+  "metrics": {
+    "listingView": 120,
+    "searchPerformed": 70,
+    "searchFallbackApplied": 9,
+    "contactClicked": 35,
+    "contactSent": 12,
+    "listingCreated": 28,
+    "listingPublished": 14
+  },
+  "moderation": {
+    "pendingReview": 4,
+    "approved": 18,
+    "rejected": 3
+  },
+  "funnel": {
+    "listingCreated": 28,
+    "listingPublished": 14,
+    "contactClicked": 35,
+    "contactSent": 12,
+    "publishRatePct": 50,
+    "contactFromPublishedRatePct": 85.7,
+    "contactClickToSendRatePct": 34.3
+  },
+  "derived": {
+    "fallbackRatePct": 12.9,
+    "contactRatePct": 10,
+    "publishRatePct": 50
+  }
+}
+```
+
+Note:
+
+- KPI principali disponibili: `listingView`, `searchPerformed`, `searchFallbackApplied`, `contactClicked`, `contactSent`, `listingCreated`, `listingPublished`
+- metriche moderazione incluse:
+  - `pendingReview`: snapshot coda `pending_review` corrente
+  - `approved`: numero azioni moderazione `approve` nel range selezionato
+  - `rejected`: numero azioni moderazione `reject` nel range selezionato
+- funnel base incluso:
+  - volumi: `listingCreated`, `listingPublished`, `contactClicked`, `contactSent`
+  - rate: `publishRatePct`, `contactFromPublishedRatePct`, `contactClickToSendRatePct`
+- eventi server-side tracciati automaticamente:
+  - `listing_created`
+  - `listing_view`
+  - `search_performed`
+  - `search_fallback_applied` (solo se fallback attivo)
+  - `listing_published` (transizione reale a `published`)
+
+## Listing Contact (M5.5)
+
+Endpoint pubblico:
+
+- `POST /v1/listings/:id/contact`
+
+### POST `/v1/listings/:id/contact`
+
+Request body:
+
+```json
+{
+  "name": "Mario Rossi",
+  "email": "mario.rossi@example.test",
+  "phone": "+393401112233",
+  "message": "Ciao, sono interessato all'annuncio...",
+  "privacyConsent": true,
+  "website": "",
+  "source": "web_public_form"
+}
+```
+
+Regole:
+
+- `name`, `email`, `message`, `privacyConsent=true` obbligatori
+- `message` minimo 20 caratteri, massimo 2000
+- `phone` opzionale
+- `website` e honeypot anti-spam: deve restare vuoto
+- listing target deve essere `published`
+- anti-abuso:
+  - rate limit per `listingId + senderIp` (finestra breve)
+  - blocco messaggi duplicati (`listingId + senderEmail + messageHash`) in finestra 24h
+
+Response shape:
+
+```json
+{
+  "contactRequest": {
+    "id": "5001",
+    "listingId": "101",
+    "createdAt": "2026-02-25T23:00:00.000Z"
+  },
+  "confirmation": {
+    "message": "Richiesta inviata con successo. L'inserzionista ti contattera tramite i recapiti indicati."
+  }
+}
+```
+
+Errori principali:
+
+- `400` payload non valido o anti-spam payload (honeypot/link eccessivi)
+- `404` listing non trovato/non pubblicato
+- `429` rate limit o richiesta duplicata recente
+
+Note:
+
+- l'invio form registra analytics server-side su evento `contact_sent`
+- i click su CTA email/telefono restano tracciati come `contact_clicked`

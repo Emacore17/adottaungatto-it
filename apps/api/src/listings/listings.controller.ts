@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -20,10 +21,16 @@ import { validateSearchListingsQueryDto } from './dto/search-listings-query.dto'
 import { ListingsService } from './listings.service';
 import type { UploadListingMediaInput } from './models/listing-media.model';
 import {
+  type ContactListingInput,
   type ListingStatus,
   type UpdateListingInput,
   listingStatusValues,
 } from './models/listing.model';
+
+type RequestWithClientInfo = {
+  headers: Record<string, string | string[] | undefined>;
+  ip?: string;
+};
 
 const listingStatusSet = new Set<string>(listingStatusValues);
 const uniqueViolationCode = '23505';
@@ -242,6 +249,86 @@ const parseOptionalBoolean = (
   return value;
 };
 
+const parseBooleanTrue = (source: Record<string, unknown>, fieldName: string): true => {
+  const value = source[fieldName];
+  if (value !== true) {
+    throw new BadRequestException(`Field "${fieldName}" must be true.`);
+  }
+
+  return true;
+};
+
+const parseContactPayload = (body: unknown): ContactListingInput => {
+  const source = asRecord(body);
+  const senderName = parseRequiredString(source, 'name', 120);
+  const senderEmail = parseContactEmail(source, 'email');
+  if (!senderEmail) {
+    throw new BadRequestException('Field "email" is required and must be a valid email address.');
+  }
+
+  const senderPhone = parseOptionalString(source, 'phone', 40) ?? null;
+  const message = parseRequiredString(source, 'message', 2000);
+  if (message.length < 20) {
+    throw new BadRequestException('Field "message" must be at least 20 characters long.');
+  }
+
+  parseBooleanTrue(source, 'privacyConsent');
+
+  const websiteHoneypot = parseOptionalString(source, 'website', 160);
+  if (websiteHoneypot && websiteHoneypot.length > 0) {
+    throw new BadRequestException('Spam protection triggered.');
+  }
+
+  const sourceValue = parseOptionalString(source, 'source', 60) ?? 'web_public_form';
+
+  return {
+    senderName,
+    senderEmail,
+    senderPhone,
+    message,
+    source: sourceValue.toLowerCase(),
+  };
+};
+
+const pickFirstHeaderValue = (value: string | string[] | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const parseSenderIp = (request: RequestWithClientInfo): string | null => {
+  const forwardedFor = pickFirstHeaderValue(request.headers['x-forwarded-for']);
+  if (forwardedFor) {
+    const firstIp = forwardedFor
+      .split(',')
+      .map((part) => part.trim())
+      .find((part) => part.length > 0);
+    if (firstIp) {
+      return firstIp.slice(0, 64);
+    }
+  }
+
+  const realIp = pickFirstHeaderValue(request.headers['x-real-ip']);
+  if (realIp) {
+    return realIp.slice(0, 64);
+  }
+
+  const requestIp = typeof request.ip === 'string' ? request.ip.trim() : '';
+  return requestIp ? requestIp.slice(0, 64) : null;
+};
+
+const parseUserAgent = (request: RequestWithClientInfo): string | null => {
+  const userAgentHeader = pickFirstHeaderValue(request.headers['user-agent']);
+  return userAgentHeader ? userAgentHeader.slice(0, 400) : null;
+};
+
 const parseBase64Payload = (rawPayload: string): Buffer => {
   const normalized = rawPayload.trim();
   if (!normalized) {
@@ -318,6 +405,36 @@ export class ListingsController {
     }
 
     return { listing };
+  }
+
+  @Public()
+  @Post(':id/contact')
+  async contact(
+    @Param('id') rawListingId: string,
+    @Req() request: RequestWithClientInfo,
+    @Body() body: unknown,
+  ) {
+    const listingId = parsePositiveIntegerString(rawListingId, 'id');
+    const payload = parseContactPayload(body);
+    const result = await this.listingsService.submitPublicContactRequest(listingId, payload, {
+      senderIp: parseSenderIp(request),
+      userAgent: parseUserAgent(request),
+    });
+
+    if (!result) {
+      throw new NotFoundException('Listing not found.');
+    }
+
+    return {
+      contactRequest: {
+        id: result.requestId,
+        listingId: result.listingId,
+        createdAt: result.createdAt,
+      },
+      confirmation: {
+        message: result.confirmationMessage,
+      },
+    };
   }
 
   @Public()

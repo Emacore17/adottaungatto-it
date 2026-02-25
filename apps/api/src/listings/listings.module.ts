@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { ListingsController } from './listings.controller';
 import { ListingsRepository } from './listings.repository';
 import { ListingsService } from './listings.service';
@@ -7,6 +8,7 @@ import { SearchFallbackService } from './search-fallback.service';
 import { SearchIndexService } from './search-index.service';
 
 @Module({
+  imports: [AnalyticsModule],
   controllers: [ListingsController],
   providers: [
     ListingsRepository,
