@@ -1,15 +1,25 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { vi } from 'vitest';
 import { AppModule } from '../src/app.module';
+import { SearchIndexService } from '../src/listings/search-index.service';
 
 describe('Health endpoint', () => {
   let app: NestFastifyApplication;
+  const ping = vi.fn(async () => true);
+  const getIndexName = vi.fn(() => 'listings_v1');
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(SearchIndexService)
+      .useValue({
+        ping,
+        getIndexName,
+      })
+      .compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await app.init();
@@ -25,5 +35,13 @@ describe('Health endpoint', () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
     expect(response.body.service).toBe('api');
+  });
+
+  it('GET /health/search should include OpenSearch status', async () => {
+    const response = await request(app.getHttpServer()).get('/health/search');
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('ok');
+    expect(response.body.service).toBe('search');
+    expect(response.body.index).toBe('listings_v1');
   });
 });

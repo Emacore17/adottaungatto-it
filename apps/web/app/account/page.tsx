@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@adottaungatto/ui';
+import Link from 'next/link';
 import { requireWebSession } from '../../lib/auth';
 
 export default async function AccountPage() {
@@ -35,6 +36,20 @@ export default async function AccountPage() {
           <div className="space-y-1">
             <p className="text-sm text-slate-600">Ruoli</p>
             <p className="font-mono text-sm">{session.user.roles.join(', ')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+              href="/account/listings/new"
+            >
+              Nuovo annuncio
+            </Link>
+            <Link
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100"
+              href="/account/listings"
+            >
+              I miei annunci
+            </Link>
           </div>
           <form action="/api/auth/logout" method="post">
             <Button type="submit" variant="secondary">

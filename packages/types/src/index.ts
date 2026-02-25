@@ -19,3 +19,21 @@ export interface LocationIntent {
   label: string;
   secondaryLabel: string | null;
 }
+
+export type SearchSort = 'relevance' | 'newest' | 'price_asc' | 'price_desc';
+
+export type SearchFallbackLevel = 'none' | 'nearby' | LocationIntentScope;
+
+export type SearchFallbackReason =
+  | 'NO_EXACT_MATCH'
+  | 'WIDENED_TO_PARENT_AREA'
+  | 'WIDENED_TO_NEARBY_AREA'
+  | 'NO_LOCATION_FILTER';
+
+export interface SearchListingsMetadata {
+  fallbackApplied: boolean;
+  fallbackLevel: SearchFallbackLevel;
+  fallbackReason: SearchFallbackReason | null;
+  requestedLocationIntent: LocationIntent | null;
+  effectiveLocationIntent: LocationIntent | null;
+}

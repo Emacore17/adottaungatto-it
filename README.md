@@ -44,9 +44,13 @@ pnpm dev
 - Web: http://localhost:3000
 - Admin: http://localhost:3001
 - Web login: http://localhost:3000/login
+- Web nuovo annuncio (protetto): http://localhost:3000/account/listings/new
+- Web miei annunci (protetto): http://localhost:3000/account/listings
+- Web annunci pubblici: http://localhost:3000/annunci
 - Admin login: http://localhost:3001/login
 - API: http://localhost:3002
 - API healthcheck: http://localhost:3002/health
+- API search healthcheck: http://localhost:3002/health/search
 - API utente corrente (protetto): http://localhost:3002/v1/users/me
 - API geography regions: http://localhost:3002/v1/geography/regions
 - API listings miei annunci (protetto): http://localhost:3002/v1/listings/me
@@ -55,6 +59,11 @@ pnpm dev
 - API lista media annuncio (protetto): `GET /v1/listings/:id/media`
 - API rimozione media annuncio (protetto): `DELETE /v1/listings/:id/media/:mediaId`
 - API riordino media annuncio (protetto): `PATCH /v1/listings/:id/media/order`
+- API coda moderazione admin (protetto): `GET /v1/admin/moderation/queue`
+- API azioni moderazione admin (protetto): `POST /v1/admin/moderation/:listingId/{approve|reject|suspend|restore}`
+- API lista annunci pubblici (pubblico): `GET /v1/listings/public`
+- API dettaglio annuncio pubblico (pubblico): `GET /v1/listings/public/:id`
+- API ricerca annunci (pubblico): `GET /v1/listings/search`
 - Postgres/PostGIS: localhost:5432
 - Redis: localhost:6379
 - OpenSearch: http://localhost:9200
@@ -76,10 +85,12 @@ pnpm dev
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm test:e2e`
+- `pnpm test:e2e:web`
 - `pnpm test:smoke`
 - `pnpm test:smoke:listings`
 - `pnpm test:smoke:listings-media`
 - `pnpm test:smoke:media-upload`
+- `pnpm test:smoke:seed-listings`
 - `pnpm test:smoke:worker-minio`
 - `pnpm minio:bootstrap`
 - `pnpm geo:sync`
@@ -87,7 +98,7 @@ pnpm dev
 - `pnpm auth:token`
 - `pnpm db:migrate`
 - `pnpm db:seed`
-- `pnpm search:reindex` (placeholder M0)
+- `pnpm search:reindex`
 
 ## Credenziali locali (solo development)
 
@@ -156,6 +167,7 @@ La migration crea:
 - `app_users`
 - `listings`
 - `listing_media`
+- `admin_audit_logs`
 - `schema_migrations`
 
 9. Importare dataset geografia italiana (M1.5):
@@ -169,8 +181,13 @@ Output atteso:
 - `regions=20`
 - `provinces=110`
 - `comuni=7895`
+- `centroid_lat/lng` popolati per `regions/provinces/comuni` (M3.5)
+- `demo listings >= 30`
+- distribuzione stati mista (`published`, `pending_review`, `rejected`, `suspended`)
+- placeholder media associati su MinIO
 
 Dettaglio fonte e processo aggiornamento dataset: `docs/DATA_GEO_ITALIA.md`.
+Linee guida UX/UI (M4): `docs/UX_UI_GUIDELINES.md`.
 
 10. Verificare endpoint geography lookup (M1.6):
 ```bash
@@ -267,6 +284,134 @@ Output atteso:
 - lista restituita ordinata per `position`
 - riordino con `mediaIds` duplicati o incompleti rifiutato (`400`)
 - rimozione media non posseduto/non esistente rifiutata (`404`)
+
+19. Verificare form creazione annuncio web (M2.6):
+- aprire `http://localhost:3000/login`
+- login con `utente.demo / demo1234`
+- aprire `http://localhost:3000/account/listings/new`
+- compilare il form RHF + Zod, selezionare un comune con `LocationSelector`, caricare almeno 1 immagine
+- inviare e verificare redirect a `/account/listings/submitted`
+- verificare in schermata conferma:
+  - `ID annuncio` valorizzato
+  - `Immagini caricate` > 0
+  - stato backend iniziale `pending_review` (via API)
+
+20. Verificare lista “I miei annunci” web (M2.7):
+- aprire `http://localhost:3000/account/listings`
+- verificare elenco annunci con badge stato (`In revisione`, `Pubblicato`, `Rifiutato`, ...)
+- verificare empty state curato quando la lista e vuota
+- aprire un elemento con `Dettaglio privato` e verificare route `/account/listings/<ID>`
+
+21. Verificare backend moderazione (M2.8):
+- recuperare un token admin/moderator:
+```bash
+pnpm auth:token moderatore.demo demo1234 adottaungatto-admin
+```
+- leggere coda pending review:
+```bash
+curl -H "Authorization: Bearer <TOKEN>" \
+  "http://localhost:3002/v1/admin/moderation/queue?limit=20"
+```
+- approvare o rifiutare un annuncio in coda:
+```bash
+curl -X POST "http://localhost:3002/v1/admin/moderation/<LISTING_ID>/approve" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Contenuto conforme alle policy"}'
+
+curl -X POST "http://localhost:3002/v1/admin/moderation/<LISTING_ID>/reject" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Contenuto non conforme alle policy"}'
+```
+- verificare audit log su DB:
+```bash
+docker exec -it adottaungatto-postgres psql -U adottaungatto -d adottaungatto \
+  -c "SELECT id, action, target_type, target_id, reason, from_status, to_status FROM admin_audit_logs ORDER BY created_at DESC LIMIT 5;"
+```
+
+22. Verificare lista + dettaglio annunci pubblici (M2.10):
+- creare un annuncio in `pending_review` (step 19) e approvarlo (step 21)
+- verificare endpoint pubblico lista:
+```bash
+curl "http://localhost:3002/v1/listings/public?limit=20&offset=0"
+```
+- verificare endpoint pubblico dettaglio:
+```bash
+curl "http://localhost:3002/v1/listings/public/<LISTING_ID>"
+```
+- verificare web pubblico:
+  - `http://localhost:3000/annunci`
+  - `http://localhost:3000/annunci/<LISTING_ID>`
+- comportamento atteso:
+  - solo annunci `published` visibili
+  - annuncio approvato compare in lista e dettaglio
+  - annuncio non pubblicato/non esistente restituisce `404` lato API e pagina `not found` lato web
+
+23. Verificare seed demo annunci + immagini (M2.11):
+```bash
+pnpm db:seed
+pnpm test:smoke:seed-listings
+```
+Output atteso (`test:smoke:seed-listings`):
+- `listingsTotal >= 30`
+- `mediaTotal >= listingsTotal`
+- copertura geografica multi area (`regionsTotal >= 5`, `provincesTotal >= 10`, `comuniTotal >= 15`)
+- stati misti presenti (`published`, `pending_review`, `rejected`, `suspended`)
+
+24. Verificare contratto ricerca annunci (M3.1-M3.4):
+```bash
+curl "http://localhost:3002/v1/listings/search?locationScope=comune&regionId=1&provinceId=11&comuneId=101&listingType=adozione&sort=newest&limit=12&offset=0"
+```
+Output atteso:
+- payload con `items`, `pagination`, `metadata`
+- metadata fallback sempre presenti:
+  - `fallbackApplied`
+  - `fallbackLevel`
+  - `fallbackReason`
+- path primario ricerca su OpenSearch (`listings_v1`)
+- fallback tecnico su query SQL se OpenSearch non disponibile
+- fallback geografico anti-zero-results attivo (comune -> provincia -> nearby -> regione -> Italia)
+
+25. Verificare OpenSearch index/reindex (M3.2):
+```bash
+curl http://localhost:3002/health/search
+pnpm search:reindex
+curl "http://localhost:9200/listings_v1/_count"
+```
+Output atteso:
+- `/health/search` raggiungibile con `service=search`
+- script `search:reindex` completa con totale documenti indicizzati
+- `_count` su `listings_v1` coerente con annunci `published`
+
+Nota:
+- `pnpm search:reindex` richiede env worker validi (`WORKER_NAME`, `DATABASE_URL`, `REDIS_URL`, `OPENSEARCH_URL`).
+
+26. Verificare test ricerca M3.3 (OpenSearch + fallback tecnico):
+```bash
+pnpm --filter @adottaungatto/api test -- test/search-index.service.spec.ts test/listings.service.spec.ts test/listings-search.e2e-spec.ts
+```
+Output atteso:
+- tutti i test verdi
+- copertura filtri/sort/paginazione endpoint search
+- copertura fallback tecnico API da OpenSearch a SQL
+
+27. Verificare test fallback geografico M3.4:
+```bash
+pnpm --filter @adottaungatto/api test -- test/search-fallback.service.spec.ts test/listings-search.e2e-spec.ts
+```
+Output atteso:
+- metadata fallback valorizzati quando si allarga l'area
+- sequenza fallback coperta fino a `nearby`
+- reason code coerenti (`WIDENED_TO_PARENT_AREA`, `WIDENED_TO_NEARBY_AREA`, `NO_LOCATION_FILTER`)
+
+28. Verificare distanza geo M3.5:
+```bash
+curl "http://localhost:3002/v1/listings/search?locationScope=comune&regionId=1&provinceId=11&comuneId=101&sort=relevance&limit=12&offset=0"
+```
+Output atteso:
+- `items[*].distanceKm` presente (numero o `null` quando non calcolabile)
+- ordinamento `relevance` distance-aware su ricerca geolocalizzata
 
 Esempio payload endpoint server-side:
 ```bash

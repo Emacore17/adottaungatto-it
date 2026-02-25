@@ -8,14 +8,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  motionPresets,
 } from '@adottaungatto/ui';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import { LocationSelector, type LocationValue } from '../components/location-selector';
+import { LazyLocationSelector } from '../components/lazy-location-selector';
+import type { LocationValue } from '../components/location-selector';
 
 const emptyLocation: LocationValue = null;
 
 export function HomeContent() {
+  const router = useRouter();
   const [location, setLocation] = useState<LocationValue>(emptyLocation);
 
   const apiBaseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002', []);
@@ -25,11 +29,11 @@ export function HomeContent() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-6 py-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl items-start px-4 py-8 sm:px-6 sm:py-10">
       <motion.div
-        animate={{ opacity: 1, y: 0 }}
-        initial={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        animate={motionPresets.sectionEnter.animate}
+        initial={motionPresets.sectionEnter.initial}
+        transition={motionPresets.sectionEnter.transition}
         className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]"
       >
         <Card className="border-slate-300/60 bg-white/90 backdrop-blur-sm">
@@ -45,15 +49,26 @@ export function HomeContent() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row">
             <Button
+              className="w-full sm:w-auto"
               onClick={() => {
-                window.location.href = '/login';
+                router.push('/annunci');
+              }}
+              variant="outline"
+            >
+              Esplora annunci
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => {
+                router.push('/login');
               }}
             >
               Login
             </Button>
             <Button
+              className="w-full sm:w-auto"
               onClick={() => {
-                window.location.href = '/account';
+                router.push('/account');
               }}
               variant="secondary"
             >
@@ -74,7 +89,7 @@ export function HomeContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <LocationSelector
+            <LazyLocationSelector
               apiBaseUrl={apiBaseUrl}
               onChange={handleLocationChange}
               value={location}

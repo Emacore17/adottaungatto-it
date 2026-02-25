@@ -14,6 +14,7 @@
     "@adottaungatto/config": "workspace:*",
     "@adottaungatto/sdk": "workspace:*",
     "@adottaungatto/ui": "workspace:*",
+    "@tanstack/react-query": "^5.90.21",
     "framer-motion": "^12.5.0",
     "next": "^15.2.0",
     "react": "^19.0.0",

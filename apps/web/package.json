@@ -8,19 +8,27 @@
     "start": "next start -p 3000",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests for @adottaungatto/web\""
+    "test": "echo \"No tests for @adottaungatto/web\"",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@adottaungatto/config": "workspace:*",
     "@adottaungatto/sdk": "workspace:*",
     "@adottaungatto/types": "workspace:*",
     "@adottaungatto/ui": "workspace:*",
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.90.21",
     "framer-motion": "^12.5.0",
     "next": "^15.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.71.2",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

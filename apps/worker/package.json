@@ -21,10 +21,12 @@
     "bullmq": "^5.43.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.5.0",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/pg": "^8.15.4",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }

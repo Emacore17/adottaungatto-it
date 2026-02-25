@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  motionPresets,
 } from '@adottaungatto/ui';
 import { motion } from 'framer-motion';
 
@@ -15,9 +16,9 @@ export function AdminHomeContent() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-10">
       <motion.div
-        animate={{ opacity: 1, y: 0 }}
-        initial={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        animate={motionPresets.sectionEnter.animate}
+        initial={motionPresets.sectionEnter.initial}
+        transition={motionPresets.sectionEnter.transition}
         className="w-full"
       >
         <Card className="border-slate-300/60 bg-white/90 backdrop-blur-sm">

@@ -4,4 +4,6 @@ export * from './components/card';
 export * from './components/dialog';
 export * from './components/input';
 export * from './components/skeleton';
+export * from './components/toast';
+export * from './lib/motion';
 export * from './lib/utils';

@@ -23,3 +23,9 @@ Thumbs.db
 # logs
 *.log
 pnpm-debug.log*
+
+# playwright
+playwright-report/
+test-results/
+**/playwright-report/
+**/test-results/

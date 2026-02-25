@@ -101,10 +101,12 @@ const apiSchema = baseSchema.extend({
     .optional()
     .default('true')
     .transform((value) => value === 'true'),
+  SEARCH_FALLBACK_MAX_STEPS: z.coerce.number().int().min(1).max(5).optional().default(5),
 });
 
 const workerSchema = baseSchema.extend({
   WORKER_NAME: z.string().min(1, 'WORKER_NAME is required'),
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
   REDIS_URL: z.string().url('REDIS_URL must be a valid URL'),
   OPENSEARCH_URL: z.string().url('OPENSEARCH_URL must be a valid URL'),
   MINIO_ENDPOINT: z

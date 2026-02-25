@@ -1,3 +1,11 @@
+import type {
+  LocationIntent,
+  SearchListingsMetadata,
+  SearchFallbackLevel as SharedSearchFallbackLevel,
+  SearchFallbackReason as SharedSearchFallbackReason,
+  SearchSort as SharedSearchSort,
+} from '@adottaungatto/types';
+
 export const listingStatusValues = [
   'draft',
   'pending_review',
@@ -72,4 +80,61 @@ export interface UpdateListingInput {
   contactEmail?: string | null;
   publishedAt?: string | null;
   archivedAt?: string | null;
+}
+
+export interface PublicListingMedia {
+  id: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  position: number;
+  isPrimary: boolean;
+  objectUrl: string;
+}
+
+export interface PublicListingSummary {
+  id: string;
+  title: string;
+  description: string;
+  listingType: string;
+  priceAmount: string | null;
+  currency: string;
+  ageText: string;
+  sex: string;
+  breed: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  regionName: string;
+  provinceName: string;
+  provinceSigla: string;
+  comuneName: string;
+  distanceKm: number | null;
+  mediaCount: number;
+  primaryMedia: PublicListingMedia | null;
+}
+
+export interface PublicListingDetail extends PublicListingSummary {
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  media: PublicListingMedia[];
+}
+
+export const searchSortValues = ['relevance', 'newest', 'price_asc', 'price_desc'] as const;
+
+export type SearchSort = SharedSearchSort;
+
+export type SearchFallbackLevel = SharedSearchFallbackLevel;
+
+export type SearchFallbackReason = SharedSearchFallbackReason;
+
+export interface SearchListingsPage {
+  items: PublicListingSummary[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+  metadata: SearchListingsMetadata;
 }

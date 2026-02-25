@@ -3,16 +3,18 @@
 import type { LocationIntent, LocationIntentScope } from '@adottaungatto/types';
 import { Badge, Button, Input, Skeleton, cn } from '@adottaungatto/ui';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { type GeographySuggestion, fetchLocationSuggestions } from '../lib/geography';
 
 export type LocationValue = LocationIntent | null;
 
-interface LocationSelectorProps {
+export interface LocationSelectorProps {
   apiBaseUrl: string;
   value: LocationValue;
   onChange: (nextValue: LocationValue) => void;
   className?: string;
+  showDebugState?: boolean;
+  showSelectItalyAction?: boolean;
 }
 
 const minimumQueryLength = 2;
@@ -50,7 +52,10 @@ export function LocationSelector({
   value,
   onChange,
   className,
+  showDebugState = true,
+  showSelectItalyAction = true,
 }: LocationSelectorProps) {
+  const selectorId = useId();
   const [query, setQuery] = useState(value?.label ?? '');
   const [suggestions, setSuggestions] = useState<GeographySuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -160,20 +165,30 @@ export function LocationSelector({
     () => (activeIndex >= 0 ? suggestions[activeIndex] : null),
     [activeIndex, suggestions],
   );
+  const listboxId = `${selectorId}-location-suggestions`;
+  const statusId = `${selectorId}-location-status`;
+  const activeSuggestionId =
+    activeSuggestion !== null ? `${selectorId}-suggestion-${activeIndex}` : undefined;
 
   return (
     <section className={cn('space-y-4', className)}>
       <div className="space-y-2" ref={containerRef}>
-        <label className="text-sm font-medium text-slate-900" htmlFor="location-search">
+        <label
+          className="text-sm font-medium text-slate-900"
+          htmlFor={`${selectorId}-location-search`}
+        >
           Luogo
         </label>
         <div className="relative">
           <Input
+            aria-activedescendant={activeSuggestionId}
             aria-autocomplete="list"
-            aria-controls="location-suggestions"
+            aria-controls={listboxId}
+            aria-describedby={statusId}
             aria-expanded={isOpen}
+            aria-haspopup="listbox"
             autoComplete="off"
-            id="location-search"
+            id={`${selectorId}-location-search`}
             onChange={(event) => {
               const nextValue = event.target.value;
               setQuery(nextValue);
@@ -224,13 +239,14 @@ export function LocationSelector({
               }
             }}
             placeholder="Scrivi comune, provincia o regione"
+            role="combobox"
             value={query}
           />
 
           {query.length > 0 ? (
             <button
               aria-label="Reset luogo"
-              className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-slate-500 hover:text-slate-900"
+              className="absolute inset-y-0 right-0 rounded-md px-3 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
               onClick={() => {
                 setQuery('');
                 setSuggestions([]);
@@ -245,6 +261,15 @@ export function LocationSelector({
             </button>
           ) : null}
         </div>
+        <p className="sr-only" id={statusId}>
+          {isLoading
+            ? 'Caricamento suggerimenti luogo.'
+            : error
+              ? 'Errore durante il caricamento suggerimenti luogo.'
+              : canSearch
+                ? `${suggestions.length} suggerimenti disponibili.`
+                : `Digita almeno ${minimumQueryLength} caratteri per i suggerimenti.`}
+        </p>
 
         <AnimatePresence initial={false}>
           {isOpen ? (
@@ -294,16 +319,18 @@ export function LocationSelector({
               ) : null}
 
               {!isLoading && !error && canSearch && suggestions.length > 0 ? (
-                <ul className="space-y-1" id="location-suggestions">
+                <ul className="space-y-1" id={listboxId}>
                   {suggestions.map((suggestion, index) => {
                     const isActive = index === activeIndex;
                     return (
                       <li key={`${suggestion.type}-${suggestion.id}`}>
                         <button
+                          aria-current={isActive ? 'true' : undefined}
                           className={cn(
                             'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors',
                             isActive ? 'bg-slate-100' : 'hover:bg-slate-50',
                           )}
+                          id={`${selectorId}-suggestion-${index}`}
                           onMouseEnter={() => setActiveIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -338,30 +365,34 @@ export function LocationSelector({
         </AnimatePresence>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={selectItaly} size="sm" variant="outline">
-          Seleziona tutta Italia
-        </Button>
-      </div>
+      {showSelectItalyAction ? (
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={selectItaly} size="sm" variant="outline">
+            Seleziona tutta Italia
+          </Button>
+        </div>
+      ) : null}
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
-          Form state (LocationIntent)
-        </p>
-        <p className="mt-1 text-sm text-slate-900">
-          Scope: <span className="font-medium">{value ? scopeLabel[value.scope] : '-'}</span>
-        </p>
-        <p className="text-sm text-slate-900">
-          Selezione: <span className="font-medium">{value?.label ?? '-'}</span>
-        </p>
-        <p className="text-sm text-slate-900">
-          Contesto: <span className="font-medium">{value?.secondaryLabel ?? '-'}</span>
-        </p>
-        <p className="text-xs text-slate-600">
-          regionId={value?.regionId ?? 'null'} | provinceId={value?.provinceId ?? 'null'} |
-          comuneId={value?.comuneId ?? 'null'}
-        </p>
-      </div>
+      {showDebugState ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
+            Form state (LocationIntent)
+          </p>
+          <p className="mt-1 text-sm text-slate-900">
+            Scope: <span className="font-medium">{value ? scopeLabel[value.scope] : '-'}</span>
+          </p>
+          <p className="text-sm text-slate-900">
+            Selezione: <span className="font-medium">{value?.label ?? '-'}</span>
+          </p>
+          <p className="text-sm text-slate-900">
+            Contesto: <span className="font-medium">{value?.secondaryLabel ?? '-'}</span>
+          </p>
+          <p className="text-xs text-slate-600">
+            regionId={value?.regionId ?? 'null'} | provinceId={value?.provinceId ?? 'null'} |
+            comuneId={value?.comuneId ?? 'null'}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

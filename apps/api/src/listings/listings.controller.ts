@@ -10,10 +10,13 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import { validateCreateListingDto } from './dto/create-listing.dto';
+import { validateSearchListingsQueryDto } from './dto/search-listings-query.dto';
 import { ListingsService } from './listings.service';
 import type { UploadListingMediaInput } from './models/listing-media.model';
 import {
@@ -102,6 +105,30 @@ const parsePositiveIntegerString = (value: unknown, fieldName: string): string =
   }
 
   throw new BadRequestException(`Field "${fieldName}" must be a positive integer.`);
+};
+
+const parsePaginationNumber = (
+  rawValue: string | undefined,
+  fieldName: 'limit' | 'offset',
+): number => {
+  if (!rawValue) {
+    return fieldName === 'limit' ? 24 : 0;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  const isLimit = fieldName === 'limit';
+  const maxValue = isLimit ? 100 : Number.MAX_SAFE_INTEGER;
+  const minValue = isLimit ? 1 : 0;
+
+  if (!Number.isFinite(parsed) || parsed < minValue || parsed > maxValue) {
+    if (isLimit) {
+      throw new BadRequestException('Query param "limit" must be an integer between 1 and 100.');
+    }
+
+    throw new BadRequestException('Query param "offset" must be an integer >= 0.');
+  }
+
+  return parsed;
 };
 
 const parsePriceAmount = (value: unknown): number | null => {
@@ -266,6 +293,45 @@ export class ListingsController {
     };
     const listing = await this.listingsService.createForUser(user, payload);
     return { listing };
+  }
+
+  @Public()
+  @Get('public')
+  async listPublic(@Query('limit') rawLimit?: string, @Query('offset') rawOffset?: string) {
+    const limit = parsePaginationNumber(rawLimit, 'limit');
+    const offset = parsePaginationNumber(rawOffset, 'offset');
+    const listings = await this.listingsService.listPublished(limit, offset);
+    return {
+      listings,
+      limit,
+      offset,
+    };
+  }
+
+  @Public()
+  @Get('public/:id')
+  async getPublicById(@Param('id') rawListingId: string) {
+    const listingId = parsePositiveIntegerString(rawListingId, 'id');
+    const listing = await this.listingsService.getPublishedById(listingId);
+    if (!listing) {
+      throw new NotFoundException('Listing not found.');
+    }
+
+    return { listing };
+  }
+
+  @Public()
+  @Get('search')
+  async searchPublic(@Query() query: Record<string, unknown>) {
+    const validation = validateSearchListingsQueryDto(query);
+    if ('issues' in validation) {
+      throw new BadRequestException({
+        message: 'Invalid search listings query.',
+        issues: validation.issues,
+      });
+    }
+
+    return this.listingsService.searchPublic(validation.dto);
   }
 
   @Get('me')

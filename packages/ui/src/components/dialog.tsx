@@ -12,7 +12,10 @@ export const DialogPortal = DialogPrimitive.Portal;
 
 export const DialogOverlay = ({ className, ...props }: DialogPrimitive.DialogOverlayProps) => (
   <DialogPrimitive.Overlay
-    className={cn('fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px]', className)}
+    className={cn(
+      'fixed inset-0 z-50 bg-[color:rgb(15_23_42_/_0.5)] backdrop-blur-[1px] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
+      className,
+    )}
     {...props}
   />
 );
@@ -26,13 +29,13 @@ export const DialogContent = ({
     <DialogOverlay />
     <DialogPrimitive.Content
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-6 shadow-lg',
+        'fixed left-1/2 top-1/2 z-50 w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-[var(--color-text)] shadow-[var(--shadow-lg)] transition-all duration-200 data-[state=open]:opacity-100 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=closed]:opacity-0 data-[state=closed]:translate-y-2 data-[state=closed]:scale-[0.98]',
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-slate-600 opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -56,5 +59,8 @@ export const DialogDescription = ({
   className,
   ...props
 }: DialogPrimitive.DialogDescriptionProps) => (
-  <DialogPrimitive.Description className={cn('text-sm text-slate-600', className)} {...props} />
+  <DialogPrimitive.Description
+    className={cn('text-sm text-[var(--color-text-muted)]', className)}
+    {...props}
+  />
 );

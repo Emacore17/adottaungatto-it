@@ -44,6 +44,16 @@ const bootstrap = async () => {
     minioClient.destroy();
   }
 
+  try {
+    const response = await fetch(env.OPENSEARCH_URL, { method: 'GET' });
+    if (!response.ok) {
+      throw new Error(`status=${response.status}`);
+    }
+    logger.log(`Worker "${env.WORKER_NAME}" connected to OpenSearch ${env.OPENSEARCH_URL}`);
+  } catch (error) {
+    logger.warn(`Worker started without OpenSearch ping (${(error as Error).message}).`);
+  }
+
   logger.log(`Worker "${env.WORKER_NAME}" is up`);
 
   const keepAlive = setInterval(() => {
