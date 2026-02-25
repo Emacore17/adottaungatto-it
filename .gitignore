@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# build outputs
+.next/
+dist/
+coverage/
+
+# environment
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# turbo
+.turbo/
+
+# logs
+*.log
+pnpm-debug.log*

@@ -1,0 +1,30 @@
+{
+  "name": "adottaungatto-it",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.6.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @adottaungatto/web dev",
+    "dev:admin": "pnpm --filter @adottaungatto/admin dev",
+    "dev:api": "pnpm --filter @adottaungatto/api dev",
+    "dev:worker": "pnpm --filter @adottaungatto/worker dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "pnpm --filter @adottaungatto/api test:e2e",
+    "test:smoke": "pnpm --filter @adottaungatto/api test:smoke",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:migrate": "pnpm --filter @adottaungatto/api db:migrate",
+    "db:seed": "pnpm --filter @adottaungatto/api db:seed",
+    "search:reindex": "pnpm --filter @adottaungatto/worker search:reindex"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2"
+  }
+}
