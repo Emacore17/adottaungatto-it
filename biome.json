@@ -20,7 +20,8 @@
       "**/node_modules/**",
       "**/playwright-report/**",
       "**/test-results/**",
-      "**/data/geography/istat-current.json"
+      "**/data/geography/istat-current.json",
+      "**/next-env.d.ts"
     ]
   },
   "javascript": {

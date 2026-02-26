@@ -21,7 +21,7 @@ export function AdminHomeContent() {
         transition={motionPresets.sectionEnter.transition}
         className="w-full"
       >
-        <Card className="border-slate-300/60 bg-white/90 backdrop-blur-sm">
+        <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
           <CardHeader>
             <div className="mb-2 flex items-center gap-2">
               <Badge variant="success">admin up</Badge>

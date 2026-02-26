@@ -23,7 +23,7 @@ export default function AnnunciErrorPage({ error, reset }: AnnunciErrorPageProps
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 sm:px-6 sm:py-10">
-      <Card className="w-full border-rose-300/70 bg-rose-50/80">
+      <Card className="w-full border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]">
         <CardHeader className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="danger">Ricerca non disponibile</Badge>
@@ -39,7 +39,7 @@ export default function AnnunciErrorPage({ error, reset }: AnnunciErrorPageProps
             Riprova caricamento
           </Button>
           <a
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-900 transition-colors hover:bg-rose-100"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-danger-fg)] transition-colors hover:bg-[var(--color-danger-bg)]"
             href="/annunci"
           >
             Torna alla lista

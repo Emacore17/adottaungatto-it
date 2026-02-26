@@ -12,7 +12,7 @@ export default function PublicListingsPage() {
       fallback={
         <main className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
           <div className="w-full space-y-6">
-            <Card className="border-slate-300/70 bg-white/90">
+            <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
               <CardHeader className="space-y-3">
                 <Skeleton className="h-5 w-40" />
                 <Skeleton className="h-10 w-full" />
@@ -20,7 +20,7 @@ export default function PublicListingsPage() {
             </Card>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <Card className="border-slate-300/70 bg-white/95">
+              <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
                 <Skeleton className="h-48 w-full rounded-t-lg" />
                 <CardHeader className="space-y-3">
                   <Skeleton className="h-4 w-24" />
@@ -31,7 +31,7 @@ export default function PublicListingsPage() {
                   <Skeleton className="h-10 w-full" />
                 </CardContent>
               </Card>
-              <Card className="border-slate-300/70 bg-white/95">
+              <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
                 <Skeleton className="h-48 w-full rounded-t-lg" />
                 <CardHeader className="space-y-3">
                   <Skeleton className="h-4 w-24" />
@@ -42,7 +42,7 @@ export default function PublicListingsPage() {
                   <Skeleton className="h-10 w-full" />
                 </CardContent>
               </Card>
-              <Card className="hidden border-slate-300/70 bg-white/95 xl:block">
+              <Card className="hidden border-[var(--color-border)] bg-[var(--color-surface)] xl:block">
                 <Skeleton className="h-48 w-full rounded-t-lg" />
                 <CardHeader className="space-y-3">
                   <Skeleton className="h-4 w-24" />

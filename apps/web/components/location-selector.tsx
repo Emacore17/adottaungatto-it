@@ -174,7 +174,7 @@ export function LocationSelector({
     <section className={cn('space-y-4', className)}>
       <div className="space-y-2" ref={containerRef}>
         <label
-          className="text-sm font-medium text-slate-900"
+          className="text-sm font-medium text-[var(--color-text)]"
           htmlFor={`${selectorId}-location-search`}
         >
           Luogo
@@ -246,7 +246,7 @@ export function LocationSelector({
           {query.length > 0 ? (
             <button
               aria-label="Reset luogo"
-              className="absolute inset-y-0 right-0 rounded-md px-3 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+              className="absolute inset-y-0 right-0 rounded-md px-3 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
               onClick={() => {
                 setQuery('');
                 setSuggestions([]);
@@ -275,7 +275,7 @@ export function LocationSelector({
           {isOpen ? (
             <motion.div
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
               exit={{ opacity: 0, y: -4 }}
               initial={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
@@ -290,7 +290,7 @@ export function LocationSelector({
 
               {!isLoading && error ? (
                 <div className="space-y-2 p-2">
-                  <p className="text-sm text-rose-700">{error}</p>
+                  <p className="text-sm text-[var(--color-danger-fg)]">{error}</p>
                   <Button
                     onClick={() => {
                       if (canSearch) {
@@ -306,13 +306,13 @@ export function LocationSelector({
               ) : null}
 
               {!isLoading && !error && !canSearch ? (
-                <p className="p-2 text-sm text-slate-600">
+                <p className="p-2 text-sm text-[var(--color-text-muted)]">
                   Digita almeno {minimumQueryLength} caratteri per vedere i suggerimenti.
                 </p>
               ) : null}
 
               {!isLoading && !error && canSearch && suggestions.length === 0 ? (
-                <p className="p-2 text-sm text-slate-600">
+                <p className="p-2 text-sm text-[var(--color-text-muted)]">
                   Nessuna corrispondenza trovata. Prova con un nome completo, ad esempio "Torino" o
                   "Piemonte".
                 </p>
@@ -328,7 +328,9 @@ export function LocationSelector({
                           aria-current={isActive ? 'true' : undefined}
                           className={cn(
                             'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors',
-                            isActive ? 'bg-slate-100' : 'hover:bg-slate-50',
+                            isActive
+                              ? 'bg-[var(--color-surface-muted)]'
+                              : 'hover:bg-[var(--color-surface-muted)]',
                           )}
                           id={`${selectorId}-suggestion-${index}`}
                           onMouseEnter={() => setActiveIndex(index)}
@@ -339,11 +341,11 @@ export function LocationSelector({
                           type="button"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-900">
+                            <p className="truncate text-sm font-medium text-[var(--color-text)]">
                               {suggestion.label}
                             </p>
                             {suggestion.secondaryLabel ? (
-                              <p className="truncate text-xs text-slate-600">
+                              <p className="truncate text-xs text-[var(--color-text-muted)]">
                                 {suggestion.secondaryLabel}
                               </p>
                             ) : null}
@@ -374,20 +376,20 @@ export function LocationSelector({
       ) : null}
 
       {showDebugState ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
             Form state (LocationIntent)
           </p>
-          <p className="mt-1 text-sm text-slate-900">
+          <p className="mt-1 text-sm text-[var(--color-text)]">
             Scope: <span className="font-medium">{value ? scopeLabel[value.scope] : '-'}</span>
           </p>
-          <p className="text-sm text-slate-900">
+          <p className="text-sm text-[var(--color-text)]">
             Selezione: <span className="font-medium">{value?.label ?? '-'}</span>
           </p>
-          <p className="text-sm text-slate-900">
+          <p className="text-sm text-[var(--color-text)]">
             Contesto: <span className="font-medium">{value?.secondaryLabel ?? '-'}</span>
           </p>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-[var(--color-text-muted)]">
             regionId={value?.regionId ?? 'null'} | provinceId={value?.provinceId ?? 'null'} |
             comuneId={value?.comuneId ?? 'null'}
           </p>

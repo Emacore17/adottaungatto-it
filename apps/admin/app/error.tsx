@@ -3,6 +3,7 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { captureAdminException } from './sentry-client';
 
 interface AdminRootErrorPageProps {
   error: Error & { digest?: string };
@@ -11,6 +12,7 @@ interface AdminRootErrorPageProps {
 
 export default function AdminRootErrorPage({ error, reset }: AdminRootErrorPageProps) {
   useEffect(() => {
+    captureAdminException(error, 'root_error_boundary');
     console.error('Admin app error boundary:', error);
   }, [error]);
 
@@ -33,8 +35,8 @@ export default function AdminRootErrorPage({ error, reset }: AdminRootErrorPageP
               Riprova
             </Button>
             <Link
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-900 transition-colors hover:bg-rose-100"
-              href="/moderation"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-rose-900 transition-colors hover:bg-rose-100"
+              href="/admin/moderazione"
             >
               Vai a moderazione
             </Link>

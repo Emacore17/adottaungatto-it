@@ -163,7 +163,7 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Canali diretti
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -201,16 +201,16 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
       </div>
 
       <form
-        className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4"
+        className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4"
         onSubmit={submitContact}
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Invia richiesta
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label
-              className="text-xs font-medium text-slate-700"
+              className="text-xs font-medium text-[var(--color-text)]"
               htmlFor={`contact-name-${listingId}`}
             >
               Nome
@@ -221,12 +221,14 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
               {...form.register('name')}
             />
             {form.formState.errors.name ? (
-              <p className="text-xs text-rose-600">{form.formState.errors.name.message}</p>
+              <p className="text-xs text-[var(--color-danger-fg)]">
+                {form.formState.errors.name.message}
+              </p>
             ) : null}
           </div>
           <div className="space-y-1.5">
             <label
-              className="text-xs font-medium text-slate-700"
+              className="text-xs font-medium text-[var(--color-text)]"
               htmlFor={`contact-email-${listingId}`}
             >
               Email
@@ -238,14 +240,16 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
               {...form.register('email')}
             />
             {form.formState.errors.email ? (
-              <p className="text-xs text-rose-600">{form.formState.errors.email.message}</p>
+              <p className="text-xs text-[var(--color-danger-fg)]">
+                {form.formState.errors.email.message}
+              </p>
             ) : null}
           </div>
         </div>
 
         <div className="space-y-1.5">
           <label
-            className="text-xs font-medium text-slate-700"
+            className="text-xs font-medium text-[var(--color-text)]"
             htmlFor={`contact-phone-${listingId}`}
           >
             Telefono (opzionale)
@@ -256,25 +260,29 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
             {...form.register('phone')}
           />
           {form.formState.errors.phone ? (
-            <p className="text-xs text-rose-600">{form.formState.errors.phone.message}</p>
+            <p className="text-xs text-[var(--color-danger-fg)]">
+              {form.formState.errors.phone.message}
+            </p>
           ) : null}
         </div>
 
         <div className="space-y-1.5">
           <label
-            className="text-xs font-medium text-slate-700"
+            className="text-xs font-medium text-[var(--color-text)]"
             htmlFor={`contact-message-${listingId}`}
           >
             Messaggio
           </label>
           <textarea
-            className="min-h-28 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+            className="min-h-28 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] shadow-sm outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
             id={`contact-message-${listingId}`}
             placeholder="Scrivi qui la tua richiesta..."
             {...form.register('message')}
           />
           {form.formState.errors.message ? (
-            <p className="text-xs text-rose-600">{form.formState.errors.message.message}</p>
+            <p className="text-xs text-[var(--color-danger-fg)]">
+              {form.formState.errors.message.message}
+            </p>
           ) : null}
         </div>
 
@@ -287,9 +295,9 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
         />
 
         <div className="space-y-1.5">
-          <label className="flex items-start gap-2 text-xs text-slate-700">
+          <label className="flex items-start gap-2 text-xs text-[var(--color-text)]">
             <input
-              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+              className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)]"
               type="checkbox"
               {...form.register('privacyConsent')}
             />
@@ -298,7 +306,9 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
             </span>
           </label>
           {form.formState.errors.privacyConsent ? (
-            <p className="text-xs text-rose-600">{form.formState.errors.privacyConsent.message}</p>
+            <p className="text-xs text-[var(--color-danger-fg)]">
+              {form.formState.errors.privacyConsent.message}
+            </p>
           ) : null}
         </div>
 
@@ -306,7 +316,7 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
           <Button disabled={!hasContactChannel || form.formState.isSubmitting} type="submit">
             {form.formState.isSubmitting ? 'Invio in corso...' : 'Invia richiesta'}
           </Button>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[var(--color-text-muted)]">
             Protezione anti-spam attiva con limite richieste.
           </p>
         </div>
@@ -314,7 +324,9 @@ export function ContactActions({ listingId, contactEmail, contactPhone }: Contac
         {feedback ? (
           <p
             className={
-              feedback.status === 'success' ? 'text-xs text-emerald-700' : 'text-xs text-rose-700'
+              feedback.status === 'success'
+                ? 'text-xs text-[var(--color-success-fg)]'
+                : 'text-xs text-[var(--color-danger-fg)]'
             }
           >
             {feedback.message}

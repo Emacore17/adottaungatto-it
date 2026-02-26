@@ -12,6 +12,11 @@ const webSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_WEB_URL: z.string().url('NEXT_PUBLIC_WEB_URL must be a valid URL'),
   NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
+  NEXT_PUBLIC_USE_MOCKS: z
+    .enum(['0', '1'])
+    .optional()
+    .default('1')
+    .transform((value) => value === '1'),
   KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
   KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
   KEYCLOAK_CLIENT_ID_WEB: z
@@ -30,6 +35,11 @@ const adminSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_ADMIN_URL: z.string().url('NEXT_PUBLIC_ADMIN_URL must be a valid URL'),
   NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
+  NEXT_PUBLIC_USE_MOCKS: z
+    .enum(['0', '1'])
+    .optional()
+    .default('1')
+    .transform((value) => value === '1'),
   KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
   KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
   KEYCLOAK_CLIENT_ID_ADMIN: z

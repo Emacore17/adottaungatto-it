@@ -39,7 +39,7 @@ export default function ModerationErrorPage({ error, reset }: ModerationErrorPag
             Riprova caricamento
           </Button>
           <a
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-900 transition-colors hover:bg-rose-100"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-rose-900 transition-colors hover:bg-rose-100"
             href="/moderation"
           >
             Riapri moderazione

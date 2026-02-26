@@ -12,6 +12,55 @@ pnpm test:e2e
 pnpm test:e2e:web
 ```
 
+## Manual QA (UI/UX web + admin)
+
+Checklist rapida obbligatoria prima della consegna UI:
+
+1. Avvia stack locale:
+   - `pnpm infra:up`
+   - `pnpm dev`
+2. Verifica route web principali:
+   - `/`, `/cerca`, `/annunci/<id-or-slug>`, `/pubblica`
+   - `/profilo/<username>`, `/preferiti`, `/messaggi`, `/messaggi/<threadId>`
+   - `/account`, `/account/annunci`, `/account/impostazioni`, `/account/sicurezza`
+   - `/login`, `/registrati`, `/password-dimenticata`
+3. Verifica route istituzionali:
+   - `/chi-siamo`, `/faq`, `/contatti`, `/privacy`, `/termini`, `/cookie`
+4. Verifica route admin:
+   - `/admin`, `/admin/moderazione`, `/admin/moderazione/<listingId>`
+   - `/admin/utenti`, `/admin/segnalazioni`, `/admin/impostazioni`, `/admin/audit-log`
+5. Esegui controllo responsive su viewport:
+   - `360x800`, `390x844`, `768x1024`, `1024x768`, `1440x900`
+6. Conferma assenza regressioni UX:
+   - nessun overflow orizzontale
+   - CTA principali raggiungibili su mobile
+   - filtri ricerca usabili in drawer/sheet mobile
+7. Conferma stati pagina:
+   - loading (skeleton) visibile dove previsto
+   - empty state utile con CTA
+   - error state con retry funzionante
+8. Controlla console browser:
+   - nessun errore runtime su web e admin
+9. Verifica coerenza brand:
+   - palette/gradienti/ombre coerenti
+   - badge/chips/card/CTA consistenti
+10. Verifica motion:
+   - transizioni fluide e non eccessive
+   - hover/tap feedback su card e bottoni
+11. Verifica fallback mock:
+   - con `NEXT_PUBLIC_USE_MOCKS=1` preferiti/messaggi/recensioni/notifiche/KPI admin funzionano
+12. Riesegui gate tecnico finale:
+   - `pnpm lint`
+   - `pnpm typecheck`
+   - `pnpm build`
+
+## Gate staging M6
+
+- Per deploy e post-deploy verification usare `docs/DEPLOYMENT.md`.
+- Per gestione incidenti e triage usare `docs/INCIDENT_RUNBOOK.md`.
+- Per backup/restore testati usare `docs/BACKUP_RESTORE_DRILL.md`.
+- Per soglie alert/monitoring usare `docs/OBSERVABILITY_ALERTS.md`.
+
 ## Suite rilevanti M2-M3
 
 - M2 create listing: `apps/api/test/listings-create.e2e-spec.ts`

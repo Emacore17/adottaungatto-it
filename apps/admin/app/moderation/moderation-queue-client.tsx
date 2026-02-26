@@ -183,10 +183,12 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
       />
 
       {items.length === 0 ? (
-        <Card className="border-dashed border-slate-300 bg-white/80">
+        <Card className="border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CardContent className="space-y-3 py-10 text-center">
-            <p className="text-base font-medium text-slate-900">Nessun annuncio in coda.</p>
-            <p className="text-sm text-slate-600">
+            <p className="text-base font-medium text-[var(--color-text)]">
+              Nessun annuncio in coda.
+            </p>
+            <p className="text-sm text-[var(--color-text-muted)]">
               La coda moderazione e vuota. Controlla di nuovo tra poco o aggiorna la vista.
             </p>
             <div className="pt-1">
@@ -210,7 +212,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
               whileHover={motionPresets.hoverLift.whileHover}
               whileTap={motionPresets.hoverLift.whileTap}
             >
-              <Card className="h-full border-slate-300/80 bg-white/95 shadow-sm">
+              <Card className="h-full border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -225,36 +227,40 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     </div>
                   </div>
 
-                  <p className="line-clamp-3 text-sm text-slate-700">{item.description}</p>
+                  <p className="line-clamp-3 text-sm text-[var(--color-text)]">
+                    {item.description}
+                  </p>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-2">
+                  <div className="grid gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         Autore
                       </p>
-                      <p className="text-sm text-slate-800">{item.ownerEmail || '-'}</p>
+                      <p className="text-sm text-[var(--color-text)]">{item.ownerEmail || '-'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         Luogo
                       </p>
-                      <p className="text-sm text-slate-800">
+                      <p className="text-sm text-[var(--color-text)]">
                         {item.comuneName} ({item.provinceSigla}) - {item.regionName}
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         Tipo
                       </p>
-                      <p className="text-sm text-slate-800">{item.listingType || '-'}</p>
+                      <p className="text-sm text-[var(--color-text)]">{item.listingType || '-'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         Creato il
                       </p>
-                      <p className="text-sm text-slate-800">{formatDateTime(item.createdAt)}</p>
+                      <p className="text-sm text-[var(--color-text)]">
+                        {formatDateTime(item.createdAt)}
+                      </p>
                     </div>
                   </div>
 
@@ -290,7 +296,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                   </div>
 
                   {item.status !== 'published' ? (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-[var(--color-text-muted)]">
                       Azione &quot;Sospendi&quot; disponibile solo per annunci pubblicati.
                     </p>
                   ) : null}
@@ -320,16 +326,18 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
           {dialogState ? (
             <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-medium text-slate-900">{dialogState.listing.title}</p>
-                <p className="text-xs text-slate-600">
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3">
+                <p className="text-sm font-medium text-[var(--color-text)]">
+                  {dialogState.listing.title}
+                </p>
+                <p className="text-xs text-[var(--color-text-muted)]">
                   ID #{dialogState.listing.id} - {dialogState.listing.comuneName} (
                   {dialogState.listing.provinceSigla})
                 </p>
               </div>
 
               <label className="block space-y-2" htmlFor="moderation-reason">
-                <span className="text-sm font-medium text-slate-800">Motivazione</span>
+                <span className="text-sm font-medium text-[var(--color-text)]">Motivazione</span>
                 <textarea
                   className="min-h-28 w-full resize-y rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   id="moderation-reason"

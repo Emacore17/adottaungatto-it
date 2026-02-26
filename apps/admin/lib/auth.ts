@@ -31,7 +31,7 @@ const sanitizeNextPath = (value: string | null | undefined, fallbackPath: string
 export const adminSessionCookieName = env.ADMIN_SESSION_COOKIE_NAME;
 
 export const resolveAdminRedirectAfterLogin = (rawNextPath: string | null | undefined) =>
-  sanitizeNextPath(rawNextPath, '/moderation');
+  sanitizeNextPath(rawNextPath, '/admin');
 
 export const exchangeAdminCredentialsForToken = async (username: string, password: string) =>
   requestPasswordGrantToken({

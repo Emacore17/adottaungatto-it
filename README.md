@@ -188,6 +188,10 @@ Output atteso:
 
 Dettaglio fonte e processo aggiornamento dataset: `docs/DATA_GEO_ITALIA.md`.
 Linee guida UX/UI (M4): `docs/UX_UI_GUIDELINES.md`.
+Deploy checklist (M6): `docs/DEPLOYMENT.md`.
+Incident runbook (M6): `docs/INCIDENT_RUNBOOK.md`.
+Backup/restore drill (M6): `docs/BACKUP_RESTORE_DRILL.md`.
+Observability alert matrix (M6): `docs/OBSERVABILITY_ALERTS.md`.
 
 10. Verificare endpoint geography lookup (M1.6):
 ```bash

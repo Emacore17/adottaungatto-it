@@ -6,11 +6,23 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { config as loadDotEnv } from 'dotenv';
 import { AppModule } from './app.module';
+import { captureApiException, flushApiSentry, initializeApiSentry } from './observability/sentry';
 
 const bootstrap = async () => {
   loadDotEnv({ path: '.env.local' });
   loadDotEnv();
   const env = loadApiEnv();
+  const sentryEnabled = initializeApiSentry();
+
+  if (sentryEnabled) {
+    process.on('unhandledRejection', (reason) => {
+      captureApiException(reason, { source: 'unhandled_rejection' });
+    });
+
+    process.on('uncaughtException', (error) => {
+      captureApiException(error, { source: 'uncaught_exception' });
+    });
+  }
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     bufferLogs: true,
@@ -29,6 +41,9 @@ const bootstrap = async () => {
 
 bootstrap().catch((error: Error) => {
   const logger = new Logger('Bootstrap');
+  captureApiException(error, { source: 'bootstrap' });
   logger.error(error.message);
-  process.exit(1);
+  flushApiSentry().finally(() => {
+    process.exit(1);
+  });
 });

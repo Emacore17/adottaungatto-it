@@ -1,6 +1,7 @@
 'use client';
 
 import { useReportWebVitals } from 'next/web-vitals';
+import { capturePoorAdminWebVital } from './sentry-client';
 
 const trackedMetrics = new Set(['LCP', 'CLS', 'INP']);
 
@@ -9,6 +10,8 @@ export function AdminWebVitalsReporter() {
     if (!trackedMetrics.has(metric.name)) {
       return;
     }
+
+    capturePoorAdminWebVital(metric);
 
     if (process.env.NODE_ENV !== 'development') {
       return;

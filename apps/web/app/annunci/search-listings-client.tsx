@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import type {
+  ListingCardData,
   LocationIntent,
   LocationIntentScope,
   SearchFallbackLevel,
@@ -41,6 +42,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LazyLocationSelector } from '../../components/lazy-location-selector';
 import type { LocationValue } from '../../components/location-selector';
+import { shouldFallbackToMock } from '../../lib/mock-mode';
+import { mockListings } from '../../mocks/listings';
 
 interface SearchListingsClientProps {
   apiBaseUrl: string;
@@ -184,6 +187,12 @@ const sortLabel: Record<SearchSort, string> = {
   price_asc: 'Prezzo crescente',
   price_desc: 'Prezzo decrescente',
 };
+const listingTypeLabel: Record<string, string> = {
+  adozione: 'Adozione',
+  stallo: 'Stallo',
+  segnalazione: 'Segnalazione',
+};
+const listingTypeValues = ['adozione', 'stallo', 'segnalazione'] as const;
 
 const emptyFilterState: FilterState = {
   queryText: '',
@@ -400,6 +409,125 @@ const parseSearchResponse = (value: unknown): SearchListingsResponse => {
   };
 };
 
+const mapMockListingToPublicListing = (listing: ListingCardData): PublicListingSummary => {
+  const primaryMedia = listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
+
+  return {
+    id: listing.id,
+    title: listing.title,
+    description: listing.description,
+    listingType: listing.listingType,
+    priceAmount: listing.priceAmount === null ? null : String(listing.priceAmount),
+    currency: listing.currency,
+    ageText: listing.ageText,
+    sex: listing.sex,
+    breed: listing.breed,
+    publishedAt: listing.publishedAt,
+    createdAt: listing.publishedAt,
+    regionName: listing.region,
+    provinceName: listing.province,
+    provinceSigla: listing.province,
+    comuneName: listing.city,
+    distanceKm: listing.distanceKm,
+    mediaCount: listing.media.length,
+    primaryMedia: primaryMedia
+      ? {
+          id: primaryMedia.id,
+          mimeType: 'image/svg+xml',
+          width: primaryMedia.width,
+          height: primaryMedia.height,
+          position: 1,
+          isPrimary: true,
+          objectUrl: primaryMedia.src,
+        }
+      : null,
+  };
+};
+
+const applyMockSearchFilters = (filters: FilterState): PublicListingSummary[] => {
+  const minPrice = normalizeNumericFilter(filters.priceMin);
+  const maxPrice = normalizeNumericFilter(filters.priceMax);
+  const query = filters.queryText.trim().toLowerCase();
+  const breed = filters.breed.trim().toLowerCase();
+  const age = filters.ageText.trim().toLowerCase();
+  const sex = filters.sex.trim().toLowerCase();
+  const listingType = filters.listingType.trim().toLowerCase();
+  const location = filters.locationIntent?.label.trim().toLowerCase() ?? '';
+
+  const filtered = mockListings
+    .filter((listing) => {
+      if (query) {
+        const haystack =
+          `${listing.title} ${listing.description} ${listing.city} ${listing.region}`.toLowerCase();
+        if (!haystack.includes(query)) {
+          return false;
+        }
+      }
+
+      if (listingType && listing.listingType.toLowerCase() !== listingType) {
+        return false;
+      }
+
+      if (sex && !listing.sex.toLowerCase().includes(sex)) {
+        return false;
+      }
+
+      if (breed && !(listing.breed ?? '').toLowerCase().includes(breed)) {
+        return false;
+      }
+
+      if (age && !listing.ageText.toLowerCase().includes(age)) {
+        return false;
+      }
+
+      if (location) {
+        const locationText = `${listing.city} ${listing.province} ${listing.region}`.toLowerCase();
+        if (!locationText.includes(location)) {
+          return false;
+        }
+      }
+
+      if (minPrice && listing.priceAmount !== null && listing.priceAmount < Number(minPrice)) {
+        return false;
+      }
+
+      if (maxPrice && listing.priceAmount !== null && listing.priceAmount > Number(maxPrice)) {
+        return false;
+      }
+
+      return true;
+    })
+    .map((listing) => mapMockListingToPublicListing(listing));
+
+  const sorted = [...filtered];
+  if (filters.sort === 'newest') {
+    sorted.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  } else if (filters.sort === 'price_asc') {
+    sorted.sort((left, right) => Number(left.priceAmount ?? 0) - Number(right.priceAmount ?? 0));
+  } else if (filters.sort === 'price_desc') {
+    sorted.sort((left, right) => Number(right.priceAmount ?? 0) - Number(left.priceAmount ?? 0));
+  }
+
+  return sorted;
+};
+
+const buildMockSearchResponse = (filters: FilterState, offset: number): SearchListingsResponse => {
+  const allItems = applyMockSearchFilters(filters);
+  const paginatedItems = allItems.slice(offset, offset + pageSize);
+  const total = allItems.length;
+
+  return {
+    items: paginatedItems,
+    pagination: {
+      limit: pageSize,
+      offset,
+      total,
+      hasMore: offset + pageSize < total,
+    },
+    metadata: defaultSearchMetadata,
+  };
+};
+
 const parseOffsetValue = (rawOffset: string | null): number => {
   if (!rawOffset) {
     return 0;
@@ -584,6 +712,24 @@ const truncate = (value: string, maxLength: number): string => {
   return `${normalized.slice(0, maxLength - 1)}...`;
 };
 
+const getListingTypeSearchHref = (listingType: string): string => {
+  const normalized = listingType.trim().toLowerCase();
+  if (!normalized) {
+    return '/cerca';
+  }
+
+  return `/cerca?listingType=${encodeURIComponent(normalized)}`;
+};
+
+const formatListingTypeLabel = (listingType: string): string => {
+  const normalized = listingType.trim().toLowerCase();
+  if (!normalized) {
+    return '-';
+  }
+
+  return listingTypeLabel[normalized] ?? listingType;
+};
+
 const summarizePriceChip = (priceMin: string, priceMax: string): string | null => {
   const min = normalizeNumericFilter(priceMin);
   const max = normalizeNumericFilter(priceMax);
@@ -674,21 +820,33 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
   const searchQuery = useQuery<SearchListingsResponse, Error>({
     queryKey: ['listings-search', apiBaseUrl, searchQueryString],
     queryFn: async ({ signal }) => {
-      const response = await fetch(`${apiBaseUrl}/v1/listings/search?${searchQueryString}`, {
-        cache: 'no-store',
-        signal,
-      });
+      try {
+        const response = await fetch(`${apiBaseUrl}/v1/listings/search?${searchQueryString}`, {
+          cache: 'no-store',
+          signal,
+        });
 
-      if (!response.ok) {
-        const payload = asRecord(await response.json().catch(() => ({})));
-        const message =
-          parseOptionalString(payload.message) ??
-          `Ricerca non disponibile (status ${response.status}).`;
-        throw new Error(message);
+        if (!response.ok) {
+          if (shouldFallbackToMock(response.status)) {
+            return buildMockSearchResponse(appliedFilters, appliedOffset);
+          }
+
+          const payload = asRecord(await response.json().catch(() => ({})));
+          const message =
+            parseOptionalString(payload.message) ??
+            `Ricerca non disponibile (status ${response.status}).`;
+          throw new Error(message);
+        }
+
+        const payload = await response.json();
+        return parseSearchResponse(payload);
+      } catch {
+        if (shouldFallbackToMock(null)) {
+          return buildMockSearchResponse(appliedFilters, appliedOffset);
+        }
+
+        throw new Error('Ricerca non disponibile.');
       }
-
-      const payload = await response.json();
-      return parseSearchResponse(payload);
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -730,7 +888,10 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
       chips.push({ key: 'locationIntent', label: `Luogo: ${appliedFilters.locationIntent.label}` });
     }
     if (appliedFilters.listingType) {
-      chips.push({ key: 'listingType', label: `Tipo: ${appliedFilters.listingType}` });
+      chips.push({
+        key: 'listingType',
+        label: `Tipo: ${formatListingTypeLabel(appliedFilters.listingType)}`,
+      });
     }
     const priceChip = summarizePriceChip(appliedFilters.priceMin, appliedFilters.priceMax);
     if (priceChip) {
@@ -810,25 +971,32 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
       >
         <div className="space-y-2">
           <label
-            className="text-sm font-medium text-slate-900"
+            className="text-sm font-medium text-[var(--color-text)]"
             htmlFor={`${options.idPrefix}-listing-type`}
           >
             Tipo annuncio
           </label>
-          <Input
+          <select
+            className="flex h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
             id={`${options.idPrefix}-listing-type`}
             onChange={(event) => {
               setDraftFilters((previous) => ({ ...previous, listingType: event.target.value }));
             }}
-            placeholder="adozione, vendita..."
             value={draftFilters.listingType}
-          />
+          >
+            <option value="">Qualsiasi</option>
+            {listingTypeValues.map((value) => (
+              <option key={value} value={value}>
+                {listingTypeLabel[value]}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <label
-              className="text-sm font-medium text-slate-900"
+              className="text-sm font-medium text-[var(--color-text)]"
               htmlFor={`${options.idPrefix}-price-min`}
             >
               Prezzo min
@@ -847,7 +1015,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
           </div>
           <div className="space-y-2">
             <label
-              className="text-sm font-medium text-slate-900"
+              className="text-sm font-medium text-[var(--color-text)]"
               htmlFor={`${options.idPrefix}-price-max`}
             >
               Prezzo max
@@ -868,7 +1036,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
 
         <div className="space-y-2">
           <label
-            className="text-sm font-medium text-slate-900"
+            className="text-sm font-medium text-[var(--color-text)]"
             htmlFor={`${options.idPrefix}-age-text`}
           >
             Età
@@ -884,11 +1052,14 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-900" htmlFor={`${options.idPrefix}-sex`}>
+          <label
+            className="text-sm font-medium text-[var(--color-text)]"
+            htmlFor={`${options.idPrefix}-sex`}
+          >
             Sesso
           </label>
           <select
-            className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="flex h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
             id={`${options.idPrefix}-sex`}
             onChange={(event) => {
               setDraftFilters((previous) => ({ ...previous, sex: event.target.value }));
@@ -903,7 +1074,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
 
         <div className="space-y-2">
           <label
-            className="text-sm font-medium text-slate-900"
+            className="text-sm font-medium text-[var(--color-text)]"
             htmlFor={`${options.idPrefix}-breed`}
           >
             Razza
@@ -966,7 +1137,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1280px] px-4 py-8 sm:px-6 sm:py-10">
       <div className="w-full space-y-6">
         <Toast
           actionLabel="Riprova"
@@ -982,27 +1153,48 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
           variant="danger"
         />
 
-        <header className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="success">Ricerca annunci</Badge>
-            <Badge variant="outline">M3.7</Badge>
+        <motion.header
+          className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-6 shadow-[var(--shadow-sm)] backdrop-blur-lg sm:p-8"
+          initial={motionPresets.sectionEnter.initial}
+          transition={motionPresets.sectionEnter.transition}
+          whileInView={motionPresets.sectionEnter.animate}
+          viewport={{ once: true, amount: 0.5 }}
+        >
+          <motion.div
+            animate={{ scale: [1, 1.04, 1], x: [0, 8, 0], y: [0, -6, 0] }}
+            className="absolute -left-12 top-6 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(245,196,174,0.45),transparent_68%)]"
+            transition={{ duration: 9.5, ease: 'easeInOut', repeat: Number.POSITIVE_INFINITY }}
+          />
+          <motion.div
+            animate={{ scale: [1, 1.05, 1], x: [0, -10, 0], y: [0, 6, 0] }}
+            className="absolute -right-10 top-5 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(233,180,209,0.35),transparent_70%)]"
+            transition={{ duration: 11.5, ease: 'easeInOut', repeat: Number.POSITIVE_INFINITY }}
+          />
+          <div className="relative space-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Badge variant="success">Ricerca annunci</Badge>
+              <Badge variant="outline">Esperienza premium</Badge>
+            </div>
+            <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--color-text)] sm:text-3xl">
+              Trova il gatto giusto vicino a te
+            </h1>
+            <p className="mx-auto max-w-3xl text-center text-sm text-[var(--color-text-muted)]">
+              Ricerca per luogo, filtra per caratteristiche e ordina i risultati con una lista
+              ottimizzata per mobile e desktop.
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-            Trova il gatto giusto
-          </h1>
-          <p className="max-w-3xl text-sm text-slate-600">
-            Ricerca per luogo, filtra per caratteristiche e ordina i risultati con una lista
-            ottimizzata per mobile e desktop.
-          </p>
-        </header>
+        </motion.header>
 
-        <Card className="border-slate-300/70 bg-white/90 backdrop-blur">
+        <Card className="rounded-3xl border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)]">
           <CardHeader className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div className="grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-900" htmlFor="search-query">
+                    <label
+                      className="text-sm font-medium text-[var(--color-text)]"
+                      htmlFor="search-query"
+                    >
                       Cerca
                     </label>
                     <Input
@@ -1018,11 +1210,14 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-900" htmlFor="search-sort">
+                    <label
+                      className="text-sm font-medium text-[var(--color-text)]"
+                      htmlFor="search-sort"
+                    >
                       Ordina
                     </label>
                     <select
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      className="flex h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
                       id="search-sort"
                       onChange={(event) => {
                         setDraftFilters((previous) => ({
@@ -1061,7 +1256,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                       Filtri avanzati
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="left-auto right-0 top-0 h-dvh w-full max-w-[92vw] translate-x-0 translate-y-0 rounded-none border-l border-slate-200 p-0 sm:max-w-md">
+                  <DialogContent className="left-auto right-0 top-0 h-dvh w-full max-w-[92vw] translate-x-0 translate-y-0 rounded-none border-l border-[var(--color-border)] p-0 sm:max-w-md">
                     <div className="flex h-full flex-col overflow-y-auto p-5">
                       <DialogHeader>
                         <DialogTitle>Filtri avanzati</DialogTitle>
@@ -1096,14 +1291,14 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
             <legend className="sr-only">Filtri attivi</legend>
             {activeFilterChips.map((chip) => (
               <Badge
-                className="gap-2 px-3 py-1"
+                className="gap-2 border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] px-3 py-1"
                 key={`${chip.key}-${chip.label}`}
                 variant="outline"
               >
                 <span>{chip.label}</span>
                 <button
                   aria-label={`Rimuovi filtro ${chip.label}`}
-                  className="rounded-sm px-1 text-xs text-slate-500 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                  className="rounded-sm px-1 text-xs text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   onClick={() => clearSingleFilter(chip.key)}
                   type="button"
                 >
@@ -1117,9 +1312,15 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
           </fieldset>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <motion.div
+          className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"
+          initial={motionPresets.sectionEnter.initial}
+          transition={motionPresets.sectionEnter.transition}
+          viewport={{ once: true, amount: 0.12 }}
+          whileInView={motionPresets.sectionEnter.animate}
+        >
           <aside className="hidden lg:block">
-            <Card className="sticky top-6 border-slate-300/70 bg-white/90">
+            <Card className="sticky top-28 border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)]">
               <CardHeader>
                 <CardTitle className="text-base">Filtri avanzati</CardTitle>
                 <CardDescription>
@@ -1134,7 +1335,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p aria-live="polite" className="text-sm text-slate-600">
+              <p aria-live="polite" className="text-sm text-[var(--color-text-muted)]">
                 {isLoading
                   ? 'Caricamento annunci in corso...'
                   : `${currentPagination.total} annunci trovati`}
@@ -1154,7 +1355,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                 >
                   Precedente
                 </Button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-[var(--color-text-muted)]">
                   Pagina {currentPage} / {totalPages}
                 </span>
                 <Button
@@ -1187,10 +1388,10 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
             ) : null}
 
             {metadata.fallbackApplied ? (
-              <Card className="border-amber-200 bg-amber-50">
+              <Card className="border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]">
                 <CardContent className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <p className="text-sm text-amber-900">
+                    <p className="text-sm text-[var(--color-warning-fg)]">
                       Nessun risultato esatto in{' '}
                       <strong>{formatLocationIntentLabel(requestedLocationIntent)}</strong>.
                       Mostriamo annunci in{' '}
@@ -1269,7 +1470,10 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                   transition={motionPresets.crossfade.transition}
                 >
                   {loadingSkeletonKeys.map((skeletonKey) => (
-                    <Card className="border-slate-300/70 bg-white/95" key={skeletonKey}>
+                    <Card
+                      className="border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)]"
+                      key={skeletonKey}
+                    >
                       <Skeleton className="h-48 w-full rounded-t-lg" />
                       <CardHeader className="space-y-3">
                         <Skeleton className="h-4 w-20" />
@@ -1294,7 +1498,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                   key="search-error"
                   transition={motionPresets.crossfade.transition}
                 >
-                  <Card className="border-rose-300/70 bg-rose-50">
+                  <Card className="border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]">
                     <CardHeader>
                       <CardTitle>Ricerca non disponibile</CardTitle>
                       <CardDescription>{requestError}</CardDescription>
@@ -1324,7 +1528,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                   key="search-empty"
                   transition={motionPresets.crossfade.transition}
                 >
-                  <Card className="border-slate-300/70 bg-white/95">
+                  <Card className="border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)]">
                     <CardHeader>
                       <CardTitle>Nessun annuncio con i filtri correnti</CardTitle>
                       <CardDescription>
@@ -1333,7 +1537,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+                      <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--color-text)]">
                         {zeroStateSuggestions.length > 0 ? (
                           zeroStateSuggestions.map((suggestion) => (
                             <li key={suggestion}>{suggestion}</li>
@@ -1383,12 +1587,13 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
 
               {!isLoading && !requestError && (searchResponse?.items.length ?? 0) > 0 ? (
                 <motion.div
-                  animate={motionPresets.listEnter.animate}
                   className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
                   exit={motionPresets.crossfade.exit}
                   initial={motionPresets.listEnter.initial}
                   key="search-results"
                   transition={motionPresets.listEnter.transition}
+                  viewport={{ once: true, amount: 0.12 }}
+                  whileInView={motionPresets.listEnter.animate}
                 >
                   {searchResponse?.items.map((listing, index) => (
                     <motion.article
@@ -1400,32 +1605,49 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                       whileHover={motionPresets.hoverLift.whileHover}
                       whileTap={motionPresets.hoverLift.whileTap}
                     >
-                      <Card className="border-slate-300/70 bg-white/95">
+                      <Card className="overflow-hidden rounded-3xl border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)]">
                         {listing.primaryMedia ? (
-                          <Image
-                            alt={`Foto annuncio ${listing.title}`}
-                            className="h-48 w-full rounded-t-lg object-cover"
-                            height={listing.primaryMedia.height ?? 480}
-                            priority={index < 2}
-                            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                            src={listing.primaryMedia.objectUrl}
-                            width={listing.primaryMedia.width ?? 640}
-                          />
+                          <div className="relative">
+                            <Image
+                              alt={`Foto annuncio ${listing.title}`}
+                              className="h-48 w-full rounded-t-2xl object-cover"
+                              height={listing.primaryMedia.height ?? 480}
+                              priority={index < 2}
+                              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                              src={listing.primaryMedia.objectUrl}
+                              width={listing.primaryMedia.width ?? 640}
+                            />
+                            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/30 to-transparent" />
+                          </div>
                         ) : (
-                          <div className="flex h-48 w-full items-center justify-center rounded-t-lg bg-slate-100 text-sm text-slate-500">
+                          <div className="flex h-48 w-full items-center justify-center rounded-t-2xl bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-muted)]">
                             Nessuna foto
                           </div>
                         )}
                         <CardHeader className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
-                            <Badge variant="secondary">{listing.listingType}</Badge>
+                            <div className="flex items-center gap-2">
+                              <Link
+                                aria-label={`Filtra annunci per ${formatListingTypeLabel(listing.listingType)}`}
+                                className="inline-flex"
+                                href={getListingTypeSearchHref(listing.listingType)}
+                              >
+                                <Badge
+                                  className="cursor-pointer border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] text-[var(--color-text)] hover:border-[var(--color-primary)]/50"
+                                  variant="secondary"
+                                >
+                                  {formatListingTypeLabel(listing.listingType)}
+                                </Badge>
+                              </Link>
+                              <Badge variant="success">Verificato</Badge>
+                            </div>
                             <div className="flex items-center gap-2">
                               {formatDistance(listing.distanceKm) ? (
                                 <Badge variant="outline">
                                   {formatDistance(listing.distanceKm)}
                                 </Badge>
                               ) : null}
-                              <span className="text-xs text-slate-500">
+                              <span className="text-xs text-[var(--color-text-muted)]">
                                 {formatDate(listing.publishedAt)}
                               </span>
                             </div>
@@ -1439,10 +1661,10 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <p className="text-sm text-slate-700">
+                          <p className="text-sm text-[var(--color-text)]">
                             {truncate(listing.description, 140)}
                           </p>
-                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                          <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-text-muted)]">
                             <span>Età: {listing.ageText || '-'}</span>
                             <span>Sesso: {listing.sex || '-'}</span>
                             <span className="col-span-2">
@@ -1450,7 +1672,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
                             </span>
                           </div>
                           <Link
-                            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+                            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition-colors hover:bg-[var(--color-primary-hover)]"
                             href={`/annunci/${listing.id}`}
                           >
                             Apri dettaglio
@@ -1463,7 +1685,7 @@ export function SearchListingsClient({ apiBaseUrl }: SearchListingsClientProps) 
               ) : null}
             </AnimatePresence>
           </section>
-        </div>
+        </motion.div>
       </div>
     </main>
   );

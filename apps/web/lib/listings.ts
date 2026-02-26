@@ -1,6 +1,9 @@
 import { loadWebEnv } from '@adottaungatto/config';
+import type { ListingCardData } from '@adottaungatto/types';
 import { cookies } from 'next/headers';
+import { findMockListingBySlug, mockListings } from '../mocks/listings';
 import { webSessionCookieName } from './auth';
+import { shouldFallbackToMock } from './mock-mode';
 
 const env = loadWebEnv();
 
@@ -211,6 +214,57 @@ const parsePublicDetail = (value: unknown): PublicListingDetail | null => {
   };
 };
 
+const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingSummary => {
+  const primaryMedia = listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
+
+  return {
+    id: listing.id,
+    title: listing.title,
+    description: listing.description,
+    listingType: listing.listingType,
+    priceAmount: listing.priceAmount === null ? null : String(listing.priceAmount),
+    currency: listing.currency,
+    ageText: listing.ageText,
+    sex: listing.sex,
+    breed: listing.breed,
+    publishedAt: listing.publishedAt,
+    createdAt: listing.publishedAt,
+    regionName: listing.region,
+    provinceName: listing.province,
+    provinceSigla: listing.province,
+    comuneName: listing.city,
+    distanceKm: listing.distanceKm,
+    mediaCount: listing.media.length,
+    primaryMedia: primaryMedia
+      ? {
+          id: primaryMedia.id,
+          mimeType: 'image/svg+xml',
+          width: primaryMedia.width,
+          height: primaryMedia.height,
+          position: 1,
+          isPrimary: primaryMedia.isPrimary === true,
+          objectUrl: primaryMedia.src,
+        }
+      : null,
+  };
+};
+
+const mapMockListingToPublicDetail = (listing: ListingCardData): PublicListingDetail => ({
+  ...mapMockListingToPublicSummary(listing),
+  contactName: listing.sellerUsername,
+  contactPhone: null,
+  contactEmail: `${listing.sellerUsername}@adottaungatto.it`,
+  media: listing.media.map((media, index) => ({
+    id: media.id,
+    mimeType: 'image/svg+xml',
+    width: media.width,
+    height: media.height,
+    position: index + 1,
+    isPrimary: media.isPrimary === true,
+    objectUrl: media.src,
+  })),
+});
+
 export const fetchMyListings = async (): Promise<MyListing[]> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(webSessionCookieName)?.value;
@@ -252,45 +306,83 @@ export const fetchPublicListings = async (
     offset: String(offset >= 0 ? offset : 0),
   });
 
-  const response = await fetch(
-    `${env.NEXT_PUBLIC_API_URL}/v1/listings/public?${query.toString()}`,
-    {
-      cache: 'no-store',
-    },
-  );
+  try {
+    const response = await fetch(
+      `${env.NEXT_PUBLIC_API_URL}/v1/listings/public?${query.toString()}`,
+      {
+        cache: 'no-store',
+      },
+    );
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch public listings with status ${response.status}.`);
+    if (!response.ok) {
+      if (shouldFallbackToMock(response.status)) {
+        return mockListings
+          .slice(offset, offset + limit)
+          .map((listing) => mapMockListingToPublicSummary(listing));
+      }
+
+      throw new Error(`Failed to fetch public listings with status ${response.status}.`);
+    }
+
+    const payload = asRecord(await response.json());
+    const rawListings = Array.isArray(payload.listings) ? payload.listings : [];
+
+    return rawListings
+      .map((item) => parsePublicSummary(item))
+      .filter((item): item is PublicListingSummary => item !== null);
+  } catch {
+    if (shouldFallbackToMock(null)) {
+      return mockListings
+        .slice(offset, offset + limit)
+        .map((listing) => mapMockListingToPublicSummary(listing));
+    }
+
+    throw new Error('Failed to fetch public listings.');
   }
-
-  const payload = asRecord(await response.json());
-  const rawListings = Array.isArray(payload.listings) ? payload.listings : [];
-
-  return rawListings
-    .map((item) => parsePublicSummary(item))
-    .filter((item): item is PublicListingSummary => item !== null);
 };
 
 export const fetchPublicListingById = async (
   listingId: string,
 ): Promise<PublicListingDetail | null> => {
   const normalizedId = listingId.trim();
-  if (!/^[1-9]\d*$/.test(normalizedId)) {
-    return null;
+  const isNumericId = /^[1-9]\d*$/.test(normalizedId);
+
+  if (!isNumericId) {
+    const mockListing = findMockListingBySlug(normalizedId);
+    return mockListing ? mapMockListingToPublicDetail(mockListing) : null;
   }
 
-  const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/v1/listings/public/${normalizedId}`, {
-    cache: 'no-store',
-  });
+  try {
+    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/v1/listings/public/${normalizedId}`, {
+      cache: 'no-store',
+    });
 
-  if (response.status === 404) {
-    return null;
+    if (response.status === 404) {
+      if (shouldFallbackToMock(response.status)) {
+        const mockListing = findMockListingBySlug(normalizedId);
+        return mockListing ? mapMockListingToPublicDetail(mockListing) : null;
+      }
+
+      return null;
+    }
+
+    if (!response.ok) {
+      if (shouldFallbackToMock(response.status)) {
+        const mockListing = findMockListingBySlug(normalizedId);
+        return mockListing ? mapMockListingToPublicDetail(mockListing) : null;
+      }
+
+      throw new Error(`Failed to fetch public listing with status ${response.status}.`);
+    }
+
+    const payload = asRecord(await response.json());
+    return parsePublicDetail(payload.listing);
+  } catch {
+    if (shouldFallbackToMock(null)) {
+      const mockListing = findMockListingBySlug(normalizedId);
+      return mockListing ? mapMockListingToPublicDetail(mockListing) : null;
+    }
+
+    throw new Error('Failed to fetch public listing.');
   }
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch public listing with status ${response.status}.`);
-  }
-
-  const payload = asRecord(await response.json());
-  return parsePublicDetail(payload.listing);
 };

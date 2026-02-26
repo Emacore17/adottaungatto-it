@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import type { LocationIntent } from '@adottaungatto/types';
 import {
@@ -62,8 +62,8 @@ const listingCreateSchema = z
     ageText: z
       .string()
       .trim()
-      .min(2, 'Indica eta o fascia eta.')
-      .max(80, 'Campo eta troppo lungo (max 80 caratteri).'),
+      .min(2, 'Indica età o fascia età.')
+      .max(80, 'Campo età troppo lungo (max 80 caratteri).'),
     sex: z.enum(['femmina', 'maschio', 'non_specificato']),
     breed: z.string().trim().max(120, 'Razza troppo lunga (max 120 caratteri).').optional(),
     priceAmount: z.string().trim().optional(),
@@ -443,14 +443,16 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
 
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 via-orange-50 to-white p-4 shadow-sm"
+        className="rounded-2xl border border-[var(--color-border)] bg-[linear-gradient(120deg,rgba(204,110,80,0.16),var(--color-surface-overlay-strong),rgba(232,180,206,0.2))] p-4 shadow-[var(--shadow-sm)]"
         initial={{ opacity: 0, y: 8 }}
         transition={{ duration: 0.25, ease: 'easeOut' }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Nuovo annuncio adozione</p>
-            <p className="text-xs text-slate-600">
+            <p className="text-sm font-semibold text-[var(--color-text)]">
+              Nuovo annuncio adozione
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">
               Flusso M2.6: compilazione guidata + upload immagini + invio in revisione.
             </p>
           </div>
@@ -462,7 +464,7 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
       </motion.div>
 
       <form className="space-y-6 pb-20 sm:pb-0" onSubmit={onSubmit}>
-        <Card className="border-slate-300/80">
+        <Card className="border-[var(--color-border)]">
           <CardHeader>
             <CardTitle>Dati annuncio</CardTitle>
             <CardDescription>
@@ -472,7 +474,10 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-title">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-title"
+                >
                   Titolo
                 </label>
                 <Input
@@ -481,16 +486,21 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                   {...form.register('title')}
                 />
                 {form.formState.errors.title ? (
-                  <p className="text-xs text-rose-700">{form.formState.errors.title.message}</p>
+                  <p className="text-xs text-[var(--color-danger-fg)]">
+                    {form.formState.errors.title.message}
+                  </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-type">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-type"
+                >
                   Tipo annuncio
                 </label>
                 <select
-                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                  className="flex h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   id="listing-type"
                   {...form.register('listingType')}
                 >
@@ -503,11 +513,14 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-sex">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-sex"
+                >
                   Sesso
                 </label>
                 <select
-                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                  className="flex h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   id="listing-sex"
                   {...form.register('sex')}
                 >
@@ -520,27 +533,40 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-age">
-                  Eta
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-age"
+                >
+                  Età
                 </label>
                 <Input id="listing-age" placeholder="Es. 2 anni" {...form.register('ageText')} />
                 {form.formState.errors.ageText ? (
-                  <p className="text-xs text-rose-700">{form.formState.errors.ageText.message}</p>
+                  <p className="text-xs text-[var(--color-danger-fg)]">
+                    {form.formState.errors.ageText.message}
+                  </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-breed">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-breed"
+                >
                   Razza (opzionale)
                 </label>
                 <Input id="listing-breed" placeholder="Es. Europeo" {...form.register('breed')} />
                 {form.formState.errors.breed ? (
-                  <p className="text-xs text-rose-700">{form.formState.errors.breed.message}</p>
+                  <p className="text-xs text-[var(--color-danger-fg)]">
+                    {form.formState.errors.breed.message}
+                  </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-price">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-price"
+                >
                   Prezzo adozione (opzionale)
                 </label>
                 <Input
@@ -550,24 +576,27 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                   {...form.register('priceAmount')}
                 />
                 {form.formState.errors.priceAmount ? (
-                  <p className="text-xs text-rose-700">
+                  <p className="text-xs text-[var(--color-danger-fg)]">
                     {form.formState.errors.priceAmount.message}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="listing-description">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="listing-description"
+                >
                   Descrizione
                 </label>
                 <textarea
-                  className="min-h-36 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                  className="min-h-36 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   id="listing-description"
                   placeholder="Racconta carattere, stato sanitario, compatibilita, note utili."
                   {...form.register('description')}
                 />
                 {form.formState.errors.description ? (
-                  <p className="text-xs text-rose-700">
+                  <p className="text-xs text-[var(--color-danger-fg)]">
                     {form.formState.errors.description.message}
                   </p>
                 ) : null}
@@ -576,7 +605,7 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
           </CardContent>
         </Card>
 
-        <Card className="border-slate-300/80">
+        <Card className="border-[var(--color-border)]">
           <CardHeader>
             <CardTitle>Luogo e contatti</CardTitle>
             <CardDescription>
@@ -599,12 +628,17 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
               )}
             />
             {form.formState.errors.location ? (
-              <p className="text-xs text-rose-700">{form.formState.errors.location.message}</p>
+              <p className="text-xs text-[var(--color-danger-fg)]">
+                {form.formState.errors.location.message}
+              </p>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="contact-name">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="contact-name"
+                >
                   Nome contatto
                 </label>
                 <Input
@@ -613,14 +647,17 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                   {...form.register('contactName')}
                 />
                 {form.formState.errors.contactName ? (
-                  <p className="text-xs text-rose-700">
+                  <p className="text-xs text-[var(--color-danger-fg)]">
                     {form.formState.errors.contactName.message}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="contact-phone">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="contact-phone"
+                >
                   Telefono
                 </label>
                 <Input
@@ -629,14 +666,17 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                   {...form.register('contactPhone')}
                 />
                 {form.formState.errors.contactPhone ? (
-                  <p className="text-xs text-rose-700">
+                  <p className="text-xs text-[var(--color-danger-fg)]">
                     {form.formState.errors.contactPhone.message}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-2 sm:col-span-2 xl:col-span-1">
-                <label className="text-sm font-medium text-slate-900" htmlFor="contact-email">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="contact-email"
+                >
                   Email contatto
                 </label>
                 <Input
@@ -645,7 +685,7 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                   {...form.register('contactEmail')}
                 />
                 {form.formState.errors.contactEmail ? (
-                  <p className="text-xs text-rose-700">
+                  <p className="text-xs text-[var(--color-danger-fg)]">
                     {form.formState.errors.contactEmail.message}
                   </p>
                 ) : null}
@@ -654,7 +694,7 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
           </CardContent>
         </Card>
 
-        <Card className="border-slate-300/80">
+        <Card className="border-[var(--color-border)]">
           <CardHeader>
             <CardTitle>Immagini annuncio</CardTitle>
             <CardDescription>
@@ -665,7 +705,9 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
             <div
               className={cn(
                 'rounded-xl border border-dashed p-5 transition-colors',
-                isDragActive ? 'border-slate-900 bg-slate-100/70' : 'border-slate-300 bg-slate-50',
+                isDragActive
+                  ? 'border-[var(--color-primary)] bg-[var(--color-surface-muted)]'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface-muted)]',
               )}
               onDragEnter={(event) => {
                 event.preventDefault();
@@ -682,10 +724,10 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
               onDrop={handleDrop}
             >
               <div className="space-y-3 text-center">
-                <p className="text-sm font-medium text-slate-900">
+                <p className="text-sm font-medium text-[var(--color-text)]">
                   Trascina qui le foto del gatto oppure selezionale manualmente
                 </p>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-[var(--color-text-muted)]">
                   Max {maxMediaFiles} immagini, {formatFileSize(maxFileSizeBytes)} per file.
                 </p>
                 <Button
@@ -710,10 +752,12 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
               </div>
             </div>
 
-            {mediaError ? <p className="text-xs text-rose-700">{mediaError}</p> : null}
+            {mediaError ? (
+              <p className="text-xs text-[var(--color-danger-fg)]">{mediaError}</p>
+            ) : null}
 
             {selectedFiles.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-white/80 px-3 py-2 text-xs text-slate-600">
+              <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
                 Nessuna immagine selezionata. Aggiungi almeno una foto per inviare l&apos;annuncio
                 in revisione.
               </div>
@@ -729,12 +773,16 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
                 >
                   {selectedFiles.map((file, index) => (
                     <li
-                      className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                       key={`${file.name}-${file.size}-${file.lastModified}`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
-                        <p className="text-xs text-slate-600">{formatFileSize(file.size)}</p>
+                        <p className="truncate text-sm font-medium text-[var(--color-text)]">
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-[var(--color-text-muted)]">
+                          {formatFileSize(file.size)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {index === 0 ? <Badge variant="success">Primaria</Badge> : null}
@@ -751,13 +799,13 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
         </Card>
 
         {submitError ? (
-          <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p className="rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger-fg)]">
             {submitError}
           </p>
         ) : null}
 
         {uploadProgress ? (
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-[var(--color-text)]">
             Upload immagini: {uploadProgress.uploaded}/{uploadProgress.total}
           </p>
         ) : null}
@@ -776,7 +824,7 @@ export function ListingCreateForm({ apiBaseUrl, defaultContactEmail }: ListingCr
           </Button>
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] sm:hidden">
           <div className="mx-auto grid w-full max-w-5xl grid-cols-2 gap-2">
             <Button
               className="w-full"

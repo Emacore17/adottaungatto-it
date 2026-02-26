@@ -35,6 +35,9 @@ describe('Health endpoint', () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
     expect(response.body.service).toBe('api');
+    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
   });
 
   it('GET /health/search should include OpenSearch status', async () => {

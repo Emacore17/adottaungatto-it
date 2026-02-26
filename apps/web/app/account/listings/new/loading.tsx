@@ -4,7 +4,7 @@ export default function ListingCreateLoading() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="w-full space-y-6">
-        <Card className="border-slate-300/70 bg-white/90">
+        <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
           <CardHeader className="space-y-3">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-8 w-64" />
@@ -15,7 +15,7 @@ export default function ListingCreateLoading() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-300/80">
+        <Card className="border-[var(--color-border)]">
           <CardHeader className="space-y-3">
             <Skeleton className="h-7 w-48" />
             <Skeleton className="h-4 w-80" />
@@ -27,7 +27,7 @@ export default function ListingCreateLoading() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-300/80">
+        <Card className="border-[var(--color-border)]">
           <CardHeader className="space-y-3">
             <Skeleton className="h-7 w-40" />
             <Skeleton className="h-4 w-72" />

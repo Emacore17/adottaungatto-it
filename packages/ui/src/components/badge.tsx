@@ -3,15 +3,15 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '../lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus-within:ring-2 focus-within:ring-[var(--color-ring)] focus-within:ring-offset-1 focus-within:ring-offset-[var(--color-surface)]',
   {
     variants: {
       variant: {
         default:
           'border-transparent bg-[var(--color-primary)] text-[var(--color-primary-foreground)]',
         secondary:
-          'border-transparent bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]',
-        outline: 'border-[var(--color-border)] text-[var(--color-text-muted)]',
+          'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)]',
+        outline: 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]',
         success:
           'border-[var(--color-success-border)] bg-[var(--color-success-bg)] text-[var(--color-success-fg)]',
         warning:
