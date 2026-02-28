@@ -2,30 +2,30 @@
   "source": {
     "dataset": "istat-elenco-comuni",
     "url": "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx",
-    "sheetName": "CODICI al 31_01_2026",
-    "referenceDate": "2026-01-31",
-    "syncedAt": "2026-02-25T21:30:52.015Z"
+    "sheetName": "CODICI al 21_02_2026",
+    "referenceDate": "2026-02-21",
+    "syncedAt": "2026-02-28T17:24:13.409Z"
   },
   "centroids": {
     "source": {
       "dataset": "istat-confini-generalizzati",
       "url": "https://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati/2025/Limiti01012025_g.zip",
       "boundaryYear": 2025,
-      "syncedAt": "2026-02-25T21:30:52.015Z"
+      "syncedAt": "2026-02-28T17:24:13.409Z"
     },
     "coverage": {
       "regions": 20,
       "provinces": 110,
-      "comuni": 7895,
-      "comuniExactMatches": 7518,
+      "comuni": 7893,
+      "comuniExactMatches": 7516,
       "comuniLegacyMatches": 377,
-      "comuniMissing": 0
+      "comuniMissing": 1
     }
   },
   "stats": {
     "regions": 20,
     "provinces": 110,
-    "comuni": 7895
+    "comuni": 7894
   },
   "regions": [
     {
@@ -55,8 +55,8 @@
     {
       "istatCode": "05",
       "name": "Veneto",
-      "centroidLat": 45.581918,
-      "centroidLng": 11.758621
+      "centroidLat": 45.582459,
+      "centroidLng": 11.759197
     },
     {
       "istatCode": "06",
@@ -315,8 +315,8 @@
       "regionIstatCode": "05",
       "name": "Vicenza",
       "sigla": "VI",
-      "centroidLat": 45.633744,
-      "centroidLng": 11.499426
+      "centroidLat": 45.637396,
+      "centroidLng": 11.497653
     },
     {
       "istatCode": "025",
@@ -31493,16 +31493,6 @@
       "centroidLng": 11.781314
     },
     {
-      "istatCode": "024027",
-      "regionIstatCode": "05",
-      "provinceIstatCode": "024",
-      "name": "Castegnero",
-      "codeCatastale": "C056",
-      "legacyIstatCode107": "024027",
-      "centroidLat": 45.437114,
-      "centroidLng": 11.60392
-    },
-    {
       "istatCode": "024028",
       "regionIstatCode": "05",
       "provinceIstatCode": "024",
@@ -31851,16 +31841,6 @@
       "legacyIstatCode107": "024070",
       "centroidLat": 45.770843,
       "centroidLng": 11.808468
-    },
-    {
-      "istatCode": "024071",
-      "regionIstatCode": "05",
-      "provinceIstatCode": "024",
-      "name": "Nanto",
-      "codeCatastale": "F838",
-      "legacyIstatCode107": "024071",
-      "centroidLat": 45.424981,
-      "centroidLng": 11.591824
     },
     {
       "istatCode": "024072",
@@ -32381,6 +32361,16 @@
       "legacyIstatCode107": "024128",
       "centroidLat": 45.553882,
       "centroidLng": 11.434391
+    },
+    {
+      "istatCode": "024129",
+      "regionIstatCode": "05",
+      "provinceIstatCode": "024",
+      "name": "Castegnero Nanto",
+      "codeCatastale": "M439",
+      "legacyIstatCode107": "024129",
+      "centroidLat": null,
+      "centroidLng": null
     },
     {
       "istatCode": "025001",
