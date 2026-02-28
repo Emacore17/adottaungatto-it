@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function LegacyCreateListingPage() {
+export default function NewListingPage() {
   redirect('/pubblica');
 }

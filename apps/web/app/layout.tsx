@@ -1,25 +1,23 @@
 import { loadWebEnv } from '@adottaungatto/config';
 import type { Metadata } from 'next';
-import { Inter, Poppins } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
-import { MobileBottomNav } from '../components/mobile-bottom-nav';
-import { SiteFooter } from '../components/site-footer';
-import { SiteHeader } from '../components/site-header';
+import { AppShell } from '../components/app-shell';
 import { ThemeProvider } from '../components/theme-provider';
+import './globals.css';
 import { WebQueryClientProvider } from './query-client-provider';
 import { WebVitalsReporter } from './web-vitals-reporter';
-import './globals.css';
 
 const env = loadWebEnv();
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-sans',
-  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 });
-const poppins = Poppins({
+const jetBrainsMono = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['500', '600', '700'],
+  variable: '--font-mono',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -27,7 +25,7 @@ export const metadata: Metadata = {
     default: env.NEXT_PUBLIC_APP_NAME,
     template: `%s | ${env.NEXT_PUBLIC_APP_NAME}`,
   },
-  description: "Annunci gatti in adozione, stallo e supporto con un'esperienza premium.",
+  description: 'Scaffold web minimale con Next.js, UI condivisa e integrazioni backend preservate.',
 };
 
 export default function RootLayout({
@@ -37,15 +35,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={`${inter.variable} ${poppins.variable}`}>
+      <body className={`${inter.variable} ${jetBrainsMono.variable}`}>
         <ThemeProvider>
           <WebQueryClientProvider>
-            <div className="relative min-h-screen overflow-x-clip">
-              <SiteHeader />
-              <div className="pb-24 pt-6 md:pb-8">{children}</div>
-              <SiteFooter />
-              <MobileBottomNav />
-            </div>
+            <AppShell>{children}</AppShell>
             <WebVitalsReporter />
           </WebQueryClientProvider>
         </ThemeProvider>

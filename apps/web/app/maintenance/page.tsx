@@ -1,22 +1,19 @@
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
-import Link from 'next/link';
+import { LinkButton } from '../../components/link-button';
+import { ScaffoldPlaceholder } from '../../components/scaffold-placeholder';
 
 export default function MaintenancePage() {
   return (
-    <main className="mx-auto flex w-full max-w-[760px] items-center px-4 pb-12 sm:px-6 lg:px-8">
-      <Card className="w-full border-[var(--color-border)] bg-[var(--color-surface)]">
-        <CardHeader>
-          <CardTitle>Manutenzione in corso</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-          <p>
-            Stiamo applicando aggiornamenti infrastrutturali. Torna tra pochi minuti per continuare.
-          </p>
-          <Link href="/">
-            <Button>Ricarica home</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </main>
+    <ScaffoldPlaceholder
+      actions={
+        <LinkButton href="/" variant="outline">
+          Torna alla home
+        </LinkButton>
+      }
+      description="La route di manutenzione resta disponibile come punto di atterraggio tecnico, ma anche questa pagina e stata ripulita."
+      eyebrow="Infra"
+      nextSteps={['Definire il template definitivo per downtime e comunicazioni di esercizio.']}
+      route="/maintenance"
+      title="Manutenzione programmata"
+    />
   );
 }

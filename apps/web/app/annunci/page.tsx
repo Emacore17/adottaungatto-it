@@ -1,64 +1,47 @@
-import { Card, CardContent, CardHeader, Skeleton } from '@adottaungatto/ui';
-import { Suspense } from 'react';
-import { SearchListingsClient } from './search-listings-client';
+import { Badge } from '@adottaungatto/ui';
+import { LinkButton } from '../../components/link-button';
+import { PageShell } from '../../components/page-shell';
+import { PublicListingsGrid } from '../../components/public-listings-grid';
+import { fetchPublicListings } from '../../lib/listings';
+import { isMockModeEnabled } from '../../lib/mock-mode';
 
-const defaultApiBaseUrl = 'http://localhost:3002';
-
-export default function PublicListingsPage() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? defaultApiBaseUrl;
+export default async function ListingsPage() {
+  const listings = await fetchPublicListings({ limit: 12 }).catch(() => []);
 
   return (
-    <Suspense
-      fallback={
-        <main className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-          <div className="w-full space-y-6">
-            <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
-              <CardHeader className="space-y-3">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-10 w-full" />
-              </CardHeader>
-            </Card>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-                <CardHeader className="space-y-3">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-6 w-4/5" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </CardContent>
-              </Card>
-              <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-                <CardHeader className="space-y-3">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-6 w-4/5" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </CardContent>
-              </Card>
-              <Card className="hidden border-[var(--color-border)] bg-[var(--color-surface)] xl:block">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-                <CardHeader className="space-y-3">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-6 w-4/5" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </CardContent>
-              </Card>
-            </div>
+    <PageShell
+      aside={
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+              Data source
+            </p>
+            <p className="text-sm text-[var(--color-text)]">
+              Endpoint pubblico listings + fallback mock opzionale.
+            </p>
           </div>
-        </main>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">{listings.length} elementi</Badge>
+            <Badge variant={isMockModeEnabled ? 'warning' : 'secondary'}>
+              Mock {isMockModeEnabled ? 'on' : 'off'}
+            </Badge>
+          </div>
+        </div>
       }
+      description="La pagina annunci e tornata a una lista pubblica essenziale. Niente filtri avanzati, drawer o fallback banner: solo il contratto dati e una presentazione minima."
+      eyebrow="Catalogo pubblico"
+      title="Annunci pubblici"
     >
-      <SearchListingsClient apiBaseUrl={apiBaseUrl} />
-    </Suspense>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton href="/pubblica">Pubblica annuncio</LinkButton>
+        <LinkButton href="/login" variant="outline">
+          Accedi
+        </LinkButton>
+      </div>
+      <PublicListingsGrid
+        emptyDescription="Quando il nuovo motore di ricerca sara ridisegnato, questa vista tornera a crescere sopra lo stesso layer dati."
+        listings={listings}
+      />
+    </PageShell>
   );
 }

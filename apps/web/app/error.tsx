@@ -17,7 +17,7 @@ export default function RootErrorPage({ error, reset }: RootErrorPageProps) {
   }, [error]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto flex min-h-[60vh] w-full max-w-3xl items-center px-4 py-8 sm:px-6 sm:py-10">
       <Card className="w-full border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]">
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
@@ -28,14 +28,15 @@ export default function RootErrorPage({ error, reset }: RootErrorPageProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-[var(--color-danger-fg)]">
-            Riprova il caricamento della pagina. Se il problema persiste puoi tornare alla home.
+            Riprova il caricamento della pagina. Se il problema persiste puoi tornare allo scaffold
+            iniziale.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={reset} type="button">
               Riprova
             </Button>
             <Link
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-danger-fg)] transition-colors hover:bg-[var(--color-danger-bg)]"
+              className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--color-danger-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-danger-fg)] transition-colors hover:bg-[var(--color-danger-bg)]"
               href="/"
             >
               Torna alla home

@@ -1,14 +1,16 @@
-import { StaticPage } from '../../components/static-page';
+import { ScaffoldPlaceholder } from '../../components/scaffold-placeholder';
 
 export default function CookiePage() {
   return (
-    <StaticPage subtitle="Informazioni su cookie tecnici, analitici e preferenze." title="Cookie">
-      <p>Usiamo cookie tecnici per login, sessione e preferenze interfaccia (tema, filtri).</p>
-      <p>
-        Cookie analitici aggregati possono essere attivati per migliorare performance e usabilita
-        della piattaforma.
-      </p>
-      <p>Puoi gestire le preferenze dal browser o dalle impostazioni account.</p>
-    </StaticPage>
+    <ScaffoldPlaceholder
+      description="La documentazione cookie tornera quando il nuovo layer consenso e analytics sara ridefinito."
+      eyebrow="Pagina legale"
+      nextSteps={[
+        'Ridefinire gli script effettivamente presenti nel nuovo frontend.',
+        'Pubblicare la policy solo dopo aver chiuso il nuovo perimetro tracking.',
+      ]}
+      route="/cookie"
+      title="Cookie"
+    />
   );
 }

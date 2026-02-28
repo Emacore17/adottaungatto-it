@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { webSessionCookieName } from '../../../../lib/auth';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const clearWebSessionCookie = async () => {
   const cookieStore = await cookies();
   cookieStore.set({
@@ -9,7 +11,7 @@ const clearWebSessionCookie = async () => {
     value: '',
     httpOnly: true,
     sameSite: 'lax',
-    secure: false,
+    secure: isProduction,
     path: '/',
     maxAge: 0,
   });

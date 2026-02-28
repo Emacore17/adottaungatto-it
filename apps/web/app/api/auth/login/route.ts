@@ -13,6 +13,8 @@ const toLoginUrl = (request: Request, errorCode: string, nextPath: string) => {
   return url;
 };
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 export async function POST(request: Request) {
   const formData = await request.formData();
   const username = String(formData.get('username') ?? '').trim();
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
       value: token.accessToken,
       httpOnly: true,
       sameSite: 'lax',
-      secure: false,
+      secure: isProduction,
       path: '/',
       maxAge: token.expiresIn,
     });

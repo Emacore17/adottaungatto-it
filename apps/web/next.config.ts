@@ -66,7 +66,12 @@ const securityHeaders: Array<{ key: string; value: string }> = [
 ];
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@adottaungatto/ui', '@adottaungatto/config', '@adottaungatto/types'],
+  transpilePackages: [
+    '@adottaungatto/ui',
+    '@adottaungatto/config',
+    '@adottaungatto/sdk',
+    '@adottaungatto/types',
+  ],
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [

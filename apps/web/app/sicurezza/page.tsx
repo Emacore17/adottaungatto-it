@@ -1,17 +1,12 @@
-import { StaticPage } from '../../components/static-page';
+import { ScaffoldPlaceholder } from '../../components/scaffold-placeholder';
 
-export default function SafetyPage() {
+export default function SecurityPage() {
   return (
-    <StaticPage
-      subtitle="Checklist anti-truffa e best practice per adozioni sicure."
+    <ScaffoldPlaceholder
+      description="La pagina sicurezza tornera quando il nuovo frontend avra un perimetro stabile e documentabile."
+      eyebrow="Pagina istituzionale"
+      route="/sicurezza"
       title="Sicurezza"
-    >
-      <ul className="list-disc space-y-1 pl-5">
-        <li>Diffida di richieste di pagamento urgente o canali esterni non tracciati.</li>
-        <li>Verifica il badge inserzionista e controlla recensioni/profilo.</li>
-        <li>Conserva la conversazione in piattaforma per tutela reciproca.</li>
-        <li>Segnala subito contenuti sospetti al team moderazione.</li>
-      </ul>
-    </StaticPage>
+    />
   );
 }

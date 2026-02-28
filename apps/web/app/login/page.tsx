@@ -1,5 +1,17 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@adottaungatto/ui';
-import Link from 'next/link';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '@adottaungatto/ui';
+import { redirect } from 'next/navigation';
+import { LinkButton } from '../../components/link-button';
+import { PageShell } from '../../components/page-shell';
+import { getWebSession } from '../../lib/auth';
 
 interface LoginPageProps {
   searchParams?: Promise<{
@@ -29,70 +41,93 @@ const mapErrorMessage = (code: string | undefined) => {
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const session = await getWebSession().catch(() => null);
+  if (session) {
+    redirect('/account');
+  }
+
   const resolvedSearchParams = await searchParams;
   const nextPath = getFirstParamValue(resolvedSearchParams?.next) ?? '/account';
   const errorMessage = mapErrorMessage(getFirstParamValue(resolvedSearchParams?.error));
 
   return (
-    <main className="mx-auto grid w-full max-w-[1080px] gap-5 px-4 pb-12 sm:px-6 lg:grid-cols-[1fr_440px] lg:px-8">
-      <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-lg)] lg:p-10">
-        <Badge variant="info">Area utente premium</Badge>
-        <h1 className="mt-4 text-4xl">Accedi e gestisci i tuoi annunci in tempo reale.</h1>
-        <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-          Dashboard annunci, preferiti, messaggi e sicurezza account in un unico workspace.
-        </p>
-        <ul className="mt-5 list-disc space-y-1 pl-5 text-sm text-[var(--color-text-muted)]">
-          <li>Stato moderazione sempre visibile</li>
-          <li>Messaggi con inserzionisti in thread ordinati</li>
-          <li>Controllo sicurezza e sessioni</li>
-        </ul>
-      </section>
-
-      <Card className="border-[var(--color-border)] bg-[var(--color-surface)]">
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action="/api/auth/login" className="space-y-4" method="post">
-            <input name="next" type="hidden" value={nextPath} />
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="username">
-                Username
-              </label>
-              <Input id="username" name="username" placeholder="utente.demo" required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="password">
-                Password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                placeholder="demo1234"
-                required
-                type="password"
-              />
-            </div>
-            {errorMessage ? (
-              <p className="text-sm text-[var(--color-danger-fg)]">{errorMessage}</p>
-            ) : null}
-            <Button className="w-full" type="submit">
-              Accedi
-            </Button>
-          </form>
-          <div className="mt-4 flex flex-wrap gap-3 text-xs">
-            <Link className="text-[var(--color-primary)] hover:underline" href="/registrati">
-              Crea account
-            </Link>
-            <Link
-              className="text-[var(--color-primary)] hover:underline"
-              href="/password-dimenticata"
-            >
-              Password dimenticata
-            </Link>
+    <PageShell
+      aside={
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+              Auth ancora attiva
+            </p>
+            <p className="text-sm text-[var(--color-text)]">
+              Password grant Keycloak, cookie sessione e redirect `next` restano collegati.
+            </p>
           </div>
-        </CardContent>
-      </Card>
-    </main>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="info">/api/auth/login</Badge>
+            <Badge variant="outline">/api/auth/logout</Badge>
+          </div>
+        </div>
+      }
+      description="La pagina login resta funzionale ma e tornata a una forma base. Tutto il contorno prodotto e stato rimosso per ripartire da uno scaffold pulito."
+      eyebrow="Autenticazione"
+      title="Accedi allo scaffold web"
+    >
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Login</CardTitle>
+            <CardDescription>
+              La sessione viene ancora salvata nel cookie del frontend.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action="/api/auth/login" className="space-y-4" method="post">
+              <input name="next" type="hidden" value={nextPath} />
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="username">
+                  Username
+                </label>
+                <Input id="username" name="username" placeholder="utente.demo" required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="password">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  name="password"
+                  placeholder="demo1234"
+                  required
+                  type="password"
+                />
+              </div>
+              {errorMessage ? (
+                <p className="text-sm text-[var(--color-danger-fg)]">{errorMessage}</p>
+              ) : null}
+              <Button className="w-full" type="submit">
+                Accedi
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Route collegate</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
+            <p>Il login porta ancora a `/account` o al path `next` richiesto.</p>
+            <div className="flex flex-wrap gap-2">
+              <LinkButton href="/registrati" variant="outline">
+                Registrati
+              </LinkButton>
+              <LinkButton href="/password-dimenticata" variant="ghost">
+                Password dimenticata
+              </LinkButton>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </PageShell>
   );
 }
