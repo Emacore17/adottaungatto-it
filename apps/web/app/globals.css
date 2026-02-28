@@ -13,6 +13,7 @@
   --color-surface-muted-strong: #f8e5dc;
   --color-surface-overlay: rgb(255 250 247 / 0.9);
   --color-surface-overlay-strong: rgb(255 250 247 / 0.96);
+  --color-header-overlay: rgb(255 250 247 / 0.58);
   --color-border: #ddc5ba;
   --color-text: #432b25;
   --color-text-muted: #6e554d;
@@ -64,6 +65,7 @@
   --color-surface-muted-strong: #3b2d2a;
   --color-surface-overlay: rgb(37 26 24 / 0.88);
   --color-surface-overlay-strong: rgb(37 26 24 / 0.95);
+  --color-header-overlay: rgb(37 26 24 / 0.66);
   --color-border: #59443d;
   --color-text: #f8ece8;
   --color-text-muted: #d7c2b9;
