@@ -318,7 +318,7 @@ textarea:focus-visible,
   position: absolute;
   top: -4px;
   right: -4px;
-  background: #ff385c;
+  background: var(--color-primary);
   color: white;
   border-radius: 50%;
   width: 20px;
@@ -335,7 +335,7 @@ textarea:focus-visible,
   height: 48px;
   border-radius: 50%;
   border: none;
-  background: #ff385c;
+  background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
