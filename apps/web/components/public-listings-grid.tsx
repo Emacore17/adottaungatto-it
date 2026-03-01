@@ -11,6 +11,44 @@ interface PublicListingsGridProps {
   emptyDescription?: string;
 }
 
+const placeholderMediaFileNames = [
+  'gattino-1.jpg',
+  'gattino-2.webp',
+  'gattino-3.png',
+  'gattino-4.png',
+  'gattino-5.jpeg',
+  'gattino-6.jpg',
+  'gattino-7.jpg',
+  'gattino-8.jpg',
+] as const;
+
+const resolvePlaceholderMediaFileName = (listingId: string) => {
+  let hash = 0;
+  for (let index = 0; index < listingId.length; index += 1) {
+    hash = (hash + listingId.charCodeAt(index) * (index + 1)) % 2_147_483_647;
+  }
+
+  return placeholderMediaFileNames[Math.abs(hash) % placeholderMediaFileNames.length];
+};
+
+const resolveCardImageUrl = (primaryImageUrl: string, fallbackFileName: string) => {
+  if (primaryImageUrl.length === 0) {
+    return `/mock-media/${fallbackFileName}`;
+  }
+
+  const isRemoteImage =
+    primaryImageUrl.startsWith('http://') || primaryImageUrl.startsWith('https://');
+  if (!isRemoteImage) {
+    return primaryImageUrl;
+  }
+
+  const params = new URLSearchParams({
+    src: primaryImageUrl,
+    fallbackFile: fallbackFileName,
+  });
+  return `/api/listings/media-proxy?${params.toString()}`;
+};
+
 export function PublicListingsGrid({
   listings,
   layout = 'grid',
@@ -68,14 +106,12 @@ export function PublicListingsGrid({
         const ageLabel = listing.ageText.trim();
         const breedLabel = listing.breed?.trim() ?? '';
         const publishedLabel = formatDate(listing.publishedAt ?? listing.createdAt);
-        const imageStyle = listing.primaryMedia?.objectUrl
-          ? {
-              backgroundImage: `linear-gradient(135deg, var(--color-media-overlay-start) 0%, var(--color-media-overlay-end) 100%), url("${listing.primaryMedia.objectUrl}")`,
-            }
-          : {
-              backgroundImage:
-                'linear-gradient(135deg, var(--color-image-fallback-start) 0%, var(--color-image-fallback-mid) 45%, var(--color-image-fallback-end) 100%)',
-            };
+        const primaryImageUrl = listing.primaryMedia?.objectUrl?.trim() ?? '';
+        const placeholderFileName = resolvePlaceholderMediaFileName(listing.id);
+        const imageUrl = resolveCardImageUrl(primaryImageUrl, placeholderFileName);
+        const imageStyle = {
+          backgroundImage: `linear-gradient(135deg, var(--color-media-overlay-start) 0%, var(--color-media-overlay-end) 100%), url("${imageUrl}")`,
+        };
 
         return (
           <Link

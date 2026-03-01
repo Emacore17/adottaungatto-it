@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
 import { LinkButton } from './link-button';
-import Ricerca from './ricerca';
+import { ShellSearch } from './shell-search';
 import { ThemeToggle } from './theme-toggle';
 
 const primaryNavigation = [
@@ -115,9 +115,7 @@ export async function AppShell({ children }: AppShellProps) {
       </header>
 
       <main className="relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="mb-6">
-          <Ricerca showHeader={false} />
-        </div>
+        <ShellSearch />
         {children}
       </main>
 
