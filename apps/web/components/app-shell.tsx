@@ -1,10 +1,12 @@
 import { loadWebEnv } from '@adottaungatto/config';
-import { Badge, Button, cn } from '@adottaungatto/ui';
+import { Button } from '@adottaungatto/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
 import { LinkButton } from './link-button';
+import { MobileNavMenu } from './mobile-nav-menu';
 import { ShellSearch } from './shell-search';
+import { ScrollAwareHeader } from './scroll-aware-header';
 import { ThemeToggle } from './theme-toggle';
 
 const primaryNavigation = [
@@ -34,17 +36,9 @@ export async function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-80"
-        style={{
-          background:
-            'radial-gradient(circle at top, var(--color-bg-spot-1), transparent 55%), radial-gradient(circle at right top, var(--color-bg-spot-2), transparent 48%)',
-        }}
-      />
-
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-header-overlay)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-4 sm:px-6">
-          <Link className="flex min-w-0 flex-1 items-center gap-3" href="/">
+      <ScrollAwareHeader>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4">
+          <Link className="flex min-w-0 items-center gap-3 lg:justify-self-start" href="/">
             <span
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)]"
               style={{
@@ -58,13 +52,10 @@ export async function AppShell({ children }: AppShellProps) {
               <p className="truncate text-sm font-semibold text-[var(--color-text)]">
                 {env.NEXT_PUBLIC_APP_NAME}
               </p>
-              <p className="truncate text-xs text-[var(--color-text-muted)]">
-                Annunci affidabili per adozione, stallo e segnalazioni
-              </p>
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-1 lg:col-start-2 lg:flex lg:justify-self-center">
             {primaryNavigation.map((item) => (
               <Link className={navLinkClassName} href={item.href} key={item.href}>
                 {item.label}
@@ -72,13 +63,9 @@ export async function AppShell({ children }: AppShellProps) {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
-            <Badge
-              className={cn('hidden max-w-[220px] truncate md:inline-flex')}
-              variant={session ? 'success' : 'secondary'}
-            >
-              {session ? session.user.email : 'Guest'}
-            </Badge>
+          <div className="flex items-center gap-2 lg:col-start-3 lg:justify-self-end">
+            <MobileNavMenu items={primaryNavigation} />
+
             <ThemeToggle />
             {session ? (
               <>
@@ -96,23 +83,29 @@ export async function AppShell({ children }: AppShellProps) {
                 </form>
               </>
             ) : (
-              <LinkButton className="h-9 px-3" href="/login">
+              <LinkButton className="h-9 gap-2 px-3" href="/login">
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
                 Login
               </LinkButton>
             )}
           </div>
         </div>
-
-        <div className="border-t border-[var(--color-border)] lg:hidden">
-          <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
-            {primaryNavigation.map((item) => (
-              <Link className={navLinkClassName} href={item.href} key={item.href}>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
+      </ScrollAwareHeader>
 
       <main className="relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <ShellSearch />
@@ -123,11 +116,12 @@ export async function AppShell({ children }: AppShellProps) {
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="space-y-2">
             <p className="text-sm font-medium text-[var(--color-text)]">
-              Una piattaforma chiara per trovare o pubblicare annunci dedicati ai gatti.
+              Una piattaforma semplice per adottare, offrire stallo o pubblicare annunci dedicati
+              ai gatti.
             </p>
             <p className="max-w-2xl text-sm text-[var(--color-text-muted)]">
-              Ricerca rapida, pagine leggere, gerarchia semantica e temi coerenti aiutano la
-              consultazione degli annunci sia in chiaro sia in scuro.
+              Ricerca rapida, pagine leggere e temi coerenti facilitano la consultazione degli
+              annunci, sia in modalità chiara sia scura.
             </p>
           </div>
 

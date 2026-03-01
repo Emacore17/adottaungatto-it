@@ -451,7 +451,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                 htmlFor={qInputId}
                 ref={qRef}
               >
-                <span className="search-field-label">Cerca</span>
+                <span className="search-field-label">Cerca gatti</span>
                 <input
                   className="search-field-input"
                   id={qInputId}
@@ -463,7 +463,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                       void runSearch();
                     }
                   }}
-                  placeholder="Cerca gattini, adozioni o rifugi"
+                  placeholder="Es. Milano, europeo, cucciolo..."
                   type="text"
                   value={search.q}
                 />
@@ -498,7 +498,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                   ref={listingTypeRef}
                   type="button"
                 >
-                  <span className="search-field-label">Tipo annuncio</span>
+                  <span className="search-field-label">Cosa stai cercando?</span>
                   <span className="search-field-value">{listingTypeLabel}</span>
                 </button>
 
@@ -538,7 +538,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                   ref={ageRef}
                   type="button"
                 >
-                  <span className="search-field-label">Eta</span>
+                  <span className="search-field-label">Età del gatto</span>
                   <span className="search-field-value">{ageLabel}</span>
                 </button>
               </div>
@@ -552,7 +552,41 @@ export default function Ricerca({ showHeader = true } = {}) {
               onClick={() => setExpanded((currentValue) => !currentValue)}
               type="button"
             >
-              <span className="search-adv-symbol">{expanded ? 'X' : '+'}</span>
+              {expanded ? (
+                <svg
+                  aria-hidden="true"
+                  className="search-adv-symbol search-adv-symbol-close"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M8 8l8 8M16 8l-8 8"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  aria-hidden="true"
+                  className="search-adv-symbol"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 7h8M16 7h4M4 17h4M12 17h8"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                  <circle cx="14" cy="7" r="2" stroke="currentColor" strokeWidth="1.8" />
+                  <circle cx="10" cy="17" r="2" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              )}
               {activeFiltersCount > 0 ? (
                 <span className="search-adv-badge">{activeFiltersCount}</span>
               ) : null}

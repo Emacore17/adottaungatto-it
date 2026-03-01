@@ -141,10 +141,7 @@ body {
   margin: 0;
   min-height: 100%;
   position: relative;
-  background: radial-gradient(circle at 12% 12%, var(--color-bg-spot-1), transparent 24rem),
-    radial-gradient(circle at 84% 4%, var(--color-bg-spot-2), transparent 20rem),
-    radial-gradient(circle at 50% 100%, var(--color-bg-spot-3), transparent 26rem),
-    var(--color-bg-canvas);
+  background: var(--color-bg-canvas);
   color: var(--color-text);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -408,10 +405,14 @@ textarea:focus-visible,
 }
 
 .search-adv-symbol {
-  font-size: 30px;
-  line-height: 1;
-  font-weight: 500;
-  transform: translateY(-1px);
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.search-adv-symbol-close {
+  width: 22px;
+  height: 22px;
 }
 
 .search-adv-badge {

@@ -20,13 +20,15 @@ export default async function Page() {
   const featuredListings = orderedListings.slice(0, 9);
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-3 text-center">
+    <div className="space-y-16 sm:space-y-20">
+      <section className="space-y-4 pt-8 text-center sm:pt-12">
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Trova il tuo prossimo gatto.
+          Adotta un gatto vicino a te, in modo sicuro.
         </h1>
         <p className="mx-auto max-w-2xl text-base text-[var(--color-text-muted)] sm:text-lg">
-          Cerca per localita, razza e tipologia per trovare il profilo giusto in pochi secondi.
+          Cerca per città, razza ed età e trova il gatto giusto per te in pochi secondi.
+          <br />
+          Annunci pubblicati da gattili, volontari e privati, in tutta Italia.
         </p>
       </section>
 
@@ -43,13 +45,14 @@ export default async function Page() {
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold tracking-tight">Annunci in evidenza</h2>
               <p className="text-sm text-[var(--color-text-muted)]">
-                Scorri automaticamente i profili in evidenza.
+                Profili selezionati da gattili e volontari, per gatti che hanno bisogno di più
+                visibilità.
               </p>
             </div>
           </div>
 
           <LinkButton href="/annunci" variant="outline">
-            Apri tutti gli annunci
+            Vedi tutti gli annunci
           </LinkButton>
         </div>
 
@@ -97,7 +100,7 @@ export default async function Page() {
           <Badge className="w-fit" variant="outline">
             Tutti gli annunci
           </Badge>
-          <h2 className="text-2xl font-semibold tracking-tight">Catalogo completo</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Annunci recenti da tutta Italia</h2>
         </div>
 
         <PublicListingsGrid
