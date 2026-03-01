@@ -13,7 +13,7 @@ export const DialogPortal = DialogPrimitive.Portal;
 export const DialogOverlay = ({ className, ...props }: DialogPrimitive.DialogOverlayProps) => (
   <DialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-[color:rgb(15_23_42_/_0.5)] backdrop-blur-[1px] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
+      'fixed inset-0 z-50 bg-black/45 backdrop-blur-[3px] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 dark:bg-black/60',
       className,
     )}
     {...props}

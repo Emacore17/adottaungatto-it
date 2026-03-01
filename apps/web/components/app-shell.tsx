@@ -34,19 +34,33 @@ export async function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.16),transparent_55%)]" />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-80"
+        style={{
+          background:
+            'radial-gradient(circle at top, var(--color-bg-spot-1), transparent 55%), radial-gradient(circle at right top, var(--color-bg-spot-2), transparent 48%)',
+        }}
+      />
 
       <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-header-overlay)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-4 sm:px-6">
           <Link className="flex min-w-0 flex-1 items-center gap-3" href="/">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary)] text-sm font-semibold text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)]">
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)]"
+              style={{
+                backgroundImage:
+                  'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
+              }}
+            >
               AG
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[var(--color-text)]">
                 {env.NEXT_PUBLIC_APP_NAME}
               </p>
-              <p className="truncate text-xs text-[var(--color-text-muted)]">Web scaffold reset</p>
+              <p className="truncate text-xs text-[var(--color-text-muted)]">
+                Annunci affidabili per adozione, stallo e segnalazioni
+              </p>
             </div>
           </Link>
 
@@ -111,11 +125,11 @@ export async function AppShell({ children }: AppShellProps) {
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="space-y-2">
             <p className="text-sm font-medium text-[var(--color-text)]">
-              Frontend riportato a una base pulita.
+              Una piattaforma chiara per trovare o pubblicare annunci dedicati ai gatti.
             </p>
             <p className="max-w-2xl text-sm text-[var(--color-text-muted)]">
-              Next.js App Router, UI condivisa, theme switching, motion centralizzato e collegamenti
-              a backend, API e autenticazione restano disponibili come fondamenta del rebuild.
+              Ricerca rapida, pagine leggere, gerarchia semantica e temi coerenti aiutano la
+              consultazione degli annunci sia in chiaro sia in scuro.
             </p>
           </div>
 

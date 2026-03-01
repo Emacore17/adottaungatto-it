@@ -32,18 +32,14 @@ const SEX_OPTIONS = [
 ];
 
 const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Più pertinenti' },
-  { value: 'newest', label: 'Più recenti' },
+  { value: 'relevance', label: 'Piu pertinenti' },
+  { value: 'newest', label: 'Piu recenti' },
   { value: 'price_asc', label: 'Prezzo crescente' },
   { value: 'price_desc', label: 'Prezzo decrescente' },
 ];
 
 const QUICK_LOCATION_QUERIES = ['Roma', 'Milano', 'Torino', 'Napoli'];
-
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-const normalizeLooseText = (value) =>
-  value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 const initialState = {
   q: '',
@@ -57,10 +53,13 @@ const initialState = {
   sort: 'relevance',
 };
 
+const normalizeLooseText = (value) =>
+  value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+
 function Popover({ children, parentRef, open }) {
   const popoverRef = useRef(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
   const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     setMounted(true);
@@ -80,8 +79,8 @@ function Popover({ children, parentRef, open }) {
       const popoverRect = popoverRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const margin = 12;
       const gap = 8;
+      const margin = 12;
 
       let left = triggerRect.left;
       if (left + popoverRect.width > viewportWidth - margin) {
@@ -111,9 +110,11 @@ function Popover({ children, parentRef, open }) {
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [open, parentRef, mounted]);
+  }, [mounted, open, parentRef]);
 
-  if (!mounted || !open) return null;
+  if (!mounted || !open) {
+    return null;
+  }
 
   return createPortal(
     <div
@@ -123,12 +124,13 @@ function Popover({ children, parentRef, open }) {
         top: `${position.top}px`,
         left: `${position.left}px`,
         zIndex: 1000,
-        background: '#fff',
-        borderRadius: '20px',
-        boxShadow: '0 6px 24px rgba(0,0,0,0.16)',
-        border: '1px solid #eee',
         minWidth: '220px',
         maxWidth: '380px',
+        border: '1px solid var(--color-border)',
+        borderRadius: '20px',
+        background: 'var(--color-surface-overlay-strong)',
+        boxShadow: 'var(--shadow-lg)',
+        backdropFilter: 'blur(24px)',
         animation: 'fadeInScale 0.24s ease-out',
       }}
     >
@@ -140,6 +142,16 @@ function Popover({ children, parentRef, open }) {
 
 function optionLabel(options, value, fallbackLabel) {
   return options.find((option) => option.value === value)?.label ?? fallbackLabel;
+}
+
+function buildPriceLabel(priceMin, priceMax) {
+  if (priceMin === null && priceMax === null) {
+    return 'Qualsiasi prezzo';
+  }
+
+  const minLabel = priceMin ?? 0;
+  const maxLabel = priceMax ?? 'oltre';
+  return `EUR ${minLabel} - ${maxLabel}`;
 }
 
 export default function Ricerca({ showHeader = true } = {}) {
@@ -179,7 +191,7 @@ export default function Ricerca({ showHeader = true } = {}) {
     }
 
     if (!apiBaseUrl) {
-      setLocationError('Config API mancante per i suggerimenti località.');
+      setLocationError('Config API mancante per i suggerimenti localita.');
       setLocationLoading(false);
       return;
     }
@@ -197,7 +209,7 @@ export default function Ricerca({ showHeader = true } = {}) {
       } catch {
         if (!cancelled) {
           setLocationSuggestions([]);
-          setLocationError('Impossibile recuperare suggerimenti località.');
+          setLocationError('Impossibile recuperare suggerimenti localita.');
         }
       } finally {
         if (!cancelled) {
@@ -233,14 +245,13 @@ export default function Ricerca({ showHeader = true } = {}) {
                   : openPopover === 'prezzo'
                     ? priceRef
                     : sortRef;
-
-    const handler = (event) => {
+    const handlePointerDown = (event) => {
       const target = event.target;
       if (!(target instanceof Node)) {
         return;
       }
 
-      if (activeRef.current?.contains(target)) {
+      if (activeRef?.current?.contains(target)) {
         return;
       }
 
@@ -254,22 +265,19 @@ export default function Ricerca({ showHeader = true } = {}) {
       setOpenPopover(null);
     };
 
-    document.addEventListener('mousedown', handler);
+    document.addEventListener('mousedown', handlePointerDown);
     return () => {
-      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('mousedown', handlePointerDown);
     };
   }, [openPopover]);
 
   const breedLabel = optionLabel(BREEDS, search.breed, 'Tutte le razze');
   const listingTypeLabel = optionLabel(LISTING_TYPES, search.listingType, 'Tutti i tipi');
   const sexLabel = optionLabel(SEX_OPTIONS, search.sex, 'Qualsiasi');
-  const sortLabel = optionLabel(SORT_OPTIONS, search.sort, 'Più pertinenti');
-  const localitaLabel = activeLocationLabel || 'Aggiungi località';
-  const ageLabel = search.ageText ? search.ageText : 'Qualsiasi età';
-  const prezzoLabel =
-    search.priceMin !== null || search.priceMax !== null
-      ? `€${search.priceMin ?? 0} - €${search.priceMax ?? '∞'}`
-      : 'Qualsiasi prezzo';
+  const sortLabel = optionLabel(SORT_OPTIONS, search.sort, 'Piu pertinenti');
+  const localitaLabel = activeLocationLabel || 'Aggiungi localita';
+  const ageLabel = search.ageText || 'Qualsiasi eta';
+  const prezzoLabel = buildPriceLabel(search.priceMin, search.priceMax);
 
   const activeFiltersCount =
     (search.listingType ? 1 : 0) +
@@ -281,15 +289,15 @@ export default function Ricerca({ showHeader = true } = {}) {
     (search.sort !== 'relevance' ? 1 : 0);
 
   const setField = (key, value) => {
-    setSearch((prev) => ({
-      ...prev,
+    setSearch((currentSearch) => ({
+      ...currentSearch,
       [key]: value,
     }));
   };
 
   const selectLocation = (suggestion) => {
-    setSearch((prev) => ({
-      ...prev,
+    setSearch((currentSearch) => ({
+      ...currentSearch,
       locationIntent: suggestion.locationIntent,
     }));
     setLocationQuery(suggestion.label);
@@ -363,10 +371,11 @@ export default function Ricerca({ showHeader = true } = {}) {
 
   const runSearch = async () => {
     setValidationError(null);
+
     let effectiveSearch = search;
     let fallbackLocationLabel = null;
-
     const normalizedLocationQuery = locationQuery.trim();
+
     if (!effectiveSearch.locationIntent && normalizedLocationQuery.length >= 2) {
       fallbackLocationLabel = normalizedLocationQuery;
 
@@ -387,14 +396,14 @@ export default function Ricerca({ showHeader = true } = {}) {
 
             fallbackLocationLabel = null;
 
-            setSearch((prev) => ({
-              ...prev,
+            setSearch((currentSearch) => ({
+              ...currentSearch,
               locationIntent: bestMatch.locationIntent,
             }));
             setLocationQuery(bestMatch.label);
           }
         } catch {
-          // Keep fallback label when autocomplete service is unavailable.
+          // Preserve the free-text location fallback when autocomplete is unavailable.
         }
       }
     }
@@ -404,7 +413,7 @@ export default function Ricerca({ showHeader = true } = {}) {
       effectiveSearch.priceMax !== null &&
       Number(effectiveSearch.priceMin) > Number(effectiveSearch.priceMax)
     ) {
-      setValidationError('Il prezzo minimo non può essere superiore al prezzo massimo.');
+      setValidationError('Il prezzo minimo non puo essere superiore al prezzo massimo.');
       return;
     }
 
@@ -417,7 +426,7 @@ export default function Ricerca({ showHeader = true } = {}) {
       setLocationQuery(activeLocationLabel);
     }
 
-    setOpenPopover((prev) => (prev === key ? null : key));
+    setOpenPopover((currentPopover) => (currentPopover === key ? null : key));
   };
 
   return (
@@ -428,8 +437,8 @@ export default function Ricerca({ showHeader = true } = {}) {
             <div className="header-badge-wrap">
               <Badge variant="outline">Ricerca avanzata</Badge>
             </div>
-            <h1>Adotta un Gatto</h1>
-            <p>Trova il tuo gatto ideale tra centinaia di annunci!</p>
+            <h1>Trova il prossimo gatto da accogliere.</h1>
+            <p>Filtra per localita, razza, fascia prezzo e tipologia di annuncio.</p>
           </div>
         ) : null}
 
@@ -447,7 +456,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                     void runSearch();
                   }
                 }}
-                placeholder="Cerca gattini..."
+                placeholder="Cerca gattini, adozioni o rifugi"
                 type="text"
                 value={search.q}
               />
@@ -476,10 +485,10 @@ export default function Ricerca({ showHeader = true } = {}) {
             <button
               aria-label="Filtri avanzati"
               className="search-adv-btn"
-              onClick={() => setExpanded((prev) => !prev)}
+              onClick={() => setExpanded((currentValue) => !currentValue)}
               type="button"
             >
-              <span style={{ fontSize: 20 }}>{expanded ? '✕' : '☰'}</span>
+              <span style={{ fontSize: 20 }}>{expanded ? 'X' : '+'}</span>
               {activeFiltersCount > 0 ? (
                 <span className="search-adv-badge">{activeFiltersCount}</span>
               ) : null}
@@ -491,7 +500,7 @@ export default function Ricerca({ showHeader = true } = {}) {
               onClick={() => void runSearch()}
               type="button"
             >
-              <svg fill="#fff" height="16" viewBox="0 0 16 16" width="16">
+              <svg fill="currentColor" height="16" viewBox="0 0 16 16" width="16">
                 <title>Cerca</title>
                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
               </svg>
@@ -529,6 +538,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                 <span className="search-field-label">Ordina per</span>
                 <span className="search-field-value">{sortLabel}</span>
               </button>
+
               <button
                 className={`search-field search-field-button ${openPopover === 'prezzo' ? 'active' : ''}`}
                 onClick={() => onFieldButtonClick('prezzo')}
@@ -545,7 +555,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                 ref={ageRef}
                 type="button"
               >
-                <span className="search-field-label">Età</span>
+                <span className="search-field-label">Eta</span>
                 <span className="search-field-value">{ageLabel}</span>
               </button>
             </div>
@@ -637,7 +647,7 @@ export default function Ricerca({ showHeader = true } = {}) {
                 const value = event.target.value.trim();
                 setField('priceMin', value ? Number(value) : null);
               }}
-              placeholder="Min €"
+              placeholder="Min EUR"
               type="number"
               value={search.priceMin ?? ''}
             />
@@ -648,11 +658,12 @@ export default function Ricerca({ showHeader = true } = {}) {
                 const value = event.target.value.trim();
                 setField('priceMax', value ? Number(value) : null);
               }}
-              placeholder="Max €"
+              placeholder="Max EUR"
               type="number"
               value={search.priceMax ?? ''}
             />
           </div>
+
           <div className="preset-row">
             <button
               className="preset-btn"
@@ -672,7 +683,7 @@ export default function Ricerca({ showHeader = true } = {}) {
               }}
               type="button"
             >
-              0-200€
+              0-200 EUR
             </button>
             <button
               className="preset-btn"
@@ -682,7 +693,7 @@ export default function Ricerca({ showHeader = true } = {}) {
               }}
               type="button"
             >
-              200-500€
+              200-500 EUR
             </button>
             <button
               className="preset-btn"
@@ -692,7 +703,7 @@ export default function Ricerca({ showHeader = true } = {}) {
               }}
               type="button"
             >
-              Oltre 500€
+              Oltre 500 EUR
             </button>
           </div>
         </div>
@@ -701,7 +712,7 @@ export default function Ricerca({ showHeader = true } = {}) {
       <Popover open={openPopover === 'eta'} parentRef={ageRef}>
         <div className="age-popover" data-test-popover="true">
           <label className="location-label" htmlFor="age-text">
-            Età (testo libero)
+            Eta (testo libero)
           </label>
           <input
             className="location-input"
@@ -711,6 +722,7 @@ export default function Ricerca({ showHeader = true } = {}) {
             type="text"
             value={search.ageText}
           />
+
           <div className="preset-row">
             <button className="preset-btn" onClick={() => setField('ageText', '')} type="button">
               Qualsiasi
@@ -743,7 +755,7 @@ export default function Ricerca({ showHeader = true } = {}) {
       <Popover open={openPopover === 'comune'} parentRef={locationRef}>
         <div className="location-popover" data-test-popover="true">
           <label className="location-label" htmlFor="location-query">
-            Cerca città, provincia o regione
+            Cerca citta, provincia o regione
           </label>
           <input
             className="location-input"
@@ -757,8 +769,8 @@ export default function Ricerca({ showHeader = true } = {}) {
                 normalizeLooseText(nextValue) !==
                   normalizeLooseText(search.locationIntent.label ?? '')
               ) {
-                setSearch((prev) => ({
-                  ...prev,
+                setSearch((currentSearch) => ({
+                  ...currentSearch,
                   locationIntent: null,
                 }));
               }

@@ -83,7 +83,11 @@ export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
     <button
       aria-label={buttonLabel}
       aria-pressed={isFavorite}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e4e7ec] bg-white/90 text-[#101828] shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-colors hover:bg-white"
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-[var(--shadow-sm)] backdrop-blur-md transition-colors ${
+        isFavorite
+          ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-elevated)] text-[var(--color-primary)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)]'
+      }`}
       onClick={handleToggle}
       type="button"
     >

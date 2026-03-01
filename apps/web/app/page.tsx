@@ -181,7 +181,7 @@ function HomeSectionFilters({
           </svg>
         </summary>
 
-        <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-[220px] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] p-1 shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+        <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-[220px] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] p-1 shadow-[var(--shadow-sm)] backdrop-blur-xl">
           {homeSortOptions.map((option) => (
             <Link
               className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] ${

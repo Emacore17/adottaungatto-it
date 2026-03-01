@@ -1,6 +1,6 @@
 import { loadWebEnv } from '@adottaungatto/config';
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Poppins } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AppShell } from '../components/app-shell';
 import { ThemeProvider } from '../components/theme-provider';
@@ -14,6 +14,12 @@ const inter = Inter({
   variable: '--font-sans',
   display: 'swap',
 });
+const poppins = Poppins({
+  subsets: ['latin'],
+  variable: '--font-display',
+  weight: ['500', '600', '700'],
+  display: 'swap',
+});
 const jetBrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
@@ -25,7 +31,15 @@ export const metadata: Metadata = {
     default: env.NEXT_PUBLIC_APP_NAME,
     template: `%s | ${env.NEXT_PUBLIC_APP_NAME}`,
   },
-  description: 'Scaffold web minimale con Next.js, UI condivisa e integrazioni backend preservate.',
+  description:
+    'Annunci di gatti in adozione, stallo e segnalazione in tutta Italia con ricerca per citta, razza, prezzo e localita.',
+  keywords: [
+    'adozione gatti',
+    'annunci gatti',
+    'gattini in adozione',
+    'adozione gatti italia',
+    'stallo gatti',
+  ],
 };
 
 export default function RootLayout({
@@ -35,7 +49,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetBrainsMono.variable}`}>
+      <body className={`${inter.variable} ${poppins.variable} ${jetBrainsMono.variable}`}>
         <ThemeProvider>
           <WebQueryClientProvider>
             <AppShell>{children}</AppShell>

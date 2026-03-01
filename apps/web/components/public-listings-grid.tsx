@@ -30,6 +30,8 @@ export function PublicListingsGrid({
 
   const containerClassName =
     layout === 'list' ? 'grid gap-4 grid-cols-1' : 'grid gap-5 sm:grid-cols-2 xl:grid-cols-3';
+  const pillClassName =
+    'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[13px] font-semibold';
 
   return (
     <div className={containerClassName}>
@@ -68,10 +70,11 @@ export function PublicListingsGrid({
         const publishedLabel = formatDate(listing.publishedAt ?? listing.createdAt);
         const imageStyle = listing.primaryMedia?.objectUrl
           ? {
-              backgroundImage: `linear-gradient(135deg, rgba(208,216,226,0.28) 0%, rgba(255,255,255,0.08) 100%), url("${listing.primaryMedia.objectUrl}")`,
+              backgroundImage: `linear-gradient(135deg, var(--color-media-overlay-start) 0%, var(--color-media-overlay-end) 100%), url("${listing.primaryMedia.objectUrl}")`,
             }
           : {
-              backgroundImage: 'linear-gradient(135deg, #d9e4ef 0%, #f4f6f8 45%, #e8ecef 100%)',
+              backgroundImage:
+                'linear-gradient(135deg, var(--color-image-fallback-start) 0%, var(--color-image-fallback-mid) 45%, var(--color-image-fallback-end) 100%)',
             };
 
         return (
@@ -80,7 +83,7 @@ export function PublicListingsGrid({
             href={`/annunci/${listing.id}`}
             key={listing.id}
           >
-            <article className="flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
+            <article className="flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[var(--shadow-lg)]">
               <div className="relative basis-3/5 overflow-hidden">
                 <div
                   aria-label={imageTitleLabel || titleLabel}
@@ -93,16 +96,16 @@ export function PublicListingsGrid({
                   <FavoriteHeartButton listingId={listing.id} />
                 </div>
 
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent px-4 pb-4 pt-16">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-scrim)] via-black/12 to-transparent px-4 pb-4 pt-16">
                   <h3 className="line-clamp-2 text-center text-[22px] font-semibold leading-tight tracking-[-0.01em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
                     {imageTitleLabel || titleLabel}
                   </h3>
                 </div>
               </div>
 
-              <div className="flex basis-2/5 flex-col bg-white px-5 pb-5 pt-4 text-[#344054]">
+              <div className="flex basis-2/5 flex-col bg-[var(--color-surface-elevated)] px-5 pb-5 pt-4 text-[var(--color-text)]">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#f3f4f6]">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)]">
                     <svg
                       aria-hidden="true"
                       fill="none"
@@ -127,7 +130,7 @@ export function PublicListingsGrid({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2f6] px-2.5 py-1 text-[13px] font-semibold">
+                  <span className={pillClassName}>
                     <svg
                       aria-hidden="true"
                       fill="none"
@@ -149,7 +152,7 @@ export function PublicListingsGrid({
                     1 gatto
                   </span>
                   {breedLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2f6] px-2.5 py-1 text-[13px] font-semibold">
+                    <span className={pillClassName}>
                       <svg
                         aria-hidden="true"
                         fill="none"
@@ -174,7 +177,7 @@ export function PublicListingsGrid({
                     </span>
                   ) : null}
                   {sexLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2f6] px-2.5 py-1 text-[13px] font-semibold">
+                    <span className={pillClassName}>
                       <svg
                         aria-hidden="true"
                         fill="none"
@@ -195,7 +198,7 @@ export function PublicListingsGrid({
                     </span>
                   ) : null}
                   {ageLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2f6] px-2.5 py-1 text-[13px] font-semibold">
+                    <span className={pillClassName}>
                       <svg
                         aria-hidden="true"
                         fill="none"
@@ -217,7 +220,7 @@ export function PublicListingsGrid({
                     </span>
                   ) : null}
                   {listingTypeLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eef2f6] px-2.5 py-1 text-[13px] font-semibold">
+                    <span className={pillClassName}>
                       <svg
                         aria-hidden="true"
                         fill="none"
@@ -238,7 +241,7 @@ export function PublicListingsGrid({
                   ) : null}
                 </div>
 
-                <div className="mt-4 flex items-end justify-between gap-2 border-t border-[#eef2f6] pt-3">
+                <div className="mt-4 flex items-end justify-between gap-2 border-t border-[var(--color-border)] pt-3">
                   <div className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[12px] font-medium">
                     <svg
                       aria-hidden="true"
