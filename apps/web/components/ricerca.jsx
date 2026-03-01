@@ -2,7 +2,7 @@
 
 import { Badge } from '@adottaungatto/ui';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { fetchLocationSuggestions } from '../lib/geography';
 
@@ -166,6 +166,7 @@ export default function Ricerca({ showHeader = true } = {}) {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState(null);
 
+  const qInputId = useId();
   const qRef = useRef(null);
   const breedRef = useRef(null);
   const locationRef = useRef(null);
@@ -442,53 +443,116 @@ export default function Ricerca({ showHeader = true } = {}) {
           </div>
         ) : null}
 
-        <div className={`search-bar-wrapper ${expanded ? 'expanded' : ''}`}>
-          <div className="search-bar">
-            <div className={`search-field ${openPopover === 'q' ? 'active' : ''}`} ref={qRef}>
-              <span className="search-field-label">Cerca</span>
-              <input
-                className="search-field-input"
-                onChange={(event) => setField('q', event.target.value)}
-                onFocus={() => setOpenPopover(null)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    void runSearch();
-                  }
-                }}
-                placeholder="Cerca gattini, adozioni o rifugi"
-                type="text"
-                value={search.q}
-              />
+        <div className={`search-row ${expanded ? 'expanded' : ''}`}>
+          <div className={`search-bar-wrapper ${expanded ? 'expanded' : ''}`}>
+            <div className="search-bar">
+              <label
+                className={`search-field ${openPopover === 'q' ? 'active' : ''}`}
+                htmlFor={qInputId}
+                ref={qRef}
+              >
+                <span className="search-field-label">Cerca</span>
+                <input
+                  className="search-field-input"
+                  id={qInputId}
+                  onChange={(event) => setField('q', event.target.value)}
+                  onFocus={() => setOpenPopover(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void runSearch();
+                    }
+                  }}
+                  placeholder="Cerca gattini, adozioni o rifugi"
+                  type="text"
+                  value={search.q}
+                />
+              </label>
+
+              <button
+                className={`search-field search-field-button ${openPopover === 'breed' ? 'active' : ''}`}
+                onClick={() => onFieldButtonClick('breed')}
+                ref={breedRef}
+                type="button"
+              >
+                <span className="search-field-label">Razza</span>
+                <span className="search-field-value">{breedLabel}</span>
+              </button>
+
+              <button
+                className={`search-field search-field-button ${openPopover === 'comune' ? 'active' : ''}`}
+                onClick={() => onFieldButtonClick('comune')}
+                ref={locationRef}
+                type="button"
+              >
+                <span className="search-field-label">Dove</span>
+                <span className="search-field-value">{localitaLabel}</span>
+              </button>
             </div>
 
-            <button
-              className={`search-field search-field-button ${openPopover === 'breed' ? 'active' : ''}`}
-              onClick={() => onFieldButtonClick('breed')}
-              ref={breedRef}
-              type="button"
-            >
-              <span className="search-field-label">Razza</span>
-              <span className="search-field-value">{breedLabel}</span>
-            </button>
+            <div className={`search-bar-advanced ${expanded ? 'expanded' : ''}`}>
+              <div className="adv-grid">
+                <button
+                  className={`search-field search-field-button ${openPopover === 'listingType' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('listingType')}
+                  ref={listingTypeRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Tipo annuncio</span>
+                  <span className="search-field-value">{listingTypeLabel}</span>
+                </button>
 
-            <button
-              className={`search-field search-field-button ${openPopover === 'comune' ? 'active' : ''}`}
-              onClick={() => onFieldButtonClick('comune')}
-              ref={locationRef}
-              type="button"
-            >
-              <span className="search-field-label">Dove</span>
-              <span className="search-field-value">{localitaLabel}</span>
-            </button>
+                <button
+                  className={`search-field search-field-button ${openPopover === 'sex' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('sex')}
+                  ref={sexRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Sesso</span>
+                  <span className="search-field-value">{sexLabel}</span>
+                </button>
 
+                <button
+                  className={`search-field search-field-button ${openPopover === 'sort' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('sort')}
+                  ref={sortRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Ordina per</span>
+                  <span className="search-field-value">{sortLabel}</span>
+                </button>
+
+                <button
+                  className={`search-field search-field-button ${openPopover === 'prezzo' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('prezzo')}
+                  ref={priceRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Prezzo</span>
+                  <span className="search-field-value">{prezzoLabel}</span>
+                </button>
+
+                <button
+                  className={`search-field search-field-button ${openPopover === 'eta' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('eta')}
+                  ref={ageRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Eta</span>
+                  <span className="search-field-value">{ageLabel}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="search-actions">
             <button
               aria-label="Filtri avanzati"
               className="search-adv-btn"
               onClick={() => setExpanded((currentValue) => !currentValue)}
               type="button"
             >
-              <span style={{ fontSize: 20 }}>{expanded ? 'X' : '+'}</span>
+              <span className="search-adv-symbol">{expanded ? 'X' : '+'}</span>
               {activeFiltersCount > 0 ? (
                 <span className="search-adv-badge">{activeFiltersCount}</span>
               ) : null}
@@ -505,60 +569,6 @@ export default function Ricerca({ showHeader = true } = {}) {
                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
               </svg>
             </button>
-          </div>
-
-          <div className={`search-bar-advanced ${expanded ? 'expanded' : ''}`}>
-            <div className="adv-grid">
-              <button
-                className={`search-field search-field-button ${openPopover === 'listingType' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('listingType')}
-                ref={listingTypeRef}
-                type="button"
-              >
-                <span className="search-field-label">Tipo annuncio</span>
-                <span className="search-field-value">{listingTypeLabel}</span>
-              </button>
-
-              <button
-                className={`search-field search-field-button ${openPopover === 'sex' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('sex')}
-                ref={sexRef}
-                type="button"
-              >
-                <span className="search-field-label">Sesso</span>
-                <span className="search-field-value">{sexLabel}</span>
-              </button>
-
-              <button
-                className={`search-field search-field-button ${openPopover === 'sort' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('sort')}
-                ref={sortRef}
-                type="button"
-              >
-                <span className="search-field-label">Ordina per</span>
-                <span className="search-field-value">{sortLabel}</span>
-              </button>
-
-              <button
-                className={`search-field search-field-button ${openPopover === 'prezzo' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('prezzo')}
-                ref={priceRef}
-                type="button"
-              >
-                <span className="search-field-label">Prezzo</span>
-                <span className="search-field-value">{prezzoLabel}</span>
-              </button>
-
-              <button
-                className={`search-field search-field-button ${openPopover === 'eta' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('eta')}
-                ref={ageRef}
-                type="button"
-              >
-                <span className="search-field-label">Eta</span>
-                <span className="search-field-value">{ageLabel}</span>
-              </button>
-            </div>
           </div>
         </div>
 

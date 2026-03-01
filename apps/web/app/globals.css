@@ -261,37 +261,70 @@ textarea:focus-visible,
 }
 
 .search-bar-wrapper {
-  --search-actions-space: 112px;
   background: var(--color-surface-overlay-strong);
   border: 1px solid var(--color-border);
-  border-radius: 40px;
-  box-shadow: var(--shadow-sm);
+  border-radius: 44px;
+  box-shadow: 0 8px 24px rgba(12, 19, 31, 0.08);
   backdrop-filter: blur(22px);
-  transition: border-color 0.2s ease, box-shadow 0.3s ease, transform 0.2s ease;
-  margin-bottom: 20px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.3s ease, border-radius 0.25s ease, transform 0.2s
+    ease;
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .search-bar-wrapper:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border);
+  box-shadow: 0 8px 24px rgba(12, 19, 31, 0.08);
 }
 
 .search-bar-wrapper.expanded {
-  border-radius: 32px;
-  border-color: var(--color-border-strong);
-  padding-bottom: 16px;
+  border-radius: 44px;
+  border-color: var(--color-border);
+}
+
+.search-row {
+  --search-shell-height: 72px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.search-row.expanded {
+  z-index: 12;
+}
+
+.search-bar-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  padding-right: 8px;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--search-shell-height);
+  padding: 0 6px;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: static;
+  flex-shrink: 0;
+  z-index: 13;
 }
 
 .search-field {
   flex: 1;
-  padding: 14px 18px;
+  padding: 12px 18px;
   border-radius: 32px;
   transition: background-color 0.2s ease;
   min-width: 0;
@@ -342,16 +375,23 @@ textarea:focus-visible,
   color: var(--color-text);
 }
 
+.search-field-input:focus,
+.search-field-input:focus-visible {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
 .search-field-input::placeholder {
   color: var(--color-text-muted);
 }
 
 .search-adv-btn {
   border: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
+  background: color-mix(in srgb, var(--color-surface) 85%, white 15%);
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: var(--search-shell-height);
+  height: var(--search-shell-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,10 +400,18 @@ textarea:focus-visible,
   position: relative;
   flex-shrink: 0;
   color: var(--color-text);
+  box-shadow: 0 8px 18px rgba(12, 19, 31, 0.08);
 }
 
 .search-adv-btn:hover {
-  background: var(--color-surface-muted-strong);
+  background: color-mix(in srgb, var(--color-surface-muted) 75%, white 25%);
+}
+
+.search-adv-symbol {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 500;
+  transform: translateY(-1px);
 }
 
 .search-adv-badge {
@@ -383,8 +431,8 @@ textarea:focus-visible,
 }
 
 .search-button {
-  width: 48px;
-  height: 48px;
+  width: var(--search-shell-height);
+  height: var(--search-shell-height);
   border-radius: 50%;
   border: none;
   background: var(--color-primary);
@@ -395,24 +443,30 @@ textarea:focus-visible,
   cursor: pointer;
   transition: background 0.2s;
   flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-primary) 32%, transparent);
 }
 
 .search-button:hover {
   background: var(--color-primary-hover);
 }
 
+.search-button svg {
+  width: 22px;
+  height: 22px;
+}
+
 .search-bar-advanced {
-  padding: 0 calc(8px + var(--search-actions-space)) 0 8px;
+  padding: 0 8px;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
-  transition: max-height 0.3s ease, opacity 0.2s ease;
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding-bottom 0.2s ease;
 }
 
 .search-bar-advanced.expanded {
   max-height: 320px;
   opacity: 1;
+  padding-bottom: 16px;
 }
 
 .adv-grid {
@@ -579,19 +633,29 @@ textarea:focus-visible,
 }
 
 @media (max-width: 900px) {
-  .search-bar-wrapper {
-    --search-actions-space: 0px;
+  .search-row {
+    --search-shell-height: 64px;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   .search-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    padding: 0 4px;
+    min-width: 0;
   }
 
-  .search-field {
+  .search-bar .search-field {
     width: 100%;
     flex: none;
+  }
+
+  .search-bar .search-field-button {
+    display: none;
+  }
+
+  .search-actions {
+    align-self: flex-start;
+    gap: 10px;
   }
 
   .adv-grid {
@@ -605,7 +669,6 @@ textarea:focus-visible,
 
   .search-adv-btn,
   .search-button {
-    width: 100%;
-    border-radius: 24px;
+    border-radius: 999px;
   }
 }
