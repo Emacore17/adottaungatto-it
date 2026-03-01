@@ -206,6 +206,23 @@ const parsePublicMedia = (value: unknown): PublicListingMedia | null => {
   };
 };
 
+const inferMimeTypeFromMediaUrl = (value: string): string => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('.png')) {
+    return 'image/png';
+  }
+
+  if (normalized.endsWith('.webp')) {
+    return 'image/webp';
+  }
+
+  if (normalized.endsWith('.svg')) {
+    return 'image/svg+xml';
+  }
+
+  return 'image/jpeg';
+};
+
 const parsePublicSummary = (value: unknown): PublicListingSummary | null => {
   const record = asRecord(value);
   if (typeof record.id !== 'string' || typeof record.title !== 'string') {
@@ -278,7 +295,7 @@ const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingS
     primaryMedia: primaryMedia
       ? {
           id: primaryMedia.id,
-          mimeType: 'image/svg+xml',
+          mimeType: inferMimeTypeFromMediaUrl(primaryMedia.src),
           width: primaryMedia.width,
           height: primaryMedia.height,
           position: 1,
@@ -296,7 +313,7 @@ const mapMockListingToPublicDetail = (listing: ListingCardData): PublicListingDe
   contactEmail: `${listing.sellerUsername}@adottaungatto.it`,
   media: listing.media.map((media, index) => ({
     id: media.id,
-    mimeType: 'image/svg+xml',
+    mimeType: inferMimeTypeFromMediaUrl(media.src),
     width: media.width,
     height: media.height,
     position: index + 1,

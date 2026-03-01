@@ -7,6 +7,36 @@ import type {
 
 const toIso = (input: string) => new Date(input).toISOString();
 
+const mockCatPhotoFileNames = [
+  'gattino-1.jpg',
+  'gattino-2.webp',
+  'gattino-3.png',
+  'gattino-4.png',
+  'gattino-5.jpeg',
+  'gattino-6.jpg',
+  'gattino-7.jpg',
+  'gattino-8.jpg',
+] as const;
+
+const createMockMediaAsset = (
+  id: string,
+  title: string,
+  mediaSeed: number,
+  offset: number,
+  isPrimary: boolean,
+) => {
+  const fileName = mockCatPhotoFileNames[(mediaSeed - 1 + offset) % mockCatPhotoFileNames.length];
+
+  return {
+    id: `${id}-media-${offset + 1}`,
+    src: `/mock-media/${fileName}`,
+    alt: `${isPrimary ? 'Foto principale' : 'Foto secondaria'} ${title}`,
+    width: 1200,
+    height: 900,
+    isPrimary,
+  };
+};
+
 const createListing = (
   id: string,
   title: string,
@@ -40,22 +70,8 @@ const createListing = (
   isVerifiedSeller: true,
   sellerUsername,
   media: [
-    {
-      id: `${id}-media-primary`,
-      src: `/mock/cat-${((mediaSeed - 1) % 6) + 1}.svg`,
-      alt: `Foto principale ${title}`,
-      width: 1200,
-      height: 800,
-      isPrimary: true,
-    },
-    {
-      id: `${id}-media-secondary`,
-      src: `/mock/cat-${(mediaSeed % 6) + 1}.svg`,
-      alt: `Foto secondaria ${title}`,
-      width: 1200,
-      height: 800,
-      isPrimary: false,
-    },
+    createMockMediaAsset(id, title, mediaSeed, 0, true),
+    createMockMediaAsset(id, title, mediaSeed, 1, false),
   ],
   ...overrides,
 });

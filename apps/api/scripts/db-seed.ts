@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, readdir } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
 import { loadApiEnv } from '@adottaungatto/config';
 import { config as loadDotEnv } from 'dotenv';
 import { Client } from 'pg';
@@ -111,6 +112,14 @@ type DemoListingSeed = {
   contactPhone: string;
   contactEmail: string;
   mediaCount: number;
+};
+
+type DemoMediaAsset = {
+  fileName: string;
+  mimeType: string;
+  payload: Buffer;
+  fileSize: number;
+  hash: string;
 };
 
 type DemoSeedStats = {
@@ -254,11 +263,100 @@ const preferredComuniByProvinceSigla: Partial<
 const onePixelPngBase64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AApMBgX4+7a8AAAAASUVORK5CYII=';
 
+const fallbackDemoMediaAsset: DemoMediaAsset = {
+  fileName: 'fallback-demo-media.png',
+  mimeType: 'image/png',
+  payload: Buffer.from(onePixelPngBase64, 'base64'),
+  fileSize: Buffer.from(onePixelPngBase64, 'base64').length,
+  hash: createHash('sha256').update(Buffer.from(onePixelPngBase64, 'base64')).digest('hex'),
+};
+
+const demoMediaMimeTypeByExtension: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
+
 const resolveSnapshotCandidates = (): string[] => {
   return [
     resolve(process.cwd(), 'data/geography/istat-current.json'),
     resolve(process.cwd(), 'apps/api/data/geography/istat-current.json'),
   ];
+};
+
+const resolveDemoMediaDirectoryCandidates = (): string[] => {
+  return [
+    resolve(process.cwd(), 'da-eliminare'),
+    resolve(process.cwd(), '..', '..', 'da-eliminare'),
+    resolve(process.cwd(), '..', 'da-eliminare'),
+  ];
+};
+
+const resolveDemoMediaDirectory = (): string | null => {
+  for (const candidate of resolveDemoMediaDirectoryCandidates()) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const loadDemoMediaAssets = async (): Promise<{
+  assets: DemoMediaAsset[];
+  sourceDirectory: string | null;
+  usingFallback: boolean;
+}> => {
+  const sourceDirectory = resolveDemoMediaDirectory();
+  if (!sourceDirectory) {
+    return {
+      assets: [fallbackDemoMediaAsset],
+      sourceDirectory: null,
+      usingFallback: true,
+    };
+  }
+
+  const directoryEntries = await readdir(sourceDirectory, { withFileTypes: true });
+  const fileNames = directoryEntries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right, 'it'));
+
+  const assets: DemoMediaAsset[] = [];
+
+  for (const fileName of fileNames) {
+    const extension = extname(fileName).toLowerCase();
+    const mimeType = demoMediaMimeTypeByExtension[extension];
+    if (!mimeType) {
+      continue;
+    }
+
+    const absolutePath = resolve(sourceDirectory, fileName);
+    const payload = await readFile(absolutePath);
+
+    assets.push({
+      fileName,
+      mimeType,
+      payload,
+      fileSize: payload.length,
+      hash: createHash('sha256').update(payload).digest('hex'),
+    });
+  }
+
+  if (assets.length === 0) {
+    return {
+      assets: [fallbackDemoMediaAsset],
+      sourceDirectory,
+      usingFallback: true,
+    };
+  }
+
+  return {
+    assets,
+    sourceDirectory,
+    usingFallback: false,
+  };
 };
 
 const isNullableCoordinateValue = (value: unknown): boolean => {
@@ -910,6 +1008,7 @@ const seedDemoListingsAndMedia = async (
   repository: ListingsRepository,
   storageService: MinioStorageService,
   demoListings: DemoListingSeed[],
+  demoMediaAssets: DemoMediaAsset[],
 ): Promise<DemoSeedStats> => {
   const statusCounts: Record<DemoListingStatus, number> = {
     published: 0,
@@ -949,12 +1048,16 @@ const seedDemoListingsAndMedia = async (
     comuni.add(`${listing.comuneName} (${listing.provinceSigla})`);
 
     for (let mediaIndex = 0; mediaIndex < listing.mediaCount; mediaIndex += 1) {
-      const payload = Buffer.from(onePixelPngBase64, 'base64');
+      const demoMediaAsset = demoMediaAssets[(listingIndex + mediaIndex) % demoMediaAssets.length];
+      if (!demoMediaAsset) {
+        throw new Error('No demo media asset available for listing seed.');
+      }
+
       const upload = await storageService.uploadListingMedia({
         listingId: createdListing.id,
-        mimeType: 'image/png',
-        payload,
-        originalFileName: `demo-m211-${listingIndex + 1}-${mediaIndex + 1}.png`,
+        mimeType: demoMediaAsset.mimeType,
+        payload: demoMediaAsset.payload,
+        originalFileName: demoMediaAsset.fileName,
       });
 
       try {
@@ -962,9 +1065,9 @@ const seedDemoListingsAndMedia = async (
           storageKey: upload.storageKey,
           mimeType: upload.mimeType,
           fileSize: upload.fileSize,
-          width: 1,
-          height: 1,
-          hash: null,
+          width: null,
+          height: null,
+          hash: demoMediaAsset.hash,
           position: mediaIndex + 1,
           isPrimary: mediaIndex === 0,
         });
@@ -1215,6 +1318,7 @@ const run = async () => {
   const env = loadApiEnv();
 
   const { snapshot, snapshotPath } = await loadGeographySnapshot();
+  const demoMedia = await loadDemoMediaAssets();
 
   console.log(`[db:seed] Connected target: ${env.DATABASE_URL}`);
   console.log(`[db:seed] Snapshot path: ${snapshotPath}`);
@@ -1236,6 +1340,9 @@ const run = async () => {
   ).length;
   console.log(
     `[db:seed] Snapshot centroids coverage: regions=${regionCentroids}, provinces=${provinceCentroids}, comuni=${comuniCentroids}.`,
+  );
+  console.log(
+    `[db:seed] Demo media source: ${demoMedia.sourceDirectory ?? 'embedded fallback'} (assets=${demoMedia.assets.length}, fallback=${demoMedia.usingFallback ? 'yes' : 'no'}).`,
   );
 
   const client = new Client({
@@ -1309,7 +1416,12 @@ const run = async () => {
     const removedListings = await purgeSeedListings(client, seedOwnerUserIds);
     const locations = await resolveDemoLocations(client);
     const demoListings = buildDemoListings(locations, seedUsers);
-    const demoSeedStats = await seedDemoListingsAndMedia(repository, storageService, demoListings);
+    const demoSeedStats = await seedDemoListingsAndMedia(
+      repository,
+      storageService,
+      demoListings,
+      demoMedia.assets,
+    );
     const demoPromotionsStats = await seedDemoPromotions(
       client,
       seedOwnerUserIds,
