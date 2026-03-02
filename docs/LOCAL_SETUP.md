@@ -300,6 +300,7 @@ Comportamento atteso:
 
 Verifica manuale:
 - login su `http://localhost:3000/login` con `utente.demo / demo1234`
+- secondo account disponibile per test end-to-end multiutente: `utente2.demo / demo1234`
 - aprire `http://localhost:3000/account/listings/new`
 - compilare il form (`react-hook-form` + validazione `zod`)
 - selezionare luogo tramite `LocationSelector` (scope richiesto: comune)

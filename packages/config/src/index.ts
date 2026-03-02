@@ -113,6 +113,35 @@ const apiSchema = baseSchema.extend({
     .default('true')
     .transform((value) => value === 'true'),
   SEARCH_FALLBACK_MAX_STEPS: z.coerce.number().int().min(1).max(5).optional().default(5),
+  MESSAGE_THREAD_CREATE_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(86_400)
+    .optional()
+    .default(600),
+  MESSAGE_THREAD_CREATE_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .default(20),
+  MESSAGE_MESSAGE_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(86_400)
+    .optional()
+    .default(300),
+  MESSAGE_MESSAGE_MAX_REQUESTS: z.coerce.number().int().min(1).max(500).optional().default(30),
+  MESSAGE_DUPLICATE_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(86_400)
+    .optional()
+    .default(120),
 });
 
 const workerSchema = baseSchema.extend({

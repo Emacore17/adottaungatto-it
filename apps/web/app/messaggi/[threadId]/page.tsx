@@ -1,6 +1,10 @@
-import { LinkButton } from '../../../components/link-button';
-import { ScaffoldPlaceholder } from '../../../components/scaffold-placeholder';
+import { Badge, CardContent } from '@adottaungatto/ui';
+import { notFound } from 'next/navigation';
+import { MessageThreadList } from '../../../components/message-thread-list';
+import { MessageThreadView } from '../../../components/message-thread-view';
+import { PageShell } from '../../../components/page-shell';
 import { requireWebSession } from '../../../lib/auth';
+import { fetchMessageThread, fetchMessageThreads } from '../../../lib/messages';
 
 interface MessageThreadPageProps {
   params: Promise<{
@@ -12,22 +16,48 @@ export default async function MessageThreadPage({ params }: MessageThreadPagePro
   const { threadId } = await params;
   await requireWebSession(`/messaggi/${threadId}`);
 
+  const [threadListPage, threadPage] = await Promise.all([
+    fetchMessageThreads({ limit: 30, offset: 0 }).catch(() => ({
+      threads: [],
+      pagination: {
+        limit: 30,
+        offset: 0,
+        total: 0,
+        hasMore: false,
+      },
+      unreadMessages: 0,
+    })),
+    fetchMessageThread(threadId, { limit: 40 }).catch(() => null),
+  ]);
+
+  if (!threadPage) {
+    notFound();
+  }
+
   return (
-    <ScaffoldPlaceholder
-      actions={
-        <LinkButton href="/messaggi" variant="outline">
-          Torna ai messaggi
-        </LinkButton>
+    <PageShell
+      aside={
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{threadListPage.threads.length} thread</Badge>
+            <Badge variant="outline">{threadListPage.unreadMessages} non letti</Badge>
+          </div>
+          <p className="text-sm leading-6 text-[var(--color-text)]">
+            I messaggi sono disponibili solo ai due partecipanti coinvolti nella conversazione.
+          </p>
+        </CardContent>
       }
-      description={`Il thread ${threadId} resta indirizzabile, ma la UI conversazionale e stata rimossa insieme allo store mock locale.`}
+      description="Conversazione privata legata all’annuncio selezionato, con storico persistente e aggiornamento leggero lato client."
       eyebrow="Area riservata"
-      integrations={[
-        'Protezione route via requireWebSession().',
-        'Routing dinamico Next.js gia pronto per una futura thread view.',
-      ]}
-      nextSteps={['Ricostruire inbox, thread detail e composer come flussi separati.']}
-      route={`/messaggi/${threadId}`}
-      title="Dettaglio thread"
-    />
+      title="Conversazione"
+    >
+      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <MessageThreadList
+          currentThreadId={threadPage.thread.id}
+          threads={threadListPage.threads}
+        />
+        <MessageThreadView initialThreadPage={threadPage} />
+      </div>
+    </PageShell>
   );
 }

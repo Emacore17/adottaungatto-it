@@ -1,7 +1,9 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { notFound } from 'next/navigation';
 import { LinkButton } from '../../../components/link-button';
+import { ListingMessageComposer } from '../../../components/listing-message-composer';
 import { PageShell } from '../../../components/page-shell';
+import { getWebSession } from '../../../lib/auth';
 import { formatCurrencyAmount, formatDate } from '../../../lib/formatters';
 import { fetchPublicListingById } from '../../../lib/listings';
 
@@ -13,7 +15,10 @@ interface ListingDetailPageProps {
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { listingId } = await params;
-  const listing = await fetchPublicListingById(listingId).catch(() => null);
+  const [listing, session] = await Promise.all([
+    fetchPublicListingById(listingId).catch(() => null),
+    getWebSession().catch(() => null),
+  ]);
 
   if (!listing) {
     notFound();
@@ -82,18 +87,33 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
             {listing.contactName ? <p>Referente: {listing.contactName}</p> : null}
-            {listing.contactEmail ? (
-              <p>Email: {listing.contactEmail}</p>
+            <p>
+              I recapiti diretti non vengono esposti pubblicamente: la conversazione passa dalla
+              chat interna per proteggere privacy e storico.
+            </p>
+            {session ? (
+              <ListingMessageComposer listingId={listing.id} />
             ) : (
-              <p>Email non esposta.</p>
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+                <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                  Accedi con un account registrato per inviare un messaggio all’inserzionista e
+                  continuare la chat dalla tua inbox privata.
+                </p>
+                <div className="pt-3">
+                  <LinkButton href={`/login?next=${encodeURIComponent(`/annunci/${listing.id}`)}`}>
+                    Accedi per contattare
+                  </LinkButton>
+                </div>
+              </div>
             )}
-            {listing.contactPhone ? <p>Telefono: {listing.contactPhone}</p> : null}
             <div className="flex flex-wrap gap-2 pt-2">
               <LinkButton href="/annunci" variant="outline">
                 Torna alla lista
               </LinkButton>
-              {listing.contactEmail ? (
-                <LinkButton href={`mailto:${listing.contactEmail}`}>Invia email</LinkButton>
+              {session ? (
+                <LinkButton href="/messaggi" variant="secondary">
+                  Apri inbox
+                </LinkButton>
               ) : null}
             </div>
           </CardContent>

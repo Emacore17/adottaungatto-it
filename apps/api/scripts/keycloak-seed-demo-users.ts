@@ -39,6 +39,14 @@ const demoUsers: DemoUserSeed[] = [
     roles: ['user'],
   },
   {
+    username: 'utente2.demo',
+    firstName: 'Utente',
+    lastName: 'Secondo',
+    email: 'utente2.demo@adottaungatto.local',
+    password: 'demo1234',
+    roles: ['user'],
+  },
+  {
     username: 'moderatore.demo',
     firstName: 'Moderatore',
     lastName: 'Demo',
