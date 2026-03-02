@@ -703,6 +703,9 @@ Verifica UI web:
 
 ## 34. Messaggistica privata + notifiche email (M5.6)
 
+Documentazione tecnica completa:
+- `docs/MESSAGING.md`
+
 Prerequisiti:
 - `pnpm db:migrate`
 - `pnpm db:seed`
