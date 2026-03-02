@@ -14,7 +14,7 @@ import {
 
 interface FeaturedListingsCarouselProps {
   children: ReactNode;
-  autoPlayMs?: number;
+  autoPlayMs?: number | null;
   visibleCount?: number;
 }
 
@@ -35,6 +35,8 @@ export function FeaturedListingsCarousel({
   const totalItems = items.length;
   const itemsPerView = Math.max(1, visibleCount);
   const hasLoop = totalItems > itemsPerView;
+  const autoPlayDelayMs = autoPlayMs ?? 0;
+  const autoPlayEnabled = hasLoop && autoPlayDelayMs > 0;
   const cloneCount = hasLoop ? itemsPerView : 0;
   const trackItems = useMemo(() => {
     if (!hasLoop) {
@@ -58,7 +60,7 @@ export function FeaturedListingsCarousel({
 
   const scheduleAutoPlay = useCallback(
     (delayMs: number) => {
-      if (!hasLoop) {
+      if (!autoPlayEnabled) {
         return;
       }
 
@@ -73,10 +75,10 @@ export function FeaturedListingsCarousel({
 
         setTransitionEnabled(true);
         setTrackIndex((currentValue) => currentValue + 1);
-        scheduleAutoPlay(autoPlayMs);
+        scheduleAutoPlay(autoPlayDelayMs);
       }, delayMs);
     },
-    [autoPlayMs, clearAutoPlayTimeout, hasLoop],
+    [autoPlayDelayMs, autoPlayEnabled, clearAutoPlayTimeout],
   );
 
   useEffect(() => {
@@ -88,17 +90,17 @@ export function FeaturedListingsCarousel({
     autoPlayTokenRef.current += 1;
     clearAutoPlayTimeout();
 
-    if (!hasLoop) {
+    if (!autoPlayEnabled) {
       return;
     }
 
-    scheduleAutoPlay(autoPlayMs);
+    scheduleAutoPlay(autoPlayDelayMs);
 
     return () => {
       autoPlayTokenRef.current += 1;
       clearAutoPlayTimeout();
     };
-  }, [autoPlayMs, clearAutoPlayTimeout, hasLoop, scheduleAutoPlay]);
+  }, [autoPlayDelayMs, autoPlayEnabled, clearAutoPlayTimeout, scheduleAutoPlay]);
 
   useEffect(() => {
     if (transitionEnabled) {
@@ -144,7 +146,9 @@ export function FeaturedListingsCarousel({
       return;
     }
 
-    scheduleAutoPlay(autoPlayMs);
+    if (autoPlayEnabled) {
+      scheduleAutoPlay(autoPlayDelayMs);
+    }
     setTransitionEnabled(true);
     setTrackIndex((currentValue) => currentValue - 1);
   };
@@ -154,7 +158,9 @@ export function FeaturedListingsCarousel({
       return;
     }
 
-    scheduleAutoPlay(autoPlayMs);
+    if (autoPlayEnabled) {
+      scheduleAutoPlay(autoPlayDelayMs);
+    }
     setTransitionEnabled(true);
     setTrackIndex((currentValue) => currentValue + 1);
   };
@@ -164,7 +170,9 @@ export function FeaturedListingsCarousel({
       return;
     }
 
-    scheduleAutoPlay(autoPlayMs);
+    if (autoPlayEnabled) {
+      scheduleAutoPlay(autoPlayDelayMs);
+    }
     const normalizedIndex = ((logicalIndex % totalItems) + totalItems) % totalItems;
     setTransitionEnabled(true);
     setTrackIndex(cloneCount + normalizedIndex);

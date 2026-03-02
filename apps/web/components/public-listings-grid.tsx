@@ -119,11 +119,11 @@ export function PublicListingsGrid({
             href={`/annunci/${listing.id}`}
             key={listing.id}
           >
-            <article className="flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[var(--shadow-lg)]">
+            <article className="flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[0_20px_54px_rgb(66_40_49_/_0.1)] backdrop-blur-xl transition-[border-color,box-shadow] duration-300 group-hover:border-[var(--color-border-strong)] group-hover:shadow-[0_30px_76px_rgb(66_40_49_/_0.16)]">
               <div className="relative basis-3/5 overflow-hidden">
                 <div
                   aria-label={imageTitleLabel || titleLabel}
-                  className="h-full w-full bg-cover bg-center"
+                  className="h-full w-full bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-[1.1] group-hover:brightness-[1.03] group-hover:saturate-[1.06]"
                   role="img"
                   style={imageStyle}
                 />

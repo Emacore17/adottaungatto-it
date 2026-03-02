@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 test('renders the scaffold home', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Trova il tuo prossimo gatto.' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Apri tutti gli annunci' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trova il gatto da accogliere.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Vedi tutti gli annunci' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Login' })).toBeVisible();
 });
 

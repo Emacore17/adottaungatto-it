@@ -5,8 +5,8 @@ import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
 import { LinkButton } from './link-button';
 import { MobileNavMenu } from './mobile-nav-menu';
-import { ShellSearch } from './shell-search';
 import { ScrollAwareHeader } from './scroll-aware-header';
+import { ShellSearch } from './shell-search';
 import { ThemeToggle } from './theme-toggle';
 
 const primaryNavigation = [
@@ -37,7 +37,7 @@ export async function AppShell({ children }: AppShellProps) {
   return (
     <div className="relative min-h-screen overflow-x-clip">
       <ScrollAwareHeader>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4">
+        <div className="mx-auto flex h-[var(--shell-header-height)] max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4">
           <Link className="flex min-w-0 items-center gap-3 lg:justify-self-start" href="/">
             <span
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)]"
@@ -107,7 +107,7 @@ export async function AppShell({ children }: AppShellProps) {
         </div>
       </ScrollAwareHeader>
 
-      <main className="relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="relative mx-auto w-full max-w-6xl px-4 py-[var(--shell-main-padding)] sm:px-6">
         <ShellSearch />
         {children}
       </main>
@@ -116,8 +116,8 @@ export async function AppShell({ children }: AppShellProps) {
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="space-y-2">
             <p className="text-sm font-medium text-[var(--color-text)]">
-              Una piattaforma semplice per adottare, offrire stallo o pubblicare annunci dedicati
-              ai gatti.
+              Una piattaforma semplice per adottare, offrire stallo o pubblicare annunci dedicati ai
+              gatti.
             </p>
             <p className="max-w-2xl text-sm text-[var(--color-text-muted)]">
               Ricerca rapida, pagine leggere e temi coerenti facilitano la consultazione degli
