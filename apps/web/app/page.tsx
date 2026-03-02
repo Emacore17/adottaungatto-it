@@ -1,11 +1,15 @@
+import { loadWebEnv } from '@adottaungatto/config';
 import { Badge, Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { Cat, MapPin, PawPrint, SlidersHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { FeaturedListingsCarousel } from '../components/featured-listings-carousel';
 import { LinkButton } from '../components/link-button';
+import { NearbyListingsSection } from '../components/nearby-listings-section';
 import { PublicListingsGrid } from '../components/public-listings-grid';
 import Ricerca from '../components/ricerca';
 import { type PublicListingSummary, fetchPublicListings } from '../lib/listings';
+
+const env = loadWebEnv();
 
 const parseListingTimestamp = (listing: PublicListingSummary) => {
   const value = new Date(listing.publishedAt ?? listing.createdAt).getTime();
@@ -59,9 +63,12 @@ function HeroDecorations() {
 }
 
 export default async function Page() {
-  const listings = await fetchPublicListings({ limit: 24 }).catch(() => []);
+  const featuredListingsLimit = env.NEXT_PUBLIC_HOME_FEATURED_LIMIT;
+  const listings = await fetchPublicListings({ limit: Math.max(featuredListingsLimit, 24) }).catch(
+    () => [],
+  );
   const orderedListings = sortByLatest(listings);
-  const featuredListings = orderedListings.slice(0, 9);
+  const featuredListings = orderedListings.slice(0, featuredListingsLimit);
   const listingCountLabel =
     orderedListings.length > 0
       ? `${new Intl.NumberFormat('it-IT').format(orderedListings.length)} annunci pubblici`
@@ -174,23 +181,7 @@ export default async function Page() {
         )}
       </section>
 
-      <section className="space-y-6" id="annunci-recenti">
-        <div className="max-w-2xl space-y-2">
-          <Badge className="w-fit" variant="outline">
-            Tutti gli annunci
-          </Badge>
-          <h2 className="text-2xl font-semibold tracking-tight">Annunci recenti da tutta Italia</h2>
-          <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-            Nuovi annunci pubblici ordinati per data di pubblicazione, con una lettura piu lineare
-            su desktop e mobile.
-          </p>
-        </div>
-
-        <PublicListingsGrid
-          emptyDescription="Nessun annuncio pubblico disponibile al momento."
-          listings={orderedListings}
-        />
-      </section>
+      <NearbyListingsSection />
     </div>
   );
 }

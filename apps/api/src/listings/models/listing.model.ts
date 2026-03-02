@@ -113,6 +113,8 @@ export interface PublicListingSummary {
   distanceKm: number | null;
   mediaCount: number;
   primaryMedia: PublicListingMedia | null;
+  previewMedia?: PublicListingMedia[];
+  isSponsored?: boolean;
 }
 
 export interface PublicListingDetail extends PublicListingSummary {

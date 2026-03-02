@@ -1,11 +1,12 @@
 import { loadWebEnv } from '@adottaungatto/config';
-import type {
-  ListingCardData,
-  LocationIntentScope,
-  SearchListingsMetadata,
-  SearchSort,
+import {
+  CAT_BREEDS,
+  type ListingCardData,
+  type LocationIntentScope,
+  NO_BREED_FILTER,
+  type SearchListingsMetadata,
+  type SearchSort,
 } from '@adottaungatto/types';
-import { NO_BREED_FILTER } from '@adottaungatto/types';
 import { cookies } from 'next/headers';
 import { findMockListingBySlug, mockListings } from '../mocks/listings';
 import { webSessionCookieName } from './auth';
@@ -30,6 +31,7 @@ export interface MyListing {
   priceAmount: string | null;
   currency: string;
   ageText: string;
+  ageMonths: number | null;
   sex: string;
   breed: string | null;
   status: ListingStatus;
@@ -56,6 +58,22 @@ export interface PublicListingMedia {
   objectUrl: string;
 }
 
+export interface MyListingMedia extends PublicListingMedia {
+  listingId: string;
+  storageKey: string;
+  fileSize: string;
+  hash: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ListingBreedOption = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+};
+
 export interface PublicListingSummary {
   id: string;
   title: string;
@@ -75,6 +93,8 @@ export interface PublicListingSummary {
   distanceKm: number | null;
   mediaCount: number;
   primaryMedia: PublicListingMedia | null;
+  previewMedia?: PublicListingMedia[];
+  isSponsored?: boolean;
 }
 
 export interface PublicListingDetail extends PublicListingSummary {
@@ -92,6 +112,8 @@ export interface PublicListingsSearchOptions {
   comuneId?: string | null;
   locationLabel?: string | null;
   locationSecondaryLabel?: string | null;
+  referenceLat?: number | null;
+  referenceLon?: number | null;
   listingType?: string | null;
   priceMin?: number | null;
   priceMax?: number | null;
@@ -107,8 +129,21 @@ export interface PublicListingsSearchOptions {
 
 export interface PublicListingsSearchResult {
   items: PublicListingSummary[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  } | null;
   metadata: SearchListingsMetadata | null;
 }
+
+const buildSearchPagination = (limit: number, offset: number, total: number) => ({
+  limit,
+  offset,
+  total,
+  hasMore: offset + limit < total,
+});
 
 const searchSortValues = new Set<SearchSort>(['relevance', 'newest', 'price_asc', 'price_desc']);
 
@@ -126,11 +161,32 @@ const parseSearchMetadata = (value: unknown): SearchListingsMetadata | null => {
   return record as unknown as SearchListingsMetadata;
 };
 
+const parseSearchPagination = (value: unknown): PublicListingsSearchResult['pagination'] => {
+  const record = asRecord(value);
+  if (
+    typeof record.limit !== 'number' ||
+    typeof record.offset !== 'number' ||
+    typeof record.total !== 'number' ||
+    typeof record.hasMore !== 'boolean'
+  ) {
+    return null;
+  }
+
+  return {
+    limit: record.limit,
+    offset: record.offset,
+    total: record.total,
+    hasMore: record.hasMore,
+  };
+};
+
 const parseListing = (value: unknown): MyListing | null => {
   const record = asRecord(value);
   if (typeof record.id !== 'string' || typeof record.title !== 'string') {
     return null;
   }
+
+  const parsedAgeMonths = parseNullableNumber(record.ageMonths ?? record.age_months);
 
   return {
     id: record.id,
@@ -141,6 +197,10 @@ const parseListing = (value: unknown): MyListing | null => {
     priceAmount: record.priceAmount === null ? null : String(record.priceAmount ?? ''),
     currency: String(record.currency ?? 'EUR'),
     ageText: String(record.ageText ?? ''),
+    ageMonths:
+      parsedAgeMonths === null
+        ? parseAgeTextToMonths(String(record.ageText ?? ''))
+        : parsedAgeMonths,
     sex: String(record.sex ?? ''),
     breed: record.breed === null ? null : String(record.breed ?? ''),
     status: String(record.status ?? 'pending_review') as ListingStatus,
@@ -209,6 +269,52 @@ const parsePublicMedia = (value: unknown): PublicListingMedia | null => {
   };
 };
 
+const parseMyListingMedia = (value: unknown): MyListingMedia | null => {
+  const publicMedia = parsePublicMedia(value);
+  if (!publicMedia) {
+    return null;
+  }
+
+  const record = asRecord(value);
+  return {
+    ...publicMedia,
+    listingId: String(record.listingId ?? ''),
+    storageKey: String(record.storageKey ?? ''),
+    fileSize: String(record.fileSize ?? ''),
+    hash: record.hash === null ? null : String(record.hash ?? ''),
+    createdAt: String(record.createdAt ?? ''),
+    updatedAt: String(record.updatedAt ?? ''),
+  };
+};
+
+const parseListingBreedOption = (value: unknown): ListingBreedOption | null => {
+  const record = asRecord(value);
+  if (
+    typeof record.id !== 'string' ||
+    typeof record.slug !== 'string' ||
+    typeof record.label !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: record.id,
+    slug: record.slug,
+    label: record.label,
+    sortOrder: parseInteger(record.sortOrder, 0),
+  };
+};
+
+const parsePublicMediaList = (value: unknown): PublicListingMedia[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => parsePublicMedia(item))
+    .filter((item): item is PublicListingMedia => item !== null);
+};
+
 const inferMimeTypeFromMediaUrl = (value: string): string => {
   const normalized = value.trim().toLowerCase();
   if (normalized.endsWith('.png')) {
@@ -251,6 +357,8 @@ const parsePublicSummary = (value: unknown): PublicListingSummary | null => {
     distanceKm: parseNullableNumber(record.distanceKm),
     mediaCount: parseInteger(record.mediaCount, 0),
     primaryMedia: parsePublicMedia(record.primaryMedia),
+    previewMedia: parsePublicMediaList(record.previewMedia),
+    isSponsored: record.isSponsored === true,
   };
 };
 
@@ -295,6 +403,7 @@ const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingS
     comuneName: listing.city,
     distanceKm: listing.distanceKm,
     mediaCount: listing.media.length,
+    isSponsored: false,
     primaryMedia: primaryMedia
       ? {
           id: primaryMedia.id,
@@ -306,6 +415,15 @@ const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingS
           objectUrl: primaryMedia.src,
         }
       : null,
+    previewMedia: listing.media.slice(0, 4).map((media, index) => ({
+      id: media.id,
+      mimeType: inferMimeTypeFromMediaUrl(media.src),
+      width: media.width,
+      height: media.height,
+      position: index + 1,
+      isPrimary: media.isPrimary === true,
+      objectUrl: media.src,
+    })),
   };
 };
 
@@ -342,6 +460,14 @@ const normalizeOptionalNonNegativeNumber = (value: number | null | undefined): n
   return value;
 };
 
+const normalizeOptionalFiniteNumber = (value: number | null | undefined): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+};
+
 const normalizeOptionalNonNegativeInteger = (value: number | null | undefined): number | null => {
   const normalized = normalizeOptionalNonNegativeNumber(value);
   if (normalized === null) {
@@ -369,6 +495,16 @@ const appendOptionalNumberQueryParam = (
 ) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     query.set(key, String(Math.trunc(value)));
+  }
+};
+
+const appendOptionalDecimalQueryParam = (
+  query: URLSearchParams,
+  key: string,
+  value: number | null | undefined,
+) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    query.set(key, String(value));
   }
 };
 
@@ -517,7 +653,7 @@ const searchMockPublicListings = (
   options: PublicListingsSearchOptions,
   limit: number,
   offset: number,
-): PublicListingSummary[] => {
+): PublicListingsSearchResult => {
   const queryText = normalizeOptionalString(options.q)?.toLowerCase() ?? null;
   const listingType = normalizeOptionalString(options.listingType)?.toLowerCase() ?? null;
   const sex = normalizeOptionalString(options.sex)?.toLowerCase() ?? null;
@@ -588,9 +724,13 @@ const searchMockPublicListings = (
     return byNewest(a, b);
   });
 
-  return filtered
-    .slice(offset, offset + limit)
-    .map((listing) => mapMockListingToPublicSummary(listing));
+  return {
+    items: filtered
+      .slice(offset, offset + limit)
+      .map((listing) => mapMockListingToPublicSummary(listing)),
+    pagination: buildSearchPagination(limit, offset, filtered.length),
+    metadata: null,
+  };
 };
 
 const nonWordSearchRegex = /[^a-z0-9\s]/g;
@@ -691,7 +831,7 @@ const searchPublicListingsFromPublicEndpoint = async (
   options: PublicListingsSearchOptions,
   limit: number,
   offset: number,
-): Promise<PublicListingSummary[]> => {
+): Promise<Pick<PublicListingsSearchResult, 'items' | 'pagination'>> => {
   const queryText = normalizeSearchText(options.q);
   const listingType = normalizeSearchText(options.listingType);
   const sex = normalizeSearchText(options.sex);
@@ -781,7 +921,10 @@ const searchPublicListingsFromPublicEndpoint = async (
     return byPublicNewest(a, b);
   });
 
-  return filtered.slice(offset, offset + limit);
+  return {
+    items: filtered.slice(offset, offset + limit),
+    pagination: buildSearchPagination(limit, offset, filtered.length),
+  };
 };
 
 export const fetchMyListings = async (): Promise<MyListing[]> => {
@@ -812,6 +955,60 @@ export const fetchMyListings = async (): Promise<MyListing[]> => {
 export const fetchMyListingById = async (listingId: string): Promise<MyListing | null> => {
   const listings = await fetchMyListings();
   return listings.find((listing) => listing.id === listingId) ?? null;
+};
+
+export const fetchMyListingMedia = async (listingId: string): Promise<MyListingMedia[]> => {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(webSessionCookieName)?.value;
+  if (!token) {
+    return [];
+  }
+
+  const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/v1/listings/${listingId}/media`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch listing media with status ${response.status}.`);
+  }
+
+  const payload = asRecord(await response.json());
+  const rawMedia = Array.isArray(payload.media) ? payload.media : [];
+  return rawMedia
+    .map((item) => parseMyListingMedia(item))
+    .filter((item): item is MyListingMedia => item !== null);
+};
+
+export const fetchListingBreeds = async (): Promise<ListingBreedOption[]> => {
+  try {
+    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/v1/listings/breeds`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listing breeds with status ${response.status}.`);
+    }
+
+    const payload = asRecord(await response.json());
+    const rawBreeds = Array.isArray(payload.breeds) ? payload.breeds : [];
+    const parsedBreeds = rawBreeds
+      .map((item) => parseListingBreedOption(item))
+      .filter((item): item is ListingBreedOption => item !== null);
+
+    if (parsedBreeds.length > 0) {
+      return parsedBreeds;
+    }
+  } catch {}
+
+  return CAT_BREEDS.map((breed, index) => ({
+    id: breed.slug,
+    slug: breed.slug,
+    label: breed.label,
+    sortOrder: index + 1,
+  }));
 };
 
 export const fetchPublicListings = async (
@@ -876,6 +1073,12 @@ export const searchPublicListingsWithMetadata = async (
   const priceMax = normalizeOptionalNonNegativeNumber(options.priceMax);
   const ageMinMonths = normalizeOptionalNonNegativeInteger(options.ageMinMonths);
   const ageMaxMonths = normalizeOptionalNonNegativeInteger(options.ageMaxMonths);
+  const referenceLat = normalizeOptionalFiniteNumber(options.referenceLat);
+  const referenceLon = normalizeOptionalFiniteNumber(options.referenceLon);
+  const effectiveReferenceLat =
+    referenceLat !== null && referenceLon !== null ? referenceLat : null;
+  const effectiveReferenceLon =
+    referenceLat !== null && referenceLon !== null ? referenceLon : null;
   const [effectivePriceMin, effectivePriceMax] =
     priceMin !== null && priceMax !== null && priceMin > priceMax
       ? [priceMax, priceMin]
@@ -898,6 +1101,8 @@ export const searchPublicListingsWithMetadata = async (
   appendOptionalQueryParam(query, 'comuneId', options.comuneId);
   appendOptionalQueryParam(query, 'locationLabel', options.locationLabel);
   appendOptionalQueryParam(query, 'locationSecondaryLabel', options.locationSecondaryLabel);
+  appendOptionalDecimalQueryParam(query, 'referenceLat', effectiveReferenceLat);
+  appendOptionalDecimalQueryParam(query, 'referenceLon', effectiveReferenceLon);
   appendOptionalQueryParam(query, 'listingType', options.listingType);
   appendOptionalQueryParam(query, 'ageText', options.ageText);
   appendOptionalNumberQueryParam(query, 'ageMinMonths', effectiveAgeMinMonths);
@@ -920,6 +1125,8 @@ export const searchPublicListingsWithMetadata = async (
     priceMax: effectivePriceMax,
     ageMinMonths: effectiveAgeMinMonths,
     ageMaxMonths: effectiveAgeMaxMonths,
+    referenceLat: effectiveReferenceLat,
+    referenceLon: effectiveReferenceLon,
   };
 
   try {
@@ -937,16 +1144,13 @@ export const searchPublicListingsWithMetadata = async (
             fallbackOptions,
             limit,
             offset,
-          ).catch(() => []);
-          if (publicFallback.length > 0) {
-            return { items: publicFallback, metadata: null };
+          ).catch(() => null);
+          if (publicFallback && publicFallback.items.length > 0) {
+            return { ...publicFallback, metadata: null };
           }
         }
 
-        return {
-          items: searchMockPublicListings(fallbackOptions, limit, offset),
-          metadata: null,
-        };
+        return searchMockPublicListings(fallbackOptions, limit, offset);
       }
 
       throw new Error(`Failed to search listings with status ${response.status}.`);
@@ -954,26 +1158,33 @@ export const searchPublicListingsWithMetadata = async (
 
     const payload = asRecord(await response.json());
     const parsedMetadata = parseSearchMetadata(payload.metadata);
+    const parsedPagination = parseSearchPagination(payload.pagination);
     const rawListings = Array.isArray(payload.items) ? payload.items : [];
     const parsedListings = rawListings
       .map((item) => parsePublicSummary(item))
       .filter((item): item is PublicListingSummary => item !== null);
 
     if (parsedListings.length > 0 || !isMockModeEnabled) {
-      return { items: parsedListings, metadata: parsedMetadata };
+      return {
+        items: parsedListings,
+        pagination:
+          parsedPagination ?? buildSearchPagination(limit, offset, offset + parsedListings.length),
+        metadata: parsedMetadata,
+      };
     }
 
     const publicFallback = await searchPublicListingsFromPublicEndpoint(
       fallbackOptions,
       limit,
       offset,
-    ).catch(() => []);
-    if (publicFallback.length > 0) {
-      return { items: publicFallback, metadata: parsedMetadata };
+    ).catch(() => null);
+    if (publicFallback && publicFallback.items.length > 0) {
+      return { ...publicFallback, metadata: parsedMetadata };
     }
 
+    const mockFallback = searchMockPublicListings(fallbackOptions, limit, offset);
     return {
-      items: searchMockPublicListings(fallbackOptions, limit, offset),
+      ...mockFallback,
       metadata: parsedMetadata,
     };
   } catch {
@@ -983,16 +1194,13 @@ export const searchPublicListingsWithMetadata = async (
           fallbackOptions,
           limit,
           offset,
-        ).catch(() => []);
-        if (publicFallback.length > 0) {
-          return { items: publicFallback, metadata: null };
+        ).catch(() => null);
+        if (publicFallback && publicFallback.items.length > 0) {
+          return { ...publicFallback, metadata: null };
         }
       }
 
-      return {
-        items: searchMockPublicListings(fallbackOptions, limit, offset),
-        metadata: null,
-      };
+      return searchMockPublicListings(fallbackOptions, limit, offset);
     }
 
     throw new Error('Failed to search listings.');

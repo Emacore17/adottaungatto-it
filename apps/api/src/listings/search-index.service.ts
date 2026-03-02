@@ -177,9 +177,9 @@ export class SearchIndexService {
 
   async searchPublished(query: SearchListingsQueryDto): Promise<SearchPublishedResultRecord> {
     await this.ensureIndexExists();
-    const referencePoint = await this.listingsRepository.resolveLocationCentroid(
-      query.locationIntent,
-    );
+    const referencePoint =
+      query.referencePoint ??
+      (await this.listingsRepository.resolveLocationCentroid(query.locationIntent));
 
     const response = await this.request(`/${SEARCH_INDEX_NAME}/_search`, {
       method: 'POST',

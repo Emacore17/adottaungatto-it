@@ -4,6 +4,17 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export {
+  CAT_BREEDS,
+  CAT_BREED_LABELS,
+  isSupportedCatBreedLabel,
+  normalizeCatBreed,
+  normalizeCatBreedLabel,
+  type CatBreedDefinition,
+  type CatBreedLabel,
+  type CatBreedSlug,
+} from './cat-breeds';
+
 export type LocationIntentScope =
   | 'italy'
   | 'region'

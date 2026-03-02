@@ -1,30 +1,31 @@
-import { LinkButton } from '../../components/link-button';
-import { ScaffoldPlaceholder } from '../../components/scaffold-placeholder';
+import { CardContent } from '@adottaungatto/ui';
+import { ListingEditor } from '../../components/listing-editor';
+import { PageShell } from '../../components/page-shell';
 import { requireWebSession } from '../../lib/auth';
+import { fetchListingBreeds } from '../../lib/listings';
 
 export default async function PublishPage() {
   await requireWebSession('/pubblica');
+  const breeds = await fetchListingBreeds();
 
   return (
-    <ScaffoldPlaceholder
-      actions={
-        <LinkButton href="/account/annunci" variant="outline">
-          Vai ai miei annunci
-        </LinkButton>
+    <PageShell
+      aside={
+        <CardContent className="space-y-3 pt-6">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+            Flusso attivo
+          </p>
+          <p className="text-sm leading-6 text-[var(--color-text)]">
+            Creazione annuncio, catalogo razze, localita strutturata e upload foto sono collegati al
+            backend reale.
+          </p>
+        </CardContent>
       }
-      description="Il wizard di creazione e stato rimosso. Restano pronti autenticazione, proxy listings e upload media per ricostruire il flusso da zero."
+      description="Crea una scheda completa con dati strutturati, localita precisa e foto gestite direttamente dal nuovo flusso listings."
       eyebrow="Area riservata"
-      integrations={[
-        'Protezione route via requireWebSession().',
-        'POST /api/listings ancora collegato a /v1/listings.',
-        'POST /api/listings/[listingId]/media ancora collegato all upload media.',
-      ]}
-      nextSteps={[
-        'Progettare un nuovo form step-by-step minimalista.',
-        'Separare chiaramente dati annuncio, localita e media upload.',
-      ]}
-      route="/pubblica"
       title="Pubblica annuncio"
-    />
+    >
+      <ListingEditor breeds={breeds} />
+    </PageShell>
   );
 }

@@ -1,17 +1,33 @@
+import { loadWebEnv } from '@adottaungatto/config';
 import { NO_BREED_FILTER, type SearchSort } from '@adottaungatto/types';
-import { Badge } from '@adottaungatto/ui';
+import { Badge, Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
+import Script from 'next/script';
 import { LinkButton } from '../../components/link-button';
-import { PageShell } from '../../components/page-shell';
-import { PublicListingsGrid } from '../../components/public-listings-grid';
+import { ListingsPagination } from '../../components/listings-pagination';
+import {
+  type ListingsFilterValues,
+  ListingsFiltersSidebar,
+  ListingsResultsToolbar,
+} from '../../components/listings-search-controls';
+import { SectionReveal } from '../../components/motion/section-reveal';
+import { PublicListingsList } from '../../components/public-listings-list';
 import {
   type PublicListingsSearchOptions,
-  fetchPublicListings,
   searchPublicListingsWithMetadata,
 } from '../../lib/listings';
-import { isMockModeEnabled } from '../../lib/mock-mode';
+
+const env = loadWebEnv();
+const listingsPerPage = 12;
 
 interface ListingsPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+interface ParsedListingsPageState {
+  filters: ListingsFilterValues;
+  page: number;
+  searchOptions: PublicListingsSearchOptions;
 }
 
 const searchSortValues = new Set<SearchSort>(['relevance', 'newest', 'price_asc', 'price_desc']);
@@ -64,34 +80,53 @@ const parseNonNegativeInteger = (value: string | string[] | undefined): number |
   return Math.trunc(parsed);
 };
 
-const parseSearchSort = (value: string | string[] | undefined): SearchSort => {
-  const normalized = normalizeOptionalString(value)?.toLowerCase();
-  if (normalized && searchSortValues.has(normalized as SearchSort)) {
-    return normalized as SearchSort;
+const parseBoundedNumber = (
+  value: string | string[] | undefined,
+  minValue: number,
+  maxValue: number,
+) => {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    return null;
   }
 
-  return 'relevance';
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed < minValue || parsed > maxValue) {
+    return null;
+  }
+
+  return parsed;
 };
 
-const parseLocationScope = (
-  value: string | string[] | undefined,
-): PublicListingsSearchOptions['locationScope'] => {
+const parsePositivePage = (value: string | string[] | undefined) => {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const parseLocationScope = (value: string | string[] | undefined) => {
   const normalized = normalizeOptionalString(value)?.toLowerCase();
   if (normalized && locationScopeValues.has(normalized)) {
-    return normalized as PublicListingsSearchOptions['locationScope'];
+    return normalized as NonNullable<PublicListingsSearchOptions['locationScope']>;
   }
 
   return null;
 };
 
-const parseSearchOptions = (
+const parseListingsPageState = (
   params: Record<string, string | string[] | undefined> | undefined,
-): PublicListingsSearchOptions => {
+): ParsedListingsPageState => {
+  const page = parsePositivePage(params?.page);
   const priceMin = parseNonNegativeNumber(params?.priceMin);
   const priceMax = parseNonNegativeNumber(params?.priceMax);
   const ageMinMonths = parseNonNegativeInteger(params?.ageMinMonths);
   const ageMaxMonths = parseNonNegativeInteger(params?.ageMaxMonths);
-
+  const referenceLat = parseBoundedNumber(params?.referenceLat, -90, 90);
+  const referenceLon = parseBoundedNumber(params?.referenceLon, -180, 180);
   const [effectivePriceMin, effectivePriceMax] =
     priceMin !== null && priceMax !== null && priceMin > priceMax
       ? [priceMax, priceMin]
@@ -100,94 +135,61 @@ const parseSearchOptions = (
     ageMinMonths !== null && ageMaxMonths !== null && ageMinMonths > ageMaxMonths
       ? [ageMaxMonths, ageMinMonths]
       : [ageMinMonths, ageMaxMonths];
+  const [effectiveReferenceLat, effectiveReferenceLon] =
+    referenceLat !== null && referenceLon !== null ? [referenceLat, referenceLon] : [null, null];
+  const defaultSort: SearchSort =
+    effectiveReferenceLat !== null && effectiveReferenceLon !== null ? 'relevance' : 'newest';
+  const sortCandidate = normalizeOptionalString(params?.sort)?.toLowerCase();
+  const sort =
+    sortCandidate && searchSortValues.has(sortCandidate as SearchSort)
+      ? (sortCandidate as SearchSort)
+      : defaultSort;
 
-  return {
-    q: normalizeOptionalString(params?.q),
-    listingType: normalizeOptionalString(params?.listingType),
-    sex: normalizeOptionalString(params?.sex),
-    breed: normalizeOptionalString(params?.breed),
-    ageText: normalizeOptionalString(params?.ageText),
+  const filters: ListingsFilterValues = {
+    q: normalizeOptionalString(params?.q) ?? '',
+    listingType: normalizeOptionalString(params?.listingType) ?? '',
+    sex: normalizeOptionalString(params?.sex) ?? '',
+    breed: normalizeOptionalString(params?.breed) ?? '',
     ageMinMonths: effectiveAgeMinMonths,
     ageMaxMonths: effectiveAgeMaxMonths,
+    priceMin: effectivePriceMin,
+    priceMax: effectivePriceMax,
+    sort,
     locationScope: parseLocationScope(params?.locationScope),
     regionId: normalizeOptionalString(params?.regionId),
     provinceId: normalizeOptionalString(params?.provinceId),
     comuneId: normalizeOptionalString(params?.comuneId),
     locationLabel: normalizeOptionalString(params?.locationLabel),
     locationSecondaryLabel: normalizeOptionalString(params?.locationSecondaryLabel),
-    sort: parseSearchSort(params?.sort),
-    priceMin: effectivePriceMin,
-    priceMax: effectivePriceMax,
+    locationQuery: normalizeOptionalString(params?.locationLabel) ?? '',
+    referenceLat: effectiveReferenceLat,
+    referenceLon: effectiveReferenceLon,
+  };
+
+  return {
+    filters,
+    page,
+    searchOptions: {
+      q: filters.q || null,
+      listingType: filters.listingType || null,
+      sex: filters.sex || null,
+      breed: filters.breed || null,
+      ageMinMonths: filters.ageMinMonths,
+      ageMaxMonths: filters.ageMaxMonths,
+      priceMin: filters.priceMin,
+      priceMax: filters.priceMax,
+      sort: filters.sort,
+      locationScope: filters.locationScope,
+      regionId: filters.regionId,
+      provinceId: filters.provinceId,
+      comuneId: filters.comuneId,
+      locationLabel: filters.locationLabel,
+      locationSecondaryLabel: filters.locationSecondaryLabel,
+      referenceLat: filters.referenceLat,
+      referenceLon: filters.referenceLon,
+    },
   };
 };
-
-const nonWordLocationRegex = /[^a-z0-9\s]/g;
-const locationStopwords = new Set([
-  'comune',
-  'provincia',
-  'regione',
-  'citta',
-  'citt',
-  'di',
-  'del',
-  'della',
-  'dello',
-  'dei',
-  'degli',
-  'e',
-]);
-
-const normalizeLocationText = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(nonWordLocationRegex, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const extractLocationTokens = (value: string) =>
-  normalizeLocationText(value)
-    .split(' ')
-    .filter((token) => token.length > 0 && !locationStopwords.has(token));
-
-const filterListingsByLocationLabel = (
-  listings: Awaited<ReturnType<typeof fetchPublicListings>>,
-  locationLabel: string | null | undefined,
-) => {
-  const normalizedLabel = normalizeLocationText(locationLabel ?? '');
-  if (!normalizedLabel) {
-    return listings;
-  }
-
-  const tokens = extractLocationTokens(normalizedLabel);
-  if (tokens.length === 0) {
-    return listings;
-  }
-
-  return listings.filter((listing) => {
-    const haystackTokens = extractLocationTokens(
-      `${listing.comuneName} ${listing.provinceName} ${listing.provinceSigla} ${listing.regionName}`,
-    );
-    if (haystackTokens.length === 0) {
-      return false;
-    }
-
-    return tokens.every((token) => {
-      if (token.length <= 2) {
-        return haystackTokens.some((word) => word === token);
-      }
-
-      return haystackTokens.some((word) => word.startsWith(token) || word.includes(token));
-    });
-  });
-};
-
-const hasStructuredLocationIntent = (options: PublicListingsSearchOptions) =>
-  Boolean(options.locationScope || options.regionId || options.provinceId || options.comuneId);
-
-const shouldApplyLocationLabelPostFilter = (options: PublicListingsSearchOptions) =>
-  Boolean(options.locationLabel) && !hasStructuredLocationIntent(options);
 
 const formatAgeMonthsLabel = (value: number) => {
   if (value % 12 === 0) {
@@ -198,323 +200,315 @@ const formatAgeMonthsLabel = (value: number) => {
   return `${value} ${value === 1 ? 'mese' : 'mesi'}`;
 };
 
-const buildAgeFilterLabel = (
-  ageMinMonths: number | null | undefined,
-  ageMaxMonths: number | null | undefined,
-) => {
-  if (ageMinMonths !== null && ageMinMonths !== undefined) {
-    if (ageMaxMonths !== null && ageMaxMonths !== undefined) {
-      return `${formatAgeMonthsLabel(ageMinMonths)} - ${formatAgeMonthsLabel(ageMaxMonths)}`;
-    }
-
-    return `Da ${formatAgeMonthsLabel(ageMinMonths)}`;
+const buildAgeFilterLabel = (filters: ListingsFilterValues) => {
+  if (filters.ageMinMonths !== null && filters.ageMaxMonths !== null) {
+    return `${formatAgeMonthsLabel(filters.ageMinMonths)} - ${formatAgeMonthsLabel(filters.ageMaxMonths)}`;
   }
 
-  if (ageMaxMonths !== null && ageMaxMonths !== undefined) {
-    return `Fino a ${formatAgeMonthsLabel(ageMaxMonths)}`;
+  if (filters.ageMinMonths !== null) {
+    return `Da ${formatAgeMonthsLabel(filters.ageMinMonths)}`;
+  }
+
+  if (filters.ageMaxMonths !== null) {
+    return `Fino a ${formatAgeMonthsLabel(filters.ageMaxMonths)}`;
   }
 
   return null;
 };
 
-const buildRelaxedSearchVariants = (
-  options: PublicListingsSearchOptions,
-): PublicListingsSearchOptions[] => {
-  const variants: PublicListingsSearchOptions[] = [];
-  const seen = new Set<string>();
-
-  const pushVariant = (candidate: PublicListingsSearchOptions) => {
-    const key = JSON.stringify({
-      q: candidate.q ?? null,
-      listingType: candidate.listingType ?? null,
-      sex: candidate.sex ?? null,
-      breed: candidate.breed ?? null,
-      ageText: candidate.ageText ?? null,
-      ageMinMonths: candidate.ageMinMonths ?? null,
-      ageMaxMonths: candidate.ageMaxMonths ?? null,
-      locationScope: candidate.locationScope ?? null,
-      regionId: candidate.regionId ?? null,
-      provinceId: candidate.provinceId ?? null,
-      comuneId: candidate.comuneId ?? null,
-      locationLabel: candidate.locationLabel ?? null,
-      locationSecondaryLabel: candidate.locationSecondaryLabel ?? null,
-      sort: candidate.sort ?? 'relevance',
-      priceMin: candidate.priceMin ?? null,
-      priceMax: candidate.priceMax ?? null,
-    });
-
-    if (seen.has(key)) {
-      return;
-    }
-
-    seen.add(key);
-    variants.push(candidate);
-  };
-
-  let current = { ...options };
-
-  if (current.ageText) {
-    current = { ...current, ageText: null };
-    pushVariant(current);
-  }
-
-  if (current.ageMinMonths !== null || current.ageMaxMonths !== null) {
-    current = { ...current, ageMinMonths: null, ageMaxMonths: null };
-    pushVariant(current);
-  }
-
-  if (current.breed) {
-    current = { ...current, breed: null };
-    pushVariant(current);
-  }
-
-  if (current.sex) {
-    current = { ...current, sex: null };
-    pushVariant(current);
-  }
-
-  if (current.listingType) {
-    current = { ...current, listingType: null };
-    pushVariant(current);
-  }
-
-  if (current.priceMin !== null || current.priceMax !== null) {
-    current = { ...current, priceMin: null, priceMax: null };
-    pushVariant(current);
-  }
-
-  if (current.q) {
-    current = { ...current, q: null };
-    pushVariant(current);
-  }
-
-  if (current.locationLabel && !hasStructuredLocationIntent(current)) {
-    current = { ...current, locationLabel: null, locationSecondaryLabel: null };
-    pushVariant(current);
-  }
-
-  return variants;
-};
-
-const hasActiveSearchFilters = (options: PublicListingsSearchOptions) => {
-  if (options.q) return true;
-  if (options.listingType) return true;
-  if (options.sex) return true;
-  if (options.breed) return true;
-  if (options.ageText) return true;
-  if (options.ageMinMonths !== null && options.ageMinMonths !== undefined) return true;
-  if (options.ageMaxMonths !== null && options.ageMaxMonths !== undefined) return true;
-  if (options.priceMin !== null && options.priceMin !== undefined) return true;
-  if (options.priceMax !== null && options.priceMax !== undefined) return true;
-  if (options.locationLabel) return true;
-  if (options.locationScope || options.regionId || options.provinceId || options.comuneId) {
+const hasIndexBlockingFilters = (filters: ListingsFilterValues) => {
+  if (filters.q.trim()) return true;
+  if (filters.listingType) return true;
+  if (filters.sex) return true;
+  if (filters.breed) return true;
+  if (filters.ageMinMonths !== null || filters.ageMaxMonths !== null) return true;
+  if (filters.priceMin !== null || filters.priceMax !== null) return true;
+  if (filters.locationScope || filters.regionId || filters.provinceId || filters.comuneId)
     return true;
-  }
+  if (filters.referenceLat !== null || filters.referenceLon !== null) return true;
+  if (filters.locationLabel) return true;
+  if (filters.sort !== 'newest') return true;
 
-  return (options.sort ?? 'relevance') !== 'relevance';
+  return false;
 };
 
-const sortLabelByValue: Record<SearchSort, string> = {
-  relevance: 'Più pertinenti',
-  newest: 'Più recenti',
-  price_asc: 'Prezzo crescente',
-  price_desc: 'Prezzo decrescente',
-};
-
-const buildActiveFilterLabels = (options: PublicListingsSearchOptions): string[] => {
+const buildActiveFilterLabels = (filters: ListingsFilterValues) => {
   const labels: string[] = [];
 
-  if (options.q) {
-    labels.push(`Testo: ${options.q}`);
+  if (filters.q.trim()) {
+    labels.push(`Testo: ${filters.q.trim()}`);
   }
 
-  if (options.listingType) {
-    labels.push(`Tipo: ${options.listingType}`);
+  if (filters.listingType) {
+    labels.push(`Tipo: ${filters.listingType}`);
   }
 
-  if (options.sex) {
-    labels.push(`Sesso: ${options.sex}`);
+  if (filters.sex) {
+    labels.push(`Sesso: ${filters.sex}`);
   }
 
-  if (options.breed === NO_BREED_FILTER) {
+  if (filters.breed === NO_BREED_FILTER) {
     labels.push('Razza: Non di razza');
+  } else if (filters.breed) {
+    labels.push(`Razza: ${filters.breed}`);
   }
 
-  if (options.breed && options.breed !== NO_BREED_FILTER) {
-    labels.push(`Razza: ${options.breed}`);
+  const ageLabel = buildAgeFilterLabel(filters);
+  if (ageLabel) {
+    labels.push(`Eta: ${ageLabel}`);
   }
 
-  if (options.ageText) {
-    labels.push(`Età: ${options.ageText}`);
+  if (filters.priceMin !== null) {
+    labels.push(`Prezzo da EUR ${filters.priceMin}`);
   }
 
-  const ageFilterLabel = buildAgeFilterLabel(options.ageMinMonths, options.ageMaxMonths);
-  if (ageFilterLabel) {
-    labels.push(`Eta: ${ageFilterLabel}`);
+  if (filters.priceMax !== null) {
+    labels.push(`Prezzo fino a EUR ${filters.priceMax}`);
   }
 
-  if (options.locationLabel) {
-    labels.push(`Località: ${options.locationLabel}`);
-  }
-
-  if (options.priceMin !== null && options.priceMin !== undefined) {
-    labels.push(`Min €${options.priceMin}`);
-  }
-
-  if (options.priceMax !== null && options.priceMax !== undefined) {
-    labels.push(`Max €${options.priceMax}`);
-  }
-
-  if ((options.sort ?? 'relevance') !== 'relevance') {
-    labels.push(`Ordine: ${sortLabelByValue[options.sort ?? 'relevance']}`);
+  if (filters.referenceLat !== null && filters.referenceLon !== null) {
+    labels.push('Vicino a te');
+  } else if (filters.locationLabel) {
+    labels.push(`Localita: ${filters.locationLabel}`);
   }
 
   return labels;
 };
 
+const buildListingsHref = (filters: ListingsFilterValues, page = 1) => {
+  const params = new URLSearchParams();
+
+  if (filters.q.trim()) params.set('q', filters.q.trim());
+  if (filters.listingType) params.set('listingType', filters.listingType);
+  if (filters.sex) params.set('sex', filters.sex);
+  if (filters.breed) params.set('breed', filters.breed);
+  if (filters.ageMinMonths !== null) params.set('ageMinMonths', String(filters.ageMinMonths));
+  if (filters.ageMaxMonths !== null) params.set('ageMaxMonths', String(filters.ageMaxMonths));
+  if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
+  if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
+  if (filters.locationScope) params.set('locationScope', filters.locationScope);
+  if (filters.regionId) params.set('regionId', filters.regionId);
+  if (filters.provinceId) params.set('provinceId', filters.provinceId);
+  if (filters.comuneId) params.set('comuneId', filters.comuneId);
+  if (filters.locationLabel) params.set('locationLabel', filters.locationLabel);
+  if (filters.locationSecondaryLabel)
+    params.set('locationSecondaryLabel', filters.locationSecondaryLabel);
+  if (filters.referenceLat !== null && filters.referenceLon !== null) {
+    params.set('referenceLat', String(filters.referenceLat));
+    params.set('referenceLon', String(filters.referenceLon));
+  }
+  if (
+    filters.sort !== 'newest' ||
+    (filters.referenceLat !== null && filters.referenceLon !== null)
+  ) {
+    params.set('sort', filters.sort);
+  }
+  if (page > 1) params.set('page', String(page));
+
+  const queryString = params.toString();
+  return queryString ? `/annunci?${queryString}` : '/annunci';
+};
+
+const buildPageTitle = (filters: ListingsFilterValues) => {
+  if (filters.referenceLat !== null && filters.referenceLon !== null) {
+    return 'Annunci di gatti vicino a te';
+  }
+
+  if (filters.locationLabel) {
+    return `Annunci gatti a ${filters.locationLabel}`;
+  }
+
+  return 'Annunci gatti da tutta Italia';
+};
+
+const buildPageDescription = (filters: ListingsFilterValues) => {
+  if (filters.referenceLat !== null && filters.referenceLon !== null) {
+    return 'Consulta gli annunci ordinati per distanza dalla tua posizione, con filtri completi e card ottimizzate per confronto rapido.';
+  }
+
+  if (filters.locationLabel) {
+    return `Scopri gli annunci di gatti disponibili in ${filters.locationLabel}, con filtri per razza, sesso, eta e prezzo.`;
+  }
+
+  return 'Sfoglia annunci di gatti in adozione, stallo e segnalazione in tutta Italia con filtri per localita, eta, prezzo e preferenze.';
+};
+
+export async function generateMetadata({ searchParams }: ListingsPageProps): Promise<Metadata> {
+  const resolvedSearchParams = await searchParams;
+  const { filters, page } = parseListingsPageState(resolvedSearchParams);
+  const title = buildPageTitle(filters);
+  const description = buildPageDescription(filters);
+  const shouldIndex = !hasIndexBlockingFilters(filters);
+  const canonicalUrl = new URL('/annunci', env.NEXT_PUBLIC_WEB_URL);
+  if (shouldIndex && page > 1) {
+    canonicalUrl.searchParams.set('page', String(page));
+  }
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl.toString(),
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl.toString(),
+      type: 'website',
+    },
+    robots: shouldIndex ? { index: true, follow: true } : { index: false, follow: true },
+  };
+}
+
 export default async function ListingsPage({ searchParams }: ListingsPageProps) {
   const resolvedSearchParams = await searchParams;
-  const searchOptions = parseSearchOptions(resolvedSearchParams);
-  const searchMode = hasActiveSearchFilters(searchOptions);
+  const { filters, page, searchOptions } = parseListingsPageState(resolvedSearchParams);
+  const offset = (page - 1) * listingsPerPage;
+  const searchResult = await searchPublicListingsWithMetadata({
+    ...searchOptions,
+    limit: listingsPerPage,
+    offset,
+  }).catch(() => ({
+    items: [],
+    pagination: {
+      limit: listingsPerPage,
+      offset,
+      total: 0,
+      hasMore: false,
+    },
+    metadata: null,
+  }));
 
-  let rawListings: Awaited<ReturnType<typeof fetchPublicListings>> = [];
-  let resultsExpanded = false;
-  let expandedResultsLabel: string | null = null;
-
-  const markExpandedResults = (label: string) => {
-    resultsExpanded = true;
-    if (!expandedResultsLabel) {
-      expandedResultsLabel = label;
-    }
+  const totalCount = searchResult.pagination?.total ?? searchResult.items.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / listingsPerPage));
+  const activeFilterLabels = buildActiveFilterLabels(filters);
+  const pageTitle = buildPageTitle(filters);
+  const pageDescription = buildPageDescription(filters);
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: pageTitle,
+    description: pageDescription,
+    url: new URL(buildListingsHref(filters, page), env.NEXT_PUBLIC_WEB_URL).toString(),
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: searchResult.items.length,
+      itemListElement: searchResult.items.map((listing, index) => ({
+        '@type': 'ListItem',
+        position: offset + index + 1,
+        url: new URL(`/annunci/${listing.id}`, env.NEXT_PUBLIC_WEB_URL).toString(),
+        name: listing.title,
+      })),
+    },
   };
 
-  if (searchMode) {
-    const initialSearch = await searchPublicListingsWithMetadata({
-      ...searchOptions,
-      limit: 12,
-      offset: 0,
-    }).catch(() => ({
-      items: [] as Awaited<ReturnType<typeof fetchPublicListings>>,
-      metadata: null,
-    }));
-
-    rawListings = initialSearch.items;
-    if (initialSearch.metadata?.fallbackApplied) {
-      markExpandedResults('Risultati ampliati località');
-    }
-  } else {
-    rawListings = await fetchPublicListings({ limit: 12 }).catch(() => []);
-  }
-
-  if (searchMode && rawListings.length === 0) {
-    const relaxedVariants = buildRelaxedSearchVariants(searchOptions);
-    for (const variant of relaxedVariants) {
-      const attempt = await searchPublicListingsWithMetadata({
-        ...variant,
-        limit: 12,
-        offset: 0,
-      }).catch(() => ({
-        items: [] as Awaited<ReturnType<typeof fetchPublicListings>>,
-        metadata: null,
-      }));
-
-      if (attempt.items.length > 0) {
-        rawListings = attempt.items;
-        markExpandedResults('Risultati ampliati filtri');
-        if (attempt.metadata?.fallbackApplied) {
-          markExpandedResults('Risultati ampliati località');
-        }
-        break;
-      }
-    }
-
-    if (rawListings.length === 0) {
-      rawListings = await fetchPublicListings({ limit: 12 }).catch(() => []);
-      if (rawListings.length > 0) {
-        markExpandedResults('Risultati ampliati filtri');
-      }
-    }
-  }
-
-  let listings = shouldApplyLocationLabelPostFilter(searchOptions)
-    ? filterListingsByLocationLabel(rawListings, searchOptions.locationLabel)
-    : rawListings;
-
-  if (searchMode && listings.length === 0 && rawListings.length > 0) {
-    listings = rawListings;
-    markExpandedResults('Risultati ampliati località');
-  }
-
-  const activeFilterLabels = buildActiveFilterLabels(searchOptions);
-
   return (
-    <PageShell
-      aside={
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-              Data source
-            </p>
-            <p className="text-sm text-[var(--color-text)]">
-              {searchMode
-                ? 'Ricerca reale `/v1/listings/search` con filtri attivi.'
-                : 'Endpoint pubblico listings + fallback mock opzionale.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{listings.length} elementi</Badge>
-            <Badge variant={searchMode ? 'info' : 'secondary'}>
-              Search {searchMode ? 'on' : 'off'}
-            </Badge>
-            <Badge variant={isMockModeEnabled ? 'warning' : 'secondary'}>
-              Mock {isMockModeEnabled ? 'on' : 'off'}
-            </Badge>
-          </div>
-        </div>
-      }
-      description={
-        searchMode
-          ? 'Risultati ottenuti dalla ricerca backend reale con i filtri della query string.'
-          : 'La pagina annunci e tornata a una lista pubblica essenziale. Niente filtri avanzati, drawer o fallback banner: solo il contratto dati e una presentazione minima.'
-      }
-      eyebrow={searchMode ? 'Ricerca pubblica' : 'Catalogo pubblico'}
-      title={searchMode ? 'Risultati ricerca annunci' : 'Annunci pubblici'}
-    >
-      <div className="flex flex-wrap gap-2">
-        <LinkButton href="/pubblica" variant="outline">
-          Pubblica annuncio
-        </LinkButton>
-        <LinkButton href="/login" variant="ghost">
-          Accedi
-        </LinkButton>
-        {searchMode ? (
-          <LinkButton href="/annunci" variant="secondary">
-            Rimuovi filtri
-          </LinkButton>
-        ) : null}
-      </div>
+    <div className="space-y-8 pb-8">
+      <Script id="annunci-list-jsonld" strategy="beforeInteractive" type="application/ld+json">
+        {JSON.stringify(structuredData)}
+      </Script>
 
-      {searchMode && (activeFilterLabels.length > 0 || resultsExpanded) ? (
-        <div className="flex flex-wrap gap-2">
-          {resultsExpanded ? (
-            <Badge variant="warning">{expandedResultsLabel ?? 'Risultati ampliati'}</Badge>
+      <SectionReveal>
+        <section className="overflow-hidden rounded-[36px] border border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_12%,transparent)_0%,transparent_46%),linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)_0%,color-mix(in_srgb,var(--color-surface-elevated)_94%,white_6%)_100%)] px-5 py-6 shadow-[0_24px_70px_rgb(66_40_49_/_0.08)] sm:px-7 sm:py-8 lg:px-9">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl space-y-4">
+              <Badge className="w-fit" variant="secondary">
+                Catalogo annunci
+              </Badge>
+              <div className="space-y-3">
+                <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.04em] text-[var(--color-text)] sm:text-4xl">
+                  {pageTitle}
+                </h1>
+                <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-muted)] sm:text-[1rem]">
+                  {pageDescription}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  {new Intl.NumberFormat('it-IT').format(totalCount)} annunci
+                </Badge>
+                {searchResult.metadata?.fallbackApplied ? (
+                  <Badge variant="warning">Area ampliata automaticamente</Badge>
+                ) : null}
+                {filters.referenceLat !== null && filters.referenceLon !== null ? (
+                  <Badge variant="outline">Posizione attiva</Badge>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <LinkButton href="/pubblica" variant="outline">
+                Pubblica annuncio
+              </LinkButton>
+              {activeFilterLabels.length > 0 ? (
+                <LinkButton href="/annunci" variant="secondary">
+                  Rimuovi filtri
+                </LinkButton>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </SectionReveal>
+
+      <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+        <ListingsFiltersSidebar initialValues={filters} />
+
+        <div className="space-y-6">
+          <ListingsResultsToolbar
+            initialValues={filters}
+            page={page}
+            resultsCount={searchResult.items.length}
+            totalCount={totalCount}
+            totalPages={totalPages}
+          />
+
+          {activeFilterLabels.length > 0 ? (
+            <SectionReveal delay={0.04}>
+              <div className="flex flex-wrap gap-2">
+                {activeFilterLabels.map((label) => (
+                  <Badge key={label} variant="outline">
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+            </SectionReveal>
           ) : null}
-          {activeFilterLabels.map((label) => (
-            <Badge key={label} variant="outline">
-              {label}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
 
-      <PublicListingsGrid
-        emptyDescription={
-          searchMode
-            ? 'Nessun annuncio trovato con i filtri correnti. Prova ad allargare la ricerca.'
-            : 'Quando il nuovo motore di ricerca sara ridisegnato, questa vista tornera a crescere sopra lo stesso layer dati.'
-        }
-        listings={listings}
-      />
-    </PageShell>
+          <SectionReveal delay={0.08}>
+            {searchResult.items.length > 0 ? (
+              <PublicListingsList listings={searchResult.items} />
+            ) : (
+              <Card>
+                <CardHeader className="space-y-4">
+                  <div className="space-y-2">
+                    <CardTitle>Nessun annuncio trovato con i filtri correnti.</CardTitle>
+                    <CardDescription>
+                      Prova ad allargare la ricerca oppure rimuovi i filtri per vedere tutto il
+                      catalogo disponibile.
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <LinkButton href="/annunci" variant="secondary">
+                      Vedi tutti gli annunci
+                    </LinkButton>
+                    <LinkButton href="/pubblica" variant="outline">
+                      Pubblica annuncio
+                    </LinkButton>
+                  </div>
+                </CardHeader>
+              </Card>
+            )}
+          </SectionReveal>
+
+          <SectionReveal delay={0.12}>
+            <ListingsPagination
+              buildPageHref={(targetPage) => buildListingsHref(filters, targetPage)}
+              currentPage={page}
+              totalPages={totalPages}
+            />
+          </SectionReveal>
+        </div>
+      </div>
+    </div>
   );
 }

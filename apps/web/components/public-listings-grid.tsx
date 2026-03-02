@@ -8,6 +8,7 @@ interface PublicListingsGridProps {
   listings: PublicListingSummary[];
   layout?: 'grid' | 'list';
   variant?: 'default' | 'featured';
+  showDistance?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
 }
@@ -54,6 +55,7 @@ export function PublicListingsGrid({
   listings,
   layout = 'grid',
   variant = 'default',
+  showDistance = false,
   emptyTitle = 'Nessun annuncio disponibile.',
   emptyDescription = 'Collega la nuova esperienza di ricerca quando il dominio funzionale sara ridefinito.',
 }: PublicListingsGridProps) {
@@ -86,6 +88,9 @@ export function PublicListingsGrid({
   const footerClassName = isFeaturedVariant
     ? 'mt-4 flex items-end justify-between gap-2 border-t border-[color:color-mix(in_srgb,var(--color-border)_68%,white_32%)] pt-3'
     : 'mt-4 flex items-end justify-between gap-2 border-t border-[var(--color-border)] pt-3';
+  const distanceClassName = isFeaturedVariant
+    ? 'inline-flex shrink-0 items-center gap-1 rounded-full border border-[color:color-mix(in_srgb,var(--color-border)_72%,white_28%)] bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_70%,transparent)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-muted)]'
+    : 'inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-muted)]';
 
   return (
     <div className={containerClassName}>
@@ -122,6 +127,13 @@ export function PublicListingsGrid({
         const ageLabel = listing.ageText.trim();
         const breedLabel = listing.breed?.trim() ?? '';
         const publishedLabel = formatDate(listing.publishedAt ?? listing.createdAt);
+        const distanceLabel =
+          showDistance && typeof listing.distanceKm === 'number'
+            ? `${new Intl.NumberFormat('it-IT', {
+                maximumFractionDigits: listing.distanceKm >= 10 ? 0 : 1,
+                minimumFractionDigits: 0,
+              }).format(listing.distanceKm)} km`
+            : null;
         const primaryImageUrl = listing.primaryMedia?.objectUrl?.trim() ?? '';
         const placeholderFileName = resolvePlaceholderMediaFileName(listing.id);
         const imageUrl = resolveCardImageUrl(primaryImageUrl, placeholderFileName);
@@ -156,29 +168,54 @@ export function PublicListingsGrid({
               </div>
 
               <div className={contentClassName}>
-                <div className="flex items-center gap-2">
-                  <span className={locationIconClassName}>
-                    <svg
-                      aria-hidden="true"
-                      fill="none"
-                      focusable="false"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      width="14"
-                    >
-                      <path
-                        d="M12 21s7-5.75 7-11a7 7 0 1 0-14 0c0 5.25 7 11 7 11Z"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.8"
-                      />
-                      <circle cx="12" cy="10" fill="currentColor" r="2.1" />
-                    </svg>
-                  </span>
-                  <p className="line-clamp-1 text-[15px] font-medium tracking-[-0.01em]">
-                    {locationLabel}
-                  </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={locationIconClassName}>
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        focusable="false"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        width="14"
+                      >
+                        <path
+                          d="M12 21s7-5.75 7-11a7 7 0 1 0-14 0c0 5.25 7 11 7 11Z"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.8"
+                        />
+                        <circle cx="12" cy="10" fill="currentColor" r="2.1" />
+                      </svg>
+                    </span>
+                    <p className="line-clamp-1 min-w-0 text-[15px] font-medium tracking-[-0.01em]">
+                      {locationLabel}
+                    </p>
+                  </div>
+
+                  {distanceLabel ? (
+                    <span className={distanceClassName}>
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        focusable="false"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        width="12"
+                      >
+                        <path
+                          d="M12 3v3.5M12 17.5v3.5M4.5 12H1M23 12h-3.5M5.8 5.8l2.5 2.5M18.2 18.2l-2.5-2.5M18.2 5.8l-2.5 2.5M5.8 18.2l2.5-2.5"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.6"
+                        />
+                        <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+                      </svg>
+                      {distanceLabel}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">

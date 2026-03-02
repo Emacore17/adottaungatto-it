@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { loadApiEnv } from '@adottaungatto/config';
+import { CAT_BREEDS } from '@adottaungatto/types';
 import { config as loadDotEnv } from 'dotenv';
 import { Client } from 'pg';
 import { UserRole } from '../src/auth/roles.enum';
@@ -548,6 +549,32 @@ const addUpsertResult = (counter: UpsertCounter, inserted: boolean): void => {
   counter.updated += 1;
 };
 
+const upsertCatBreeds = async (client: Client): Promise<UpsertCounter> => {
+  const counter: UpsertCounter = { inserted: 0, updated: 0 };
+
+  for (const [index, breed] of CAT_BREEDS.entries()) {
+    const result = await client.query<{
+      inserted: boolean;
+    }>(
+      `
+        INSERT INTO cat_breeds (slug, label, sort_order)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (slug)
+        DO UPDATE SET
+          label = EXCLUDED.label,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = NOW()
+        RETURNING (xmax = 0) AS inserted;
+      `,
+      [breed.slug, breed.label, index + 1],
+    );
+
+    addUpsertResult(counter, result.rows[0]?.inserted === true);
+  }
+
+  return counter;
+};
+
 const prepareProvinceSiglaForSnapshot = async (
   client: Client,
   snapshot: GeographySnapshot,
@@ -931,11 +958,11 @@ const buildDemoListings = (
 ): DemoListingSeed[] => {
   const ageOptions = ['3 mesi', '5 mesi', '8 mesi', '1 anno', '2 anni', '4 anni', '6 anni'];
   const breedOptions: Array<string | null> = [
-    'Europeo',
-    'Maine Coon',
-    'Siamese',
-    'Soriano',
-    'Persiano',
+    CAT_BREEDS[0]?.label ?? 'Europeo',
+    CAT_BREEDS[2]?.label ?? 'Maine Coon',
+    CAT_BREEDS[3]?.label ?? 'Siamese',
+    CAT_BREEDS[1]?.label ?? 'Persiano',
+    CAT_BREEDS[4]?.label ?? 'Ragdoll',
     null,
   ];
   const descriptorOptions = [
@@ -1400,6 +1427,7 @@ const run = async () => {
     }
 
     await storageService.ensureRequiredBuckets();
+    const catBreedsStats = await upsertCatBreeds(client);
     const demoPlansStats = await upsertDemoPlans(client);
     const seedUsers = await upsertDemoUsers(repository);
     const seedOwnerUserIds = seedUsers.map((user) => user.ownerUserId);
@@ -1432,6 +1460,9 @@ const run = async () => {
     );
 
     console.log(`[db:seed] Demo users upserted: ${seedUsers.length}.`);
+    console.log(
+      `[db:seed] Cat breeds upsert: inserted=${catBreedsStats.inserted}, updated=${catBreedsStats.updated}.`,
+    );
     console.log(
       `[db:seed] Demo plans upsert: inserted=${demoPlansStats.inserted}, updated=${demoPlansStats.updated}.`,
     );

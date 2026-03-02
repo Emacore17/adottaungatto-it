@@ -1,3 +1,4 @@
+import { normalizeCatBreedLabel } from '@adottaungatto/types';
 import {
   BadRequestException,
   Body,
@@ -16,6 +17,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import { CatBreedsService } from './cat-breeds.service';
 import { validateCreateListingDto } from './dto/create-listing.dto';
 import { validateSearchListingsQueryDto } from './dto/search-listings-query.dto';
 import { normalizeListingAge } from './listing-age';
@@ -388,9 +390,18 @@ type DbError = Error & { code?: string };
 @Controller('v1/listings')
 export class ListingsController {
   constructor(
+    @Inject(CatBreedsService)
+    private readonly catBreedsService: CatBreedsService,
     @Inject(ListingsService)
     private readonly listingsService: ListingsService,
   ) {}
+
+  @Public()
+  @Get('breeds')
+  async listBreeds() {
+    const breeds = await this.catBreedsService.listPublicBreeds();
+    return { breeds };
+  }
 
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() body: unknown) {
@@ -553,6 +564,22 @@ export class ListingsController {
     return { media };
   }
 
+  @Patch(':id/media/:mediaId/cover')
+  async setCoverMedia(
+    @Param('id') rawListingId: string,
+    @Param('mediaId') rawMediaId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const listingId = parsePositiveIntegerString(rawListingId, 'id');
+    const mediaId = parsePositiveIntegerString(rawMediaId, 'mediaId');
+    const media = await this.listingsService.setPrimaryMediaForUser(user, listingId, mediaId);
+    if (!media) {
+      throw new NotFoundException('Listing not found.');
+    }
+
+    return { media };
+  }
+
   @Delete(':id/media/:mediaId')
   async deleteMedia(
     @Param('id') rawListingId: string,
@@ -649,7 +676,13 @@ export class ListingsController {
     }
 
     if ('breed' in source) {
-      payload.breed = parseOptionalString(source, 'breed', 120) ?? null;
+      const breedValue = parseOptionalString(source, 'breed', 120);
+      const canonicalBreed = normalizeCatBreedLabel(breedValue);
+      if (breedValue && !canonicalBreed) {
+        throw new BadRequestException('Field "breed" must match one of the supported cat breeds.');
+      }
+
+      payload.breed = canonicalBreed ?? null;
     }
 
     if ('status' in source) {

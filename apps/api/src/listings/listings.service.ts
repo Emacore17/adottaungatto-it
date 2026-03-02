@@ -88,7 +88,8 @@ export class ListingsService {
 
   async listPublished(limit: number, offset: number): Promise<PublicListingSummary[]> {
     const listings = await this.listingsRepository.listPublished(limit, offset);
-    return listings.map((listing) => this.toPublicSummary(listing));
+    const hydratedListings = await this.attachPreviewMedia(listings);
+    return hydratedListings.map((listing) => this.toPublicSummary(listing));
   }
 
   async getPublishedById(listingId: string): Promise<PublicListingDetail | null> {
@@ -206,11 +207,14 @@ export class ListingsService {
     const fallbackSearch = await this.searchFallbackService.searchWithFallback(query, (nextQuery) =>
       this.executeSearchWithTechnicalFallback(nextQuery),
     );
-    const effectiveReferencePoint = await this.listingsRepository.resolveLocationCentroid(
-      fallbackSearch.metadata.effectiveLocationIntent,
-    );
+    const effectiveReferencePoint =
+      query.referencePoint ??
+      (await this.listingsRepository.resolveLocationCentroid(
+        fallbackSearch.metadata.effectiveLocationIntent,
+      ));
 
-    const items = fallbackSearch.result.items.map((listing) =>
+    const hydratedItems = await this.attachPreviewMedia(fallbackSearch.result.items);
+    const items = hydratedItems.map((listing) =>
       this.toPublicSummary(listing, effectiveReferencePoint),
     );
     await this.trackAnalyticsEvent({
@@ -330,9 +334,10 @@ export class ListingsService {
 
     const targetPosition =
       input.position ?? (await this.listingsRepository.getNextMediaPosition(listingId));
+    const shouldSetAsPrimary = input.isPrimary || targetPosition === 1;
 
     try {
-      if (input.isPrimary) {
+      if (shouldSetAsPrimary) {
         await this.listingsRepository.clearPrimaryMedia(listingId);
       }
 
@@ -344,7 +349,7 @@ export class ListingsService {
         height: input.height,
         hash: input.hash,
         position: targetPosition,
-        isPrimary: input.isPrimary,
+        isPrimary: shouldSetAsPrimary,
       });
 
       return {
@@ -385,6 +390,14 @@ export class ListingsService {
     }
 
     await this.minioStorageService.deleteMediaObject(media.storageKey);
+    if (media.isPrimary) {
+      const remainingMedia = await this.listingsRepository.listMediaByListingId(listingId);
+      const fallbackPrimaryMedia = remainingMedia[0];
+      if (fallbackPrimaryMedia) {
+        await this.listingsRepository.setPrimaryMedia(listingId, fallbackPrimaryMedia.id);
+      }
+    }
+
     return this.toMediaView(media);
   }
 
@@ -432,6 +445,25 @@ export class ListingsService {
     return reordered.map((item) => this.toMediaView(item));
   }
 
+  async setPrimaryMediaForUser(
+    user: RequestUser,
+    listingId: string,
+    mediaId: string,
+  ): Promise<ListingMediaView | null> {
+    const ownerUserId = await this.listingsRepository.upsertOwnerUser(user);
+    const listing = await this.listingsRepository.findMineById(ownerUserId, listingId);
+    if (!listing) {
+      return null;
+    }
+
+    const media = await this.listingsRepository.setPrimaryMedia(listingId, mediaId);
+    if (!media) {
+      throw new NotFoundException('Listing media not found.');
+    }
+
+    return this.toMediaView(media);
+  }
+
   private toMediaView(item: ListingMediaRecord): ListingMediaView {
     return {
       ...item,
@@ -439,11 +471,32 @@ export class ListingsService {
     };
   }
 
+  private async attachPreviewMedia(
+    listings: PublicListingSummaryRecord[],
+  ): Promise<PublicListingSummaryRecord[]> {
+    if (listings.length === 0) {
+      return listings;
+    }
+
+    const previewMediaByListingId = await this.listingsRepository.listPreviewMediaByListingIds(
+      listings.map((listing) => listing.id),
+      4,
+    );
+
+    return listings.map((listing) => ({
+      ...listing,
+      previewMedia:
+        previewMediaByListingId.get(listing.id) ??
+        (listing.primaryMedia ? [listing.primaryMedia] : []),
+    }));
+  }
+
   private toPublicSummary(
     listing: PublicListingSummaryRecord,
     referencePoint: LocationCentroid | null = null,
   ): PublicListingSummary {
     const primaryMedia = listing.primaryMedia;
+    const previewMedia = listing.previewMedia ?? (primaryMedia ? [primaryMedia] : []);
     const distanceKm = this.computeListingDistanceKm(listing, referencePoint);
 
     return {
@@ -464,6 +517,7 @@ export class ListingsService {
       comuneName: listing.comuneName,
       distanceKm,
       mediaCount: listing.mediaCount,
+      isSponsored: listing.isSponsored ?? false,
       primaryMedia: primaryMedia
         ? {
             id: primaryMedia.id,
@@ -475,6 +529,15 @@ export class ListingsService {
             objectUrl: this.minioStorageService.getListingMediaObjectUrl(primaryMedia.storageKey),
           }
         : null,
+      previewMedia: previewMedia.map((media) => ({
+        id: media.id,
+        mimeType: media.mimeType,
+        width: media.width,
+        height: media.height,
+        position: media.position,
+        isPrimary: media.isPrimary,
+        objectUrl: this.minioStorageService.getListingMediaObjectUrl(media.storageKey),
+      })),
     };
   }
 

@@ -19,7 +19,7 @@ test('renders the functional login scaffold', async ({ page }) => {
 test('renders the public listings scaffold', async ({ page }) => {
   await page.goto('/annunci');
 
-  await expect(page.getByRole('heading', { name: 'Annunci pubblici' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Annunci gatti da tutta Italia' })).toBeVisible();
 });
 
 test('switches between light and dark theme tokens', async ({ page }) => {

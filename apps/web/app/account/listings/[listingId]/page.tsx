@@ -85,7 +85,7 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
               <LinkButton href="/account/annunci" variant="outline">
                 Torna alla lista
               </LinkButton>
-              <LinkButton href={`/annunci/${listing.id}/modifica`}>Apri edit route</LinkButton>
+              <LinkButton href={`/annunci/${listing.id}/modifica`}>Modifica annuncio</LinkButton>
             </div>
           </CardContent>
         </Card>

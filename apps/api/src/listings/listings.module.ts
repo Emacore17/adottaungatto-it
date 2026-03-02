@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { CatBreedsService } from './cat-breeds.service';
 import { ListingsController } from './listings.controller';
 import { ListingsRepository } from './listings.repository';
 import { ListingsService } from './listings.service';
@@ -12,6 +13,7 @@ import { SearchIndexService } from './search-index.service';
   controllers: [ListingsController],
   providers: [
     ListingsRepository,
+    CatBreedsService,
     ListingsService,
     MinioStorageService,
     SearchIndexService,
@@ -19,6 +21,7 @@ import { SearchIndexService } from './search-index.service';
   ],
   exports: [
     ListingsRepository,
+    CatBreedsService,
     ListingsService,
     MinioStorageService,
     SearchIndexService,

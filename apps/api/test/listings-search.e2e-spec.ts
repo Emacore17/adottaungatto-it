@@ -94,6 +94,7 @@ describe('Listings search endpoint', () => {
           }
         : null,
   );
+  const listPreviewMediaByListingIds = vi.fn(async () => new Map());
   const getListingMediaObjectUrl = vi.fn(
     (storageKey: string) => `http://localhost:9000/listing-originals/${storageKey}`,
   );
@@ -118,6 +119,7 @@ describe('Listings search endpoint', () => {
         findFallbackProvinceContextById,
         listNearbyFallbackProvinces,
         resolveLocationCentroid,
+        listPreviewMediaByListingIds,
       })
       .overrideProvider(MinioStorageService)
       .useValue({
@@ -145,6 +147,7 @@ describe('Listings search endpoint', () => {
     findFallbackProvinceContextById.mockClear();
     listNearbyFallbackProvinces.mockClear();
     resolveLocationCentroid.mockClear();
+    listPreviewMediaByListingIds.mockClear();
     trackSystemEventSafe.mockClear();
   });
 
@@ -182,6 +185,7 @@ describe('Listings search endpoint', () => {
         label: 'Torino (TO)',
         secondaryLabel: 'Comune - Torino, Piemonte',
       },
+      referencePoint: null,
       listingType: 'adozione',
       priceMin: 20,
       priceMax: 300,
@@ -207,6 +211,7 @@ describe('Listings search endpoint', () => {
     expect(searchPublished).toHaveBeenCalledWith({
       queryText: null,
       locationIntent: null,
+      referencePoint: null,
       listingType: null,
       priceMin: null,
       priceMax: null,
@@ -214,6 +219,31 @@ describe('Listings search endpoint', () => {
       sex: null,
       breed: null,
       sort: 'relevance',
+      limit: 24,
+      offset: 0,
+    });
+  });
+
+  it('accepts structured age range filters and canonical breed values', async () => {
+    const response = await request(app.getHttpServer()).get(
+      '/v1/listings/search?ageMinMonths=6&ageMaxMonths=24&breed=maine-coon&sort=newest',
+    );
+
+    expect(response.status).toBe(200);
+    expect(searchPublished).not.toHaveBeenCalled();
+    expect(searchPublishedFallback).toHaveBeenCalledWith({
+      queryText: null,
+      locationIntent: null,
+      referencePoint: null,
+      listingType: null,
+      priceMin: null,
+      priceMax: null,
+      ageText: null,
+      ageMinMonths: 6,
+      ageMaxMonths: 24,
+      sex: null,
+      breed: 'Maine Coon',
+      sort: 'newest',
       limit: 24,
       offset: 0,
     });
@@ -275,6 +305,14 @@ describe('Listings search endpoint', () => {
     const response = await request(app.getHttpServer()).get(
       '/v1/listings/search?priceMin=400&priceMax=100',
     );
+
+    expect(response.status).toBe(400);
+    expect(searchPublished).not.toHaveBeenCalled();
+    expect(searchPublishedFallback).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported breed filters', async () => {
+    const response = await request(app.getHttpServer()).get('/v1/listings/search?breed=soriano');
 
     expect(response.status).toBe(400);
     expect(searchPublished).not.toHaveBeenCalled();

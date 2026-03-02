@@ -97,6 +97,23 @@ describe('Listings create endpoint', () => {
     expect(createForUser).toHaveBeenCalledTimes(0);
   });
 
+  it('rejects unsupported breeds in create payload', async () => {
+    const response = await request(app.getHttpServer()).post('/v1/listings').set(userHeaders).send({
+      title: 'Annuncio test',
+      description: 'Descrizione',
+      listingType: 'adozione',
+      ageMonths: 24,
+      sex: 'femmina',
+      breed: 'Soriano',
+      regionId: 1,
+      provinceId: 11,
+      comuneId: 101,
+    });
+
+    expect(response.status).toBe(400);
+    expect(createForUser).toHaveBeenCalledTimes(0);
+  });
+
   it('creates listing and enforces pending_review status', async () => {
     const response = await request(app.getHttpServer()).post('/v1/listings').set(userHeaders).send({
       title: '  Micia in adozione  ',

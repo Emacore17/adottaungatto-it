@@ -12,6 +12,7 @@ const webSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_WEB_URL: z.string().url('NEXT_PUBLIC_WEB_URL must be a valid URL'),
   NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
+  NEXT_PUBLIC_HOME_FEATURED_LIMIT: z.coerce.number().int().min(1).max(24).optional().default(9),
   NEXT_PUBLIC_USE_MOCKS: z
     .enum(['0', '1'])
     .optional()

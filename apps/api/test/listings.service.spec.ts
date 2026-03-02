@@ -100,6 +100,7 @@ describe('ListingsService', () => {
             }
           : null,
     ),
+    listPreviewMediaByListingIds: vi.fn(async () => new Map()),
     searchPublished: vi.fn(async (_query: SearchListingsQueryDto) => ({
       items: [buildSearchSummaryRecord({ id: '3001', title: 'Fallback SQL' })],
       total: 1,
@@ -135,6 +136,20 @@ describe('ListingsService', () => {
     })),
     getNextMediaPosition: vi.fn(async () => 4),
     clearPrimaryMedia: vi.fn(async () => undefined),
+    setPrimaryMedia: vi.fn(async (_listingId: string, mediaId: string) => ({
+      id: mediaId,
+      listingId: '1',
+      storageKey: `listings/1/${mediaId}.png`,
+      mimeType: 'image/png',
+      fileSize: '128',
+      width: 300,
+      height: 200,
+      hash: null,
+      position: 1,
+      isPrimary: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })),
     createListingMedia: vi.fn(async () => ({
       id: 'media-1',
       listingId: '1',
@@ -544,6 +559,29 @@ describe('ListingsService', () => {
     expect(media?.objectUrl).toContain('/listing-originals/');
   });
 
+  it('promotes the first uploaded media to primary cover automatically', async () => {
+    listingsRepositoryMock.getNextMediaPosition.mockResolvedValueOnce(1);
+
+    await service.uploadMediaForUser(baseUser, '1', {
+      mimeType: 'image/png',
+      payload: Buffer.from('media'),
+      originalFileName: 'cat.png',
+      width: 300,
+      height: 200,
+      hash: null,
+      position: null,
+      isPrimary: false,
+    });
+
+    expect(listingsRepositoryMock.clearPrimaryMedia).toHaveBeenCalledWith('1');
+    expect(listingsRepositoryMock.createListingMedia).toHaveBeenCalledWith(
+      '1',
+      expect.objectContaining({
+        isPrimary: true,
+      }),
+    );
+  });
+
   it('lists listing media for owner', async () => {
     const media = await service.listMediaForUser(baseUser, '1');
 
@@ -560,6 +598,43 @@ describe('ListingsService', () => {
       'listings/1/media-1.png',
     );
     expect(media?.id).toBe('media-1');
+  });
+
+  it('reassigns cover media when the current primary image is deleted', async () => {
+    listingsRepositoryMock.deleteListingMediaById.mockResolvedValueOnce({
+      id: 'media-1',
+      listingId: '1',
+      storageKey: 'listings/1/media-1.png',
+      mimeType: 'image/png',
+      fileSize: '128',
+      width: 300,
+      height: 200,
+      hash: null,
+      position: 1,
+      isPrimary: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    listingsRepositoryMock.listMediaByListingId.mockResolvedValueOnce([
+      {
+        id: 'media-2',
+        listingId: '1',
+        storageKey: 'listings/1/media-2.png',
+        mimeType: 'image/png',
+        fileSize: '256',
+        width: 320,
+        height: 240,
+        hash: null,
+        position: 1,
+        isPrimary: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    await service.deleteMediaForUser(baseUser, '1', 'media-1');
+
+    expect(listingsRepositoryMock.setPrimaryMedia).toHaveBeenCalledWith('1', 'media-2');
   });
 
   it('reorders listing media positions', async () => {
@@ -602,5 +677,13 @@ describe('ListingsService', () => {
     ]);
     expect(reordered?.[0]?.id).toBe('media-2');
     expect(reordered?.[0]?.position).toBe(1);
+  });
+
+  it('updates the cover image explicitly for owner media', async () => {
+    const media = await service.setPrimaryMediaForUser(baseUser, '1', 'media-2');
+
+    expect(listingsRepositoryMock.setPrimaryMedia).toHaveBeenCalledWith('1', 'media-2');
+    expect(media?.id).toBe('media-2');
+    expect(media?.isPrimary).toBe(true);
   });
 });

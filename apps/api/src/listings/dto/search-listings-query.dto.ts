@@ -1,4 +1,9 @@
-import type { LocationIntent, LocationIntentScope } from '@adottaungatto/types';
+import {
+  type LocationIntent,
+  type LocationIntentScope,
+  NO_BREED_FILTER,
+  normalizeCatBreedLabel,
+} from '@adottaungatto/types';
 import { z } from 'zod';
 import { type SearchSort, searchSortValues } from '../models/listing.model';
 
@@ -95,6 +100,38 @@ const optionalNonNegativeNumber = (fieldName: string) =>
       .optional(),
   );
 
+const optionalBoundedNumber = (fieldName: string, minValue: number, maxValue: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined;
+      }
+
+      if (typeof value === 'number') {
+        return value;
+      }
+
+      if (typeof value === 'string') {
+        const normalized = value.trim();
+        if (!normalized) {
+          return undefined;
+        }
+
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : value;
+      }
+
+      return value;
+    },
+    z
+      .number({
+        invalid_type_error: `Query parameter "${fieldName}" must be a number.`,
+      })
+      .min(minValue, `Query parameter "${fieldName}" must be >= ${minValue}.`)
+      .max(maxValue, `Query parameter "${fieldName}" must be <= ${maxValue}.`)
+      .optional(),
+  );
+
 const optionalInteger = (fieldName: string, minValue: number, maxValue?: number) =>
   z.preprocess(
     (value) => {
@@ -188,6 +225,8 @@ const searchListingsQuerySchema = z
     comuneId: optionalPositiveIntegerAsString('comuneId'),
     locationLabel: optionalTrimmedString(180, 'locationLabel'),
     locationSecondaryLabel: optionalTrimmedString(200, 'locationSecondaryLabel'),
+    referenceLat: optionalBoundedNumber('referenceLat', -90, 90),
+    referenceLon: optionalBoundedNumber('referenceLon', -180, 180),
     listingType: optionalTrimmedString(40, 'listingType'),
     listing_type: optionalTrimmedString(40, 'listingType'),
     type: optionalTrimmedString(40, 'listingType'),
@@ -264,6 +303,14 @@ const searchListingsQuerySchema = z
       }
     }
 
+    if ((value.referenceLat === undefined) !== (value.referenceLon === undefined)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['referenceLat'],
+        message: 'Query parameters "referenceLat" and "referenceLon" must be provided together.',
+      });
+    }
+
     if (
       value.priceMin !== undefined &&
       value.priceMax !== undefined &&
@@ -287,6 +334,18 @@ const searchListingsQuerySchema = z
         message: 'Query parameter "ageMinMonths" cannot be greater than "ageMaxMonths".',
       });
     }
+
+    if (
+      value.breed !== undefined &&
+      value.breed !== NO_BREED_FILTER &&
+      !normalizeCatBreedLabel(value.breed)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['breed'],
+        message: 'Query parameter "breed" must match one of the supported cat breeds.',
+      });
+    }
   })
   .transform((value): SearchListingsQueryDto => {
     const locationScope = value.locationScope ?? value.scope;
@@ -306,6 +365,13 @@ const searchListingsQuerySchema = z
     return {
       queryText,
       locationIntent,
+      referencePoint:
+        value.referenceLat !== undefined && value.referenceLon !== undefined
+          ? {
+              lat: value.referenceLat,
+              lon: value.referenceLon,
+            }
+          : null,
       listingType,
       priceMin: value.priceMin ?? null,
       priceMax: value.priceMax ?? null,
@@ -313,7 +379,10 @@ const searchListingsQuerySchema = z
       ...(value.ageMinMonths !== undefined ? { ageMinMonths: value.ageMinMonths } : {}),
       ...(value.ageMaxMonths !== undefined ? { ageMaxMonths: value.ageMaxMonths } : {}),
       sex: value.sex ?? null,
-      breed: value.breed ?? null,
+      breed:
+        value.breed === NO_BREED_FILTER
+          ? NO_BREED_FILTER
+          : (normalizeCatBreedLabel(value.breed) ?? null),
       sort: (value.sort ?? 'relevance') as SearchSort,
       limit: value.limit ?? 24,
       offset: value.offset ?? 0,
@@ -323,6 +392,10 @@ const searchListingsQuerySchema = z
 export interface SearchListingsQueryDto {
   queryText: string | null;
   locationIntent: LocationIntent | null;
+  referencePoint?: {
+    lat: number;
+    lon: number;
+  } | null;
   listingType: string | null;
   priceMin: number | null;
   priceMax: number | null;

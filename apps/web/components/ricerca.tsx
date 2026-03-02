@@ -1,7 +1,11 @@
 'use client';
 
-import type { LocationIntent, SearchSort } from '@adottaungatto/types';
-import { NO_BREED_FILTER } from '@adottaungatto/types';
+import {
+  CAT_BREEDS,
+  type LocationIntent,
+  NO_BREED_FILTER,
+  type SearchSort,
+} from '@adottaungatto/types';
 import { Badge } from '@adottaungatto/ui';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
@@ -52,14 +56,10 @@ interface MobileSheetProps {
 const BREEDS = [
   { value: '', label: 'Indifferente' },
   { value: NO_BREED_FILTER, label: 'Non di razza' },
-  { value: 'Europeo', label: 'Europeo' },
-  { value: 'Persiano', label: 'Persiano' },
-  { value: 'Maine Coon', label: 'Maine Coon' },
-  { value: 'Siamese', label: 'Siamese' },
-  { value: 'Ragdoll', label: 'Ragdoll' },
-  { value: 'British Shorthair', label: 'British Shorthair' },
-  { value: 'Bengala', label: 'Bengala' },
-  { value: 'Sphynx', label: 'Sphynx' },
+  ...CAT_BREEDS.map((breed) => ({
+    value: breed.label,
+    label: breed.label,
+  })),
 ] as const;
 
 const LISTING_TYPES = [

@@ -1,3 +1,4 @@
+import { normalizeCatBreedLabel } from '@adottaungatto/types';
 import { z } from 'zod';
 import { MAX_LISTING_AGE_MONTHS, normalizeListingAge } from '../listing-age';
 
@@ -181,6 +182,14 @@ const createListingBodySchema = z
         message: normalizedAge.error,
       });
     }
+
+    if (value.breed !== null && value.breed !== undefined && !normalizeCatBreedLabel(value.breed)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['breed'],
+        message: 'Field "breed" must match one of the supported cat breeds.',
+      });
+    }
   })
   .transform((value) => {
     const listingType = value.listingType ?? value.listing_type ?? value.type ?? value.listingKind;
@@ -205,7 +214,7 @@ const createListingBodySchema = z
       ageText: normalizedAge.ageText,
       ageMonths: normalizedAge.ageMonths,
       sex: value.sex,
-      breed: value.breed ?? null,
+      breed: normalizeCatBreedLabel(value.breed) ?? null,
       regionId: value.regionId,
       provinceId: value.provinceId,
       comuneId: value.comuneId,

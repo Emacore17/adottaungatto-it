@@ -4,6 +4,7 @@ import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
+import type { CatBreedRecord } from './models/cat-breed.model';
 import type { CreateListingMediaInput, ListingMediaRecord } from './models/listing-media.model';
 import type {
   ContactListingInput,
@@ -29,8 +30,10 @@ const buildAgeMonthsSqlExpression = (columnSql: string) => `
   END
 `;
 
-export interface PublicListingSummaryRecord extends Omit<PublicListingSummary, 'primaryMedia'> {
+export interface PublicListingSummaryRecord
+  extends Omit<PublicListingSummary, 'primaryMedia' | 'previewMedia'> {
   primaryMedia: PublicListingMediaRecord | null;
+  previewMedia?: PublicListingMediaRecord[];
   comuneCentroidLat: number | null;
   comuneCentroidLng: number | null;
 }
@@ -131,6 +134,18 @@ type PublishedListingRow = {
   primaryMediaHeight: number | null;
   primaryMediaPosition: number | null;
   primaryMediaIsPrimary: boolean | null;
+  isSponsored: boolean;
+};
+
+type PreviewMediaRow = {
+  listingId: string;
+  id: string;
+  storageKey: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  position: number;
+  isPrimary: boolean;
 };
 
 type SearchPublishedListingRow = PublishedListingRow & {
@@ -153,6 +168,13 @@ type ListingContactRequestRow = {
   id: string;
   listingId: string;
   createdAt: string;
+};
+
+type CatBreedRow = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
 };
 
 export interface SearchPublishedResultRecord {
@@ -339,6 +361,27 @@ export class ListingsRepository implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.pool.end();
+  }
+
+  async listCatBreeds(): Promise<CatBreedRecord[]> {
+    const result = await this.pool.query<CatBreedRow>(
+      `
+        SELECT
+          id::text AS "id",
+          slug AS "slug",
+          label AS "label",
+          sort_order AS "sortOrder"
+        FROM cat_breeds
+        ORDER BY sort_order ASC, label ASC;
+      `,
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      label: row.label,
+      sortOrder: row.sortOrder,
+    }));
   }
 
   async upsertOwnerUser(user: RequestUser): Promise<string> {
@@ -529,7 +572,8 @@ export class ListingsRepository implements OnModuleDestroy {
           media_preview.width AS "primaryMediaWidth",
           media_preview.height AS "primaryMediaHeight",
           media_preview.position AS "primaryMediaPosition",
-          media_preview.is_primary AS "primaryMediaIsPrimary"
+          media_preview.is_primary AS "primaryMediaIsPrimary",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored"
         FROM listings l
         INNER JOIN regions r
           ON r.id = l.region_id
@@ -556,6 +600,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ORDER BY lm.is_primary DESC, lm.position ASC, lm.created_at ASC
           LIMIT 1
         ) media_preview ON TRUE
+        ${this.activePromotionJoinSql}
         WHERE l.status = 'published'
           AND l.deleted_at IS NULL
         ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
@@ -603,7 +648,8 @@ export class ListingsRepository implements OnModuleDestroy {
           media_preview.width AS "primaryMediaWidth",
           media_preview.height AS "primaryMediaHeight",
           media_preview.position AS "primaryMediaPosition",
-          media_preview.is_primary AS "primaryMediaIsPrimary"
+          media_preview.is_primary AS "primaryMediaIsPrimary",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored"
         FROM listings l
         INNER JOIN regions r
           ON r.id = l.region_id
@@ -630,6 +676,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ORDER BY lm.is_primary DESC, lm.position ASC, lm.created_at ASC
           LIMIT 1
         ) media_preview ON TRUE
+        ${this.activePromotionJoinSql}
         WHERE l.id = ANY($1::bigint[])
           AND l.status = 'published'
           AND l.deleted_at IS NULL
@@ -642,6 +689,67 @@ export class ListingsRepository implements OnModuleDestroy {
     );
 
     return result.rows.map((row) => this.mapPublishedListingRow(row));
+  }
+
+  async listPreviewMediaByListingIds(
+    listingIds: string[],
+    limitPerListing: number,
+  ): Promise<Map<string, PublicListingMediaRecord[]>> {
+    if (listingIds.length === 0 || limitPerListing <= 0) {
+      return new Map();
+    }
+
+    const result = await this.pool.query<PreviewMediaRow>(
+      `
+        WITH ranked_media AS (
+          SELECT
+            lm.listing_id::text AS "listingId",
+            lm.id::text AS "id",
+            lm.storage_key AS "storageKey",
+            lm.mime_type AS "mimeType",
+            lm.width AS "width",
+            lm.height AS "height",
+            lm.position AS "position",
+            lm.is_primary AS "isPrimary",
+            ROW_NUMBER() OVER (
+              PARTITION BY lm.listing_id
+              ORDER BY lm.is_primary DESC, lm.position ASC, lm.created_at ASC
+            ) AS row_number
+          FROM listing_media lm
+          WHERE lm.listing_id = ANY($1::bigint[])
+        )
+        SELECT
+          "listingId",
+          "id",
+          "storageKey",
+          "mimeType",
+          "width",
+          "height",
+          "position",
+          "isPrimary"
+        FROM ranked_media
+        WHERE row_number <= $2::integer
+        ORDER BY "listingId" ASC, row_number ASC;
+      `,
+      [listingIds, limitPerListing],
+    );
+
+    const groupedMedia = new Map<string, PublicListingMediaRecord[]>();
+    for (const row of result.rows) {
+      const existingMedia = groupedMedia.get(row.listingId) ?? [];
+      existingMedia.push({
+        id: row.id,
+        storageKey: row.storageKey,
+        mimeType: row.mimeType,
+        width: row.width,
+        height: row.height,
+        position: row.position,
+        isPrimary: row.isPrimary,
+      });
+      groupedMedia.set(row.listingId, existingMedia);
+    }
+
+    return groupedMedia;
   }
 
   async findFallbackProvinceContextById(
@@ -792,7 +900,8 @@ export class ListingsRepository implements OnModuleDestroy {
       values.push(value);
       return `$${values.length}`;
     };
-    const referencePoint = await this.resolveLocationCentroid(query.locationIntent);
+    const referencePoint =
+      query.referencePoint ?? (await this.resolveLocationCentroid(query.locationIntent));
 
     if (query.queryText) {
       const patternPlaceholder = addValue(`%${query.queryText}%`);
@@ -970,6 +1079,7 @@ export class ListingsRepository implements OnModuleDestroy {
           media_preview.height AS "primaryMediaHeight",
           media_preview.position AS "primaryMediaPosition",
           media_preview.is_primary AS "primaryMediaIsPrimary",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored",
           COUNT(*) OVER()::text AS "totalCount"
         FROM listings l
         INNER JOIN regions r
@@ -1046,7 +1156,8 @@ export class ListingsRepository implements OnModuleDestroy {
           media_preview.width AS "primaryMediaWidth",
           media_preview.height AS "primaryMediaHeight",
           media_preview.position AS "primaryMediaPosition",
-          media_preview.is_primary AS "primaryMediaIsPrimary"
+          media_preview.is_primary AS "primaryMediaIsPrimary",
+          COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored"
         FROM listings l
         INNER JOIN regions r
           ON r.id = l.region_id
@@ -1073,6 +1184,7 @@ export class ListingsRepository implements OnModuleDestroy {
           ORDER BY lm.is_primary DESC, lm.position ASC, lm.created_at ASC
           LIMIT 1
         ) media_preview ON TRUE
+        ${this.activePromotionJoinSql}
         WHERE l.id = $1::bigint
           AND l.status = 'published'
           AND l.deleted_at IS NULL
@@ -1548,6 +1660,71 @@ export class ListingsRepository implements OnModuleDestroy {
     );
   }
 
+  async setPrimaryMedia(listingId: string, mediaId: string): Promise<ListingMediaRecord | null> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const targetResult = await client.query<ListingMediaRow>(
+        `
+          ${this.listingMediaSelectSql}
+          WHERE listing_id = $1::bigint
+            AND id = $2::bigint
+          LIMIT 1;
+        `,
+        [listingId, mediaId],
+      );
+
+      const targetRow = targetResult.rows[0];
+      if (!targetRow) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query(
+        `
+          UPDATE listing_media
+          SET is_primary = FALSE
+          WHERE listing_id = $1::bigint
+            AND is_primary = TRUE;
+        `,
+        [listingId],
+      );
+
+      const updateResult = await client.query<ListingMediaRow>(
+        `
+          UPDATE listing_media
+          SET is_primary = TRUE
+          WHERE listing_id = $1::bigint
+            AND id = $2::bigint
+          RETURNING
+            id::text AS "id",
+            listing_id::text AS "listingId",
+            storage_key AS "storageKey",
+            mime_type AS "mimeType",
+            file_size::text AS "fileSize",
+            width,
+            height,
+            hash,
+            position,
+            is_primary AS "isPrimary",
+            created_at::text AS "createdAt",
+            updated_at::text AS "updatedAt";
+        `,
+        [listingId, mediaId],
+      );
+
+      await client.query('COMMIT');
+      return this.mapListingMediaRow(updateResult.rows[0] ?? targetRow);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createListingMedia(
     listingId: string,
     input: CreateListingMediaInput,
@@ -1883,6 +2060,7 @@ export class ListingsRepository implements OnModuleDestroy {
       distanceKm: null,
       mediaCount: Number.parseInt(row.mediaCount, 10),
       primaryMedia,
+      isSponsored: row.isSponsored,
       comuneCentroidLat: Number.isFinite(comuneCentroidLat) ? comuneCentroidLat : null,
       comuneCentroidLng: Number.isFinite(comuneCentroidLng) ? comuneCentroidLng : null,
     };

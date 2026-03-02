@@ -15,6 +15,37 @@ const parseListingId = (value: string): string | null => {
   return normalized;
 };
 
+export async function GET(
+  _request: Request,
+  context: {
+    params: Promise<{
+      listingId: string;
+    }>;
+  },
+) {
+  const token = await getSessionTokenFromCookie();
+  if (!token) {
+    return unauthorizedResponse();
+  }
+
+  const { listingId: rawListingId } = await context.params;
+  const listingId = parseListingId(rawListingId);
+  if (!listingId) {
+    return NextResponse.json(
+      {
+        message: 'Invalid listing id.',
+      },
+      { status: 400 },
+    );
+  }
+
+  return forwardApiRequest({
+    pathname: `/v1/listings/${listingId}/media`,
+    method: 'GET',
+    token,
+  });
+}
+
 export async function POST(
   request: Request,
   context: {
@@ -52,4 +83,8 @@ export async function POST(
     token,
     body,
   });
+}
+
+export function OPTIONS() {
+  return NextResponse.json({}, { status: 200 });
 }

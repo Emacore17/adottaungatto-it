@@ -32,8 +32,8 @@ export default async function AccountListingsPage() {
             <CardTitle>Nessun annuncio disponibile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-            <p>Il nuovo flusso di pubblicazione non e ancora stato ricostruito.</p>
-            <LinkButton href="/pubblica">Apri la route di pubblicazione</LinkButton>
+            <p>Crea il tuo primo annuncio per iniziare a gestire foto, razze e copertina.</p>
+            <LinkButton href="/pubblica">Pubblica un annuncio</LinkButton>
           </CardContent>
         </Card>
       ) : (
@@ -64,7 +64,9 @@ export default async function AccountListingsPage() {
                   <LinkButton href={`/account/listings/${listing.id}`} variant="outline">
                     Apri dettaglio
                   </LinkButton>
-                  <LinkButton href={`/annunci/${listing.id}/modifica`}>Apri edit route</LinkButton>
+                  <LinkButton href={`/annunci/${listing.id}/modifica`}>
+                    Modifica annuncio
+                  </LinkButton>
                 </div>
               </CardContent>
             </Card>

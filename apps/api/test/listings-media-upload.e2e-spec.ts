@@ -75,6 +75,21 @@ describe('Listings media endpoints', () => {
     updatedAt: new Date().toISOString(),
     objectUrl: 'http://localhost:9000/listing-originals/listings/1/media-2.png',
   }));
+  const setPrimaryMediaForUser = vi.fn(async () => ({
+    id: '2',
+    listingId: '1',
+    storageKey: 'listings/1/media-2.png',
+    mimeType: 'image/png',
+    fileSize: '67',
+    width: 1,
+    height: 1,
+    hash: null,
+    position: 2,
+    isPrimary: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    objectUrl: 'http://localhost:9000/listing-originals/listings/1/media-2.png',
+  }));
   const reorderMediaForUser = vi.fn(async () => [
     {
       id: '2',
@@ -117,6 +132,7 @@ describe('Listings media endpoints', () => {
         uploadMediaForUser,
         listMediaForUser,
         deleteMediaForUser,
+        setPrimaryMediaForUser,
         reorderMediaForUser,
       })
       .compile();
@@ -134,6 +150,7 @@ describe('Listings media endpoints', () => {
     uploadMediaForUser.mockClear();
     listMediaForUser.mockClear();
     deleteMediaForUser.mockClear();
+    setPrimaryMediaForUser.mockClear();
     reorderMediaForUser.mockClear();
   });
 
@@ -195,6 +212,17 @@ describe('Listings media endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.body.media.id).toBe('2');
     expect(deleteMediaForUser).toHaveBeenCalledWith(expect.any(Object), '1', '2');
+  });
+
+  it('sets the listing cover media explicitly', async () => {
+    const response = await request(app.getHttpServer())
+      .patch('/v1/listings/1/media/2/cover')
+      .set(userHeaders);
+
+    expect(response.status).toBe(200);
+    expect(response.body.media.id).toBe('2');
+    expect(response.body.media.isPrimary).toBe(true);
+    expect(setPrimaryMediaForUser).toHaveBeenCalledWith(expect.any(Object), '1', '2');
   });
 
   it('validates reorder payload', async () => {
