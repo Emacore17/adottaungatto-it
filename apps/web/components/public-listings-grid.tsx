@@ -7,6 +7,7 @@ import { FavoriteHeartButton } from './favorite-heart-button';
 interface PublicListingsGridProps {
   listings: PublicListingSummary[];
   layout?: 'grid' | 'list';
+  variant?: 'default' | 'featured';
   emptyTitle?: string;
   emptyDescription?: string;
 }
@@ -52,6 +53,7 @@ const resolveCardImageUrl = (primaryImageUrl: string, fallbackFileName: string) 
 export function PublicListingsGrid({
   listings,
   layout = 'grid',
+  variant = 'default',
   emptyTitle = 'Nessun annuncio disponibile.',
   emptyDescription = 'Collega la nuova esperienza di ricerca quando il dominio funzionale sara ridefinito.',
 }: PublicListingsGridProps) {
@@ -68,8 +70,22 @@ export function PublicListingsGrid({
 
   const containerClassName =
     layout === 'list' ? 'grid gap-4 grid-cols-1' : 'grid gap-5 sm:grid-cols-2 xl:grid-cols-3';
-  const pillClassName =
-    'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[13px] font-semibold';
+  const isFeaturedVariant = variant === 'featured';
+  const pillClassName = isFeaturedVariant
+    ? 'inline-flex items-center gap-1.5 rounded-full border border-[color:color-mix(in_srgb,var(--color-border)_72%,white_28%)] bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_64%,transparent)] px-2.5 py-1 text-[13px] font-semibold shadow-[0_8px_22px_rgb(66_40_49_/_0.04)]'
+    : 'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[13px] font-semibold';
+  const articleClassName = isFeaturedVariant
+    ? 'flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[color:color-mix(in_srgb,var(--color-border)_70%,white_30%)] bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_90%,transparent)] shadow-[0_28px_80px_rgb(66_40_49_/_0.12)] transition-[border-color,box-shadow,transform] duration-300 group-hover:border-[var(--color-border-strong)] group-hover:shadow-[0_36px_96px_rgb(66_40_49_/_0.18)]'
+    : 'flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[0_20px_54px_rgb(66_40_49_/_0.1)] backdrop-blur-xl transition-[border-color,box-shadow] duration-300 group-hover:border-[var(--color-border-strong)] group-hover:shadow-[0_30px_76px_rgb(66_40_49_/_0.16)]';
+  const contentClassName = isFeaturedVariant
+    ? 'flex basis-2/5 flex-col bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_76%,transparent)] px-5 pb-5 pt-4 text-[var(--color-text)] backdrop-blur-[6px]'
+    : 'flex basis-2/5 flex-col bg-[var(--color-surface-elevated)] px-5 pb-5 pt-4 text-[var(--color-text)]';
+  const locationIconClassName = isFeaturedVariant
+    ? 'inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:color-mix(in_srgb,var(--color-border)_76%,white_24%)] bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_72%,transparent)] shadow-[0_10px_24px_rgb(66_40_49_/_0.05)]'
+    : 'inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)]';
+  const footerClassName = isFeaturedVariant
+    ? 'mt-4 flex items-end justify-between gap-2 border-t border-[color:color-mix(in_srgb,var(--color-border)_68%,white_32%)] pt-3'
+    : 'mt-4 flex items-end justify-between gap-2 border-t border-[var(--color-border)] pt-3';
 
   return (
     <div className={containerClassName}>
@@ -119,7 +135,7 @@ export function PublicListingsGrid({
             href={`/annunci/${listing.id}`}
             key={listing.id}
           >
-            <article className="flex h-full min-h-[430px] flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[0_20px_54px_rgb(66_40_49_/_0.1)] backdrop-blur-xl transition-[border-color,box-shadow] duration-300 group-hover:border-[var(--color-border-strong)] group-hover:shadow-[0_30px_76px_rgb(66_40_49_/_0.16)]">
+            <article className={articleClassName}>
               <div className="relative basis-3/5 overflow-hidden">
                 <div
                   aria-label={imageTitleLabel || titleLabel}
@@ -139,9 +155,9 @@ export function PublicListingsGrid({
                 </div>
               </div>
 
-              <div className="flex basis-2/5 flex-col bg-[var(--color-surface-elevated)] px-5 pb-5 pt-4 text-[var(--color-text)]">
+              <div className={contentClassName}>
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)]">
+                  <span className={locationIconClassName}>
                     <svg
                       aria-hidden="true"
                       fill="none"
@@ -277,7 +293,7 @@ export function PublicListingsGrid({
                   ) : null}
                 </div>
 
-                <div className="mt-4 flex items-end justify-between gap-2 border-t border-[var(--color-border)] pt-3">
+                <div className={footerClassName}>
                   <div className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[12px] font-medium">
                     <svg
                       aria-hidden="true"

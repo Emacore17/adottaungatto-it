@@ -6,6 +6,7 @@ import { loadApiEnv } from '@adottaungatto/config';
 import { config as loadDotEnv } from 'dotenv';
 import { Client } from 'pg';
 import { UserRole } from '../src/auth/roles.enum';
+import { parseListingAgeTextToMonths } from '../src/listings/listing-age';
 import { ListingsRepository } from '../src/listings/listings.repository';
 import { MinioStorageService } from '../src/listings/minio-storage.service';
 import type { ListingStatus } from '../src/listings/models/listing.model';
@@ -1030,6 +1031,7 @@ const seedDemoListingsAndMedia = async (
       priceAmount: listing.priceAmount,
       currency: listing.currency,
       ageText: listing.ageText,
+      ageMonths: parseListingAgeTextToMonths(listing.ageText) ?? 24,
       sex: listing.sex,
       breed: listing.breed,
       status: listing.status,

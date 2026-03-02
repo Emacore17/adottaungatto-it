@@ -22,6 +22,8 @@ export interface LocationIntent {
 
 export type SearchSort = 'relevance' | 'newest' | 'price_asc' | 'price_desc';
 
+export const NO_BREED_FILTER = '__no_breed__';
+
 export type SearchFallbackLevel = 'none' | 'nearby' | LocationIntentScope;
 
 export type SearchFallbackReason =

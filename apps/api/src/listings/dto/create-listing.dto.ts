@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_LISTING_AGE_MONTHS, normalizeListingAge } from '../listing-age';
 
 type ValidationIssue = {
   path: string;
@@ -65,7 +66,55 @@ const currencyCode = z.preprocess(
     .optional(),
 );
 
+const optionalNonNegativeInteger = (fieldName: string, maxValue: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined;
+      }
+
+      if (typeof value === 'number' && Number.isInteger(value)) {
+        return value;
+      }
+
+      if (typeof value === 'string') {
+        const normalized = value.trim();
+        if (!normalized) {
+          return undefined;
+        }
+
+        if (!/^-?\d+$/.test(normalized)) {
+          return value;
+        }
+
+        return Number.parseInt(normalized, 10);
+      }
+
+      return value;
+    },
+    z
+      .number({
+        invalid_type_error: `Field "${fieldName}" must be an integer.`,
+      })
+      .int(`Field "${fieldName}" must be an integer.`)
+      .min(0, `Field "${fieldName}" must be >= 0.`)
+      .max(maxValue, `Field "${fieldName}" must be <= ${maxValue}.`)
+      .optional(),
+  );
+
 const listingTypeAlias = trimmedString(40, 'listingType').optional();
+const optionalAgeText = z.preprocess((value) => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const normalized = value.trim();
+  return normalized.length === 0 ? undefined : normalized;
+}, z.string().max(80, 'Field "ageText" exceeds maximum length (80 characters).').optional());
 
 const createListingBodySchema = z
   .object({
@@ -83,7 +132,8 @@ const createListingBodySchema = z
       .nullable()
       .optional(),
     currency: currencyCode,
-    ageText: trimmedString(80, 'ageText'),
+    ageText: optionalAgeText,
+    ageMonths: optionalNonNegativeInteger('ageMonths', MAX_LISTING_AGE_MONTHS),
     sex: trimmedString(20, 'sex'),
     breed: optionalTrimmedNullableString(120, 'breed'),
     regionId: positiveIntegerAsString('regionId'),
@@ -119,11 +169,31 @@ const createListingBodySchema = z
         message: 'Field "listingType" is required and must be a string.',
       });
     }
+
+    const normalizedAge = normalizeListingAge({
+      ageText: value.ageText,
+      ageMonths: value.ageMonths,
+    });
+    if ('error' in normalizedAge) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: value.ageMonths !== undefined ? ['ageMonths'] : ['ageText'],
+        message: normalizedAge.error,
+      });
+    }
   })
   .transform((value) => {
     const listingType = value.listingType ?? value.listing_type ?? value.type ?? value.listingKind;
     if (!listingType) {
       throw new Error('Unexpected invalid listingType state.');
+    }
+
+    const normalizedAge = normalizeListingAge({
+      ageText: value.ageText,
+      ageMonths: value.ageMonths,
+    });
+    if ('error' in normalizedAge) {
+      throw new Error('Unexpected invalid age state.');
     }
 
     return {
@@ -132,7 +202,8 @@ const createListingBodySchema = z
       listingType,
       priceAmount: value.priceAmount ?? null,
       currency: value.currency ?? 'EUR',
-      ageText: value.ageText,
+      ageText: normalizedAge.ageText,
+      ageMonths: normalizedAge.ageMonths,
       sex: value.sex,
       breed: value.breed ?? null,
       regionId: value.regionId,

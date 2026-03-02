@@ -18,6 +18,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import { validateCreateListingDto } from './dto/create-listing.dto';
 import { validateSearchListingsQueryDto } from './dto/search-listings-query.dto';
+import { normalizeListingAge } from './listing-age';
 import { ListingsService } from './listings.service';
 import type { UploadListingMediaInput } from './models/listing-media.model';
 import {
@@ -230,6 +231,33 @@ const parseOptionalPositiveInteger = (
 
   const parsed = Number.parseInt(parsePositiveIntegerString(source[fieldName], fieldName), 10);
   return parsed;
+};
+
+const parseOptionalNonNegativeInteger = (
+  source: Record<string, unknown>,
+  fieldName: string,
+): number | null | undefined => {
+  if (!(fieldName in source)) {
+    return undefined;
+  }
+
+  const value = source[fieldName];
+  if (value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (/^\d+$/.test(normalized)) {
+      return Number.parseInt(normalized, 10);
+    }
+  }
+
+  throw new BadRequestException(`Field "${fieldName}" must be a non-negative integer.`);
 };
 
 const parseOptionalBoolean = (
@@ -594,11 +622,23 @@ export class ListingsController {
       payload.currency = parseCurrency(source.currency, false);
     }
 
-    if ('ageText' in source) {
-      payload.ageText = parseOptionalString(source, 'ageText', 80) ?? '';
-      if (!payload.ageText) {
-        throw new BadRequestException('Field "ageText" cannot be empty.');
+    const hasAgePayload = 'ageText' in source || 'ageMonths' in source || 'age_months' in source;
+    if (hasAgePayload) {
+      const ageText = parseOptionalString(source, 'ageText', 80);
+      const ageMonths =
+        parseOptionalNonNegativeInteger(source, 'ageMonths') ??
+        parseOptionalNonNegativeInteger(source, 'age_months');
+
+      const normalizedAge = normalizeListingAge({
+        ageText: ageText ?? undefined,
+        ageMonths: ageMonths ?? undefined,
+      });
+      if ('error' in normalizedAge) {
+        throw new BadRequestException(normalizedAge.error);
       }
+
+      payload.ageText = normalizedAge.ageText;
+      payload.ageMonths = normalizedAge.ageMonths;
     }
 
     if ('sex' in source) {

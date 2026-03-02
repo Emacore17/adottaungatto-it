@@ -1,4 +1,5 @@
 import { loadApiEnv } from '@adottaungatto/config';
+import { NO_BREED_FILTER } from '@adottaungatto/types';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
 import {
@@ -315,7 +316,14 @@ export class SearchIndexService {
       filters.push(this.buildCaseInsensitiveKeywordFilter('sex', query.sex));
     }
 
-    if (query.breed) {
+    if (query.breed === NO_BREED_FILTER) {
+      filters.push({
+        bool: {
+          should: [{ bool: { must_not: { exists: { field: 'breed' } } } }, { term: { breed: '' } }],
+          minimum_should_match: 1,
+        },
+      });
+    } else if (query.breed) {
       filters.push({
         wildcard: {
           breed: {

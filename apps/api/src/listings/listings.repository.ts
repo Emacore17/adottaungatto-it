@@ -1,5 +1,5 @@
 import { loadApiEnv } from '@adottaungatto/config';
-import type { LocationIntent } from '@adottaungatto/types';
+import { type LocationIntent, NO_BREED_FILTER } from '@adottaungatto/types';
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
@@ -18,6 +18,16 @@ import type {
 type PublicListingMediaRecord = Omit<PublicListingMedia, 'objectUrl'> & {
   storageKey: string;
 };
+
+const buildAgeMonthsSqlExpression = (columnSql: string) => `
+  CASE
+    WHEN ${columnSql} IS NULL THEN NULL
+    WHEN LOWER(${columnSql}) ~ '(\\d+\\s*(anno|anni)|\\d+\\s*(mese|mesi))'
+      THEN COALESCE((substring(LOWER(${columnSql}) from '(\\d+)\\s*(anno|anni)'))::integer, 0) * 12
+        + COALESCE((substring(LOWER(${columnSql}) from '(\\d+)\\s*(mese|mesi)'))::integer, 0)
+    ELSE NULL
+  END
+`;
 
 export interface PublicListingSummaryRecord extends Omit<PublicListingSummary, 'primaryMedia'> {
   primaryMedia: PublicListingMediaRecord | null;
@@ -365,6 +375,7 @@ export class ListingsRepository implements OnModuleDestroy {
           price_amount,
           currency,
           age_text,
+          age_months,
           sex,
           breed,
           status,
@@ -387,15 +398,16 @@ export class ListingsRepository implements OnModuleDestroy {
           $7,
           $8,
           $9,
-          $10::listing_status,
-          $11::bigint,
+          $10,
+          $11::listing_status,
           $12::bigint,
           $13::bigint,
-          $14,
+          $14::bigint,
           $15,
           $16,
-          $17::timestamptz,
-          $18::timestamptz
+          $17,
+          $18::timestamptz,
+          $19::timestamptz
         )
         RETURNING
           id::text AS "id",
@@ -429,6 +441,7 @@ export class ListingsRepository implements OnModuleDestroy {
         input.priceAmount,
         input.currency,
         input.ageText,
+        input.ageMonths,
         input.sex,
         input.breed,
         input.status,
@@ -829,12 +842,25 @@ export class ListingsRepository implements OnModuleDestroy {
       whereClauses.push(`l.age_text ILIKE ${agePatternPlaceholder}`);
     }
 
+    const ageMonthsSql = `COALESCE(l.age_months, ${buildAgeMonthsSqlExpression('l.age_text')})`;
+    if (query.ageMinMonths !== null && query.ageMinMonths !== undefined) {
+      const ageMinMonthsPlaceholder = addValue(query.ageMinMonths);
+      whereClauses.push(`(${ageMonthsSql}) >= ${ageMinMonthsPlaceholder}::integer`);
+    }
+
+    if (query.ageMaxMonths !== null && query.ageMaxMonths !== undefined) {
+      const ageMaxMonthsPlaceholder = addValue(query.ageMaxMonths);
+      whereClauses.push(`(${ageMonthsSql}) <= ${ageMaxMonthsPlaceholder}::integer`);
+    }
+
     if (query.sex) {
       const sexPlaceholder = addValue(query.sex.toLowerCase());
       whereClauses.push(`LOWER(l.sex) = ${sexPlaceholder}`);
     }
 
-    if (query.breed) {
+    if (query.breed === NO_BREED_FILTER) {
+      whereClauses.push(`NULLIF(BTRIM(COALESCE(l.breed, '')), '') IS NULL`);
+    } else if (query.breed) {
       const breedPatternPlaceholder = addValue(`%${query.breed}%`);
       whereClauses.push(`COALESCE(l.breed, '') ILIKE ${breedPatternPlaceholder}`);
     }
@@ -1357,6 +1383,9 @@ export class ListingsRepository implements OnModuleDestroy {
     }
     if (input.ageText !== undefined) {
       addValue('age_text', input.ageText);
+    }
+    if (input.ageMonths !== undefined) {
+      addValue('age_months', input.ageMonths);
     }
     if (input.sex !== undefined) {
       addValue('sex', input.sex);

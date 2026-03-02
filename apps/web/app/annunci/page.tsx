@@ -1,4 +1,4 @@
-import type { SearchSort } from '@adottaungatto/types';
+import { NO_BREED_FILTER, type SearchSort } from '@adottaungatto/types';
 import { Badge } from '@adottaungatto/ui';
 import { LinkButton } from '../../components/link-button';
 import { PageShell } from '../../components/page-shell';
@@ -55,6 +55,15 @@ const parseNonNegativeNumber = (value: string | string[] | undefined): number | 
   return parsed;
 };
 
+const parseNonNegativeInteger = (value: string | string[] | undefined): number | null => {
+  const parsed = parseNonNegativeNumber(value);
+  if (parsed === null) {
+    return null;
+  }
+
+  return Math.trunc(parsed);
+};
+
 const parseSearchSort = (value: string | string[] | undefined): SearchSort => {
   const normalized = normalizeOptionalString(value)?.toLowerCase();
   if (normalized && searchSortValues.has(normalized as SearchSort)) {
@@ -80,11 +89,17 @@ const parseSearchOptions = (
 ): PublicListingsSearchOptions => {
   const priceMin = parseNonNegativeNumber(params?.priceMin);
   const priceMax = parseNonNegativeNumber(params?.priceMax);
+  const ageMinMonths = parseNonNegativeInteger(params?.ageMinMonths);
+  const ageMaxMonths = parseNonNegativeInteger(params?.ageMaxMonths);
 
   const [effectivePriceMin, effectivePriceMax] =
     priceMin !== null && priceMax !== null && priceMin > priceMax
       ? [priceMax, priceMin]
       : [priceMin, priceMax];
+  const [effectiveAgeMinMonths, effectiveAgeMaxMonths] =
+    ageMinMonths !== null && ageMaxMonths !== null && ageMinMonths > ageMaxMonths
+      ? [ageMaxMonths, ageMinMonths]
+      : [ageMinMonths, ageMaxMonths];
 
   return {
     q: normalizeOptionalString(params?.q),
@@ -92,6 +107,8 @@ const parseSearchOptions = (
     sex: normalizeOptionalString(params?.sex),
     breed: normalizeOptionalString(params?.breed),
     ageText: normalizeOptionalString(params?.ageText),
+    ageMinMonths: effectiveAgeMinMonths,
+    ageMaxMonths: effectiveAgeMaxMonths,
     locationScope: parseLocationScope(params?.locationScope),
     regionId: normalizeOptionalString(params?.regionId),
     provinceId: normalizeOptionalString(params?.provinceId),
@@ -172,6 +189,34 @@ const hasStructuredLocationIntent = (options: PublicListingsSearchOptions) =>
 const shouldApplyLocationLabelPostFilter = (options: PublicListingsSearchOptions) =>
   Boolean(options.locationLabel) && !hasStructuredLocationIntent(options);
 
+const formatAgeMonthsLabel = (value: number) => {
+  if (value % 12 === 0) {
+    const years = value / 12;
+    return `${years} ${years === 1 ? 'anno' : 'anni'}`;
+  }
+
+  return `${value} ${value === 1 ? 'mese' : 'mesi'}`;
+};
+
+const buildAgeFilterLabel = (
+  ageMinMonths: number | null | undefined,
+  ageMaxMonths: number | null | undefined,
+) => {
+  if (ageMinMonths !== null && ageMinMonths !== undefined) {
+    if (ageMaxMonths !== null && ageMaxMonths !== undefined) {
+      return `${formatAgeMonthsLabel(ageMinMonths)} - ${formatAgeMonthsLabel(ageMaxMonths)}`;
+    }
+
+    return `Da ${formatAgeMonthsLabel(ageMinMonths)}`;
+  }
+
+  if (ageMaxMonths !== null && ageMaxMonths !== undefined) {
+    return `Fino a ${formatAgeMonthsLabel(ageMaxMonths)}`;
+  }
+
+  return null;
+};
+
 const buildRelaxedSearchVariants = (
   options: PublicListingsSearchOptions,
 ): PublicListingsSearchOptions[] => {
@@ -185,6 +230,8 @@ const buildRelaxedSearchVariants = (
       sex: candidate.sex ?? null,
       breed: candidate.breed ?? null,
       ageText: candidate.ageText ?? null,
+      ageMinMonths: candidate.ageMinMonths ?? null,
+      ageMaxMonths: candidate.ageMaxMonths ?? null,
       locationScope: candidate.locationScope ?? null,
       regionId: candidate.regionId ?? null,
       provinceId: candidate.provinceId ?? null,
@@ -208,6 +255,11 @@ const buildRelaxedSearchVariants = (
 
   if (current.ageText) {
     current = { ...current, ageText: null };
+    pushVariant(current);
+  }
+
+  if (current.ageMinMonths !== null || current.ageMaxMonths !== null) {
+    current = { ...current, ageMinMonths: null, ageMaxMonths: null };
     pushVariant(current);
   }
 
@@ -250,6 +302,8 @@ const hasActiveSearchFilters = (options: PublicListingsSearchOptions) => {
   if (options.sex) return true;
   if (options.breed) return true;
   if (options.ageText) return true;
+  if (options.ageMinMonths !== null && options.ageMinMonths !== undefined) return true;
+  if (options.ageMaxMonths !== null && options.ageMaxMonths !== undefined) return true;
   if (options.priceMin !== null && options.priceMin !== undefined) return true;
   if (options.priceMax !== null && options.priceMax !== undefined) return true;
   if (options.locationLabel) return true;
@@ -282,12 +336,21 @@ const buildActiveFilterLabels = (options: PublicListingsSearchOptions): string[]
     labels.push(`Sesso: ${options.sex}`);
   }
 
-  if (options.breed) {
+  if (options.breed === NO_BREED_FILTER) {
+    labels.push('Razza: Non di razza');
+  }
+
+  if (options.breed && options.breed !== NO_BREED_FILTER) {
     labels.push(`Razza: ${options.breed}`);
   }
 
   if (options.ageText) {
     labels.push(`Età: ${options.ageText}`);
+  }
+
+  const ageFilterLabel = buildAgeFilterLabel(options.ageMinMonths, options.ageMaxMonths);
+  if (ageFilterLabel) {
+    labels.push(`Eta: ${ageFilterLabel}`);
   }
 
   if (options.locationLabel) {

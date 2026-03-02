@@ -295,6 +295,7 @@ describe('ListingsService', () => {
       priceAmount: null,
       currency: 'EUR',
       ageText: '2 anni',
+      ageMonths: 24,
       sex: 'maschio',
       breed: null,
       status: 'published',

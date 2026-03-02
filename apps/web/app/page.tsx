@@ -142,6 +142,7 @@ export default async function Page() {
                     key={`featured-desktop-${listing.id}`}
                     layout="list"
                     listings={[listing]}
+                    variant="featured"
                   />
                 ))}
               </FeaturedListingsCarousel>
@@ -154,6 +155,7 @@ export default async function Page() {
                     key={`featured-mobile-${listing.id}`}
                     layout="list"
                     listings={[listing]}
+                    variant="featured"
                   />
                 ))}
               </FeaturedListingsCarousel>

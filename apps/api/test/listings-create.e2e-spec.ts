@@ -119,10 +119,33 @@ describe('Listings create endpoint', () => {
       listingType: 'adozione',
       currency: 'EUR',
       ageText: '3 anni',
+      ageMonths: 36,
       sex: 'femmina',
       regionId: '1',
       provinceId: '11',
       comuneId: '101',
+      status: 'pending_review',
+    });
+  });
+
+  it('creates listing from structured ageMonths payload', async () => {
+    const response = await request(app.getHttpServer()).post('/v1/listings').set(userHeaders).send({
+      title: 'Micio giovane',
+      description: 'Molto socievole',
+      listingType: 'adozione',
+      ageMonths: 18,
+      sex: 'maschio',
+      regionId: 1,
+      provinceId: 11,
+      comuneId: 101,
+    });
+
+    expect(response.status).toBe(201);
+    expect(createForUser).toHaveBeenCalledTimes(1);
+    const firstCall = createForUser.mock.calls[0] as unknown[] | undefined;
+    expect(firstCall?.[1]).toMatchObject({
+      ageText: '18 mesi',
+      ageMonths: 18,
       status: 'pending_review',
     });
   });

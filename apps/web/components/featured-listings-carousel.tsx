@@ -179,35 +179,37 @@ export function FeaturedListingsCarousel({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="-mx-2 overflow-hidden">
-        <div
-          aria-live="polite"
-          className={`flex ease-out ${
-            transitionEnabled ? 'transition-transform duration-500' : 'transition-none'
-          }`}
-          onTransitionEnd={handleTrackTransitionEnd}
-          style={{
-            transform: `translate3d(-${(trackIndex * 100) / itemsPerView}%, 0, 0)`,
-          }}
-        >
-          {trackItems.map((item, index) => {
-            const realIndex = hasLoop ? (index - cloneCount + totalItems) % totalItems : index;
-            const isVisible = hasLoop
-              ? (realIndex - activeStartIndex + totalItems) % totalItems < itemsPerView
-              : index < itemsPerView;
+    <div className="space-y-4 bg-transparent">
+      <div className="bg-transparent py-4">
+        <div className="-mx-3 overflow-hidden bg-transparent px-3 lg:-mx-4 lg:px-4">
+          <div
+            aria-live="polite"
+            className={`flex bg-transparent ease-out ${
+              transitionEnabled ? 'transition-transform duration-500' : 'transition-none'
+            }`}
+            onTransitionEnd={handleTrackTransitionEnd}
+            style={{
+              transform: `translate3d(-${(trackIndex * 100) / itemsPerView}%, 0, 0)`,
+            }}
+          >
+            {trackItems.map((item, index) => {
+              const realIndex = hasLoop ? (index - cloneCount + totalItems) % totalItems : index;
+              const isVisible = hasLoop
+                ? (realIndex - activeStartIndex + totalItems) % totalItems < itemsPerView
+                : index < itemsPerView;
 
-            return (
-              <div
-                aria-hidden={!isVisible}
-                className="shrink-0 px-2"
-                key={`${item.key}-${index}`}
-                style={{ flexBasis: `${100 / itemsPerView}%` }}
-              >
-                {item.content}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  aria-hidden={!isVisible}
+                  className="shrink-0 bg-transparent px-3 lg:px-4"
+                  key={`${item.key}-${index}`}
+                  style={{ flexBasis: `${100 / itemsPerView}%` }}
+                >
+                  {item.content}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

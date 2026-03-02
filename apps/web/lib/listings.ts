@@ -5,6 +5,7 @@ import type {
   SearchListingsMetadata,
   SearchSort,
 } from '@adottaungatto/types';
+import { NO_BREED_FILTER } from '@adottaungatto/types';
 import { cookies } from 'next/headers';
 import { findMockListingBySlug, mockListings } from '../mocks/listings';
 import { webSessionCookieName } from './auth';
@@ -95,6 +96,8 @@ export interface PublicListingsSearchOptions {
   priceMin?: number | null;
   priceMax?: number | null;
   ageText?: string | null;
+  ageMinMonths?: number | null;
+  ageMaxMonths?: number | null;
   sex?: string | null;
   breed?: string | null;
   sort?: SearchSort;
@@ -339,6 +342,15 @@ const normalizeOptionalNonNegativeNumber = (value: number | null | undefined): n
   return value;
 };
 
+const normalizeOptionalNonNegativeInteger = (value: number | null | undefined): number | null => {
+  const normalized = normalizeOptionalNonNegativeNumber(value);
+  if (normalized === null) {
+    return null;
+  }
+
+  return Math.trunc(normalized);
+};
+
 const appendOptionalQueryParam = (
   query: URLSearchParams,
   key: string,
@@ -348,6 +360,87 @@ const appendOptionalQueryParam = (
   if (normalizedValue) {
     query.set(key, normalizedValue);
   }
+};
+
+const appendOptionalNumberQueryParam = (
+  query: URLSearchParams,
+  key: string,
+  value: number | null | undefined,
+) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    query.set(key, String(Math.trunc(value)));
+  }
+};
+
+const parseAgeTextToMonths = (value: string | null | undefined): number | null => {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const yearsMatch = normalized.match(/(\d+)\s*(anno|anni)\b/);
+  const monthsMatch = normalized.match(/(\d+)\s*(mese|mesi)\b/);
+
+  const years = yearsMatch ? Number.parseInt(yearsMatch[1] ?? '', 10) : 0;
+  const months = monthsMatch ? Number.parseInt(monthsMatch[1] ?? '', 10) : 0;
+
+  if (!Number.isFinite(years) || !Number.isFinite(months)) {
+    return null;
+  }
+
+  if (years === 0 && months === 0) {
+    return null;
+  }
+
+  return years * 12 + months;
+};
+
+const matchesBreedFilter = (
+  listingBreed: string | null | undefined,
+  breedFilter: string | null,
+): boolean => {
+  if (!breedFilter) {
+    return true;
+  }
+
+  if (breedFilter === NO_BREED_FILTER) {
+    return normalizeOptionalString(listingBreed ?? null) === null;
+  }
+
+  return normalizeSearchText(listingBreed).includes(normalizeSearchText(breedFilter));
+};
+
+const matchesAgeFilters = (
+  listingAgeText: string,
+  ageTextFilter: string | null,
+  ageMinMonths: number | null,
+  ageMaxMonths: number | null,
+): boolean => {
+  if (
+    ageTextFilter &&
+    !normalizeSearchText(listingAgeText).includes(normalizeSearchText(ageTextFilter))
+  ) {
+    return false;
+  }
+
+  if (ageMinMonths === null && ageMaxMonths === null) {
+    return true;
+  }
+
+  const ageMonths = parseAgeTextToMonths(listingAgeText);
+  if (ageMonths === null) {
+    return false;
+  }
+
+  if (ageMinMonths !== null && ageMonths < ageMinMonths) {
+    return false;
+  }
+
+  if (ageMaxMonths !== null && ageMonths > ageMaxMonths) {
+    return false;
+  }
+
+  return true;
 };
 
 const byNewest = (a: ListingCardData, b: ListingCardData) =>
@@ -428,8 +521,9 @@ const searchMockPublicListings = (
   const queryText = normalizeOptionalString(options.q)?.toLowerCase() ?? null;
   const listingType = normalizeOptionalString(options.listingType)?.toLowerCase() ?? null;
   const sex = normalizeOptionalString(options.sex)?.toLowerCase() ?? null;
-  const breed = normalizeOptionalString(options.breed)?.toLowerCase() ?? null;
   const ageText = normalizeOptionalString(options.ageText)?.toLowerCase() ?? null;
+  const ageMinMonths = normalizeOptionalNonNegativeInteger(options.ageMinMonths);
+  const ageMaxMonths = normalizeOptionalNonNegativeInteger(options.ageMaxMonths);
   const priceMin = normalizeOptionalNonNegativeNumber(options.priceMin);
   const priceMax = normalizeOptionalNonNegativeNumber(options.priceMax);
   const sort = searchSortValues.has(options.sort ?? 'relevance')
@@ -450,16 +544,11 @@ const searchMockPublicListings = (
       return false;
     }
 
-    if (
-      breed &&
-      !String(listing.breed ?? '')
-        .toLowerCase()
-        .includes(breed)
-    ) {
+    if (!matchesBreedFilter(listing.breed, options.breed ?? null)) {
       return false;
     }
 
-    if (ageText && !listing.ageText.toLowerCase().includes(ageText)) {
+    if (!matchesAgeFilters(listing.ageText, ageText, ageMinMonths, ageMaxMonths)) {
       return false;
     }
 
@@ -606,8 +695,9 @@ const searchPublicListingsFromPublicEndpoint = async (
   const queryText = normalizeSearchText(options.q);
   const listingType = normalizeSearchText(options.listingType);
   const sex = normalizeSearchText(options.sex);
-  const breed = normalizeSearchText(options.breed);
   const ageText = normalizeSearchText(options.ageText);
+  const ageMinMonths = normalizeOptionalNonNegativeInteger(options.ageMinMonths);
+  const ageMaxMonths = normalizeOptionalNonNegativeInteger(options.ageMaxMonths);
   const locationLabel = normalizeSearchText(options.locationLabel);
   const locationTokens = locationLabel.length > 0 ? locationLabel.split(' ') : [];
   const priceMin = normalizeOptionalNonNegativeNumber(options.priceMin);
@@ -636,11 +726,11 @@ const searchPublicListingsFromPublicEndpoint = async (
       return false;
     }
 
-    if (breed && !normalizeSearchText(listing.breed ?? '').includes(breed)) {
+    if (!matchesBreedFilter(listing.breed, options.breed ?? null)) {
       return false;
     }
 
-    if (ageText && !normalizeSearchText(listing.ageText).includes(ageText)) {
+    if (!matchesAgeFilters(listing.ageText, ageText, ageMinMonths, ageMaxMonths)) {
       return false;
     }
 
@@ -784,10 +874,16 @@ export const searchPublicListingsWithMetadata = async (
 
   const priceMin = normalizeOptionalNonNegativeNumber(options.priceMin);
   const priceMax = normalizeOptionalNonNegativeNumber(options.priceMax);
+  const ageMinMonths = normalizeOptionalNonNegativeInteger(options.ageMinMonths);
+  const ageMaxMonths = normalizeOptionalNonNegativeInteger(options.ageMaxMonths);
   const [effectivePriceMin, effectivePriceMax] =
     priceMin !== null && priceMax !== null && priceMin > priceMax
       ? [priceMax, priceMin]
       : [priceMin, priceMax];
+  const [effectiveAgeMinMonths, effectiveAgeMaxMonths] =
+    ageMinMonths !== null && ageMaxMonths !== null && ageMinMonths > ageMaxMonths
+      ? [ageMaxMonths, ageMinMonths]
+      : [ageMinMonths, ageMaxMonths];
 
   const query = new URLSearchParams({
     limit: String(limit),
@@ -804,6 +900,8 @@ export const searchPublicListingsWithMetadata = async (
   appendOptionalQueryParam(query, 'locationSecondaryLabel', options.locationSecondaryLabel);
   appendOptionalQueryParam(query, 'listingType', options.listingType);
   appendOptionalQueryParam(query, 'ageText', options.ageText);
+  appendOptionalNumberQueryParam(query, 'ageMinMonths', effectiveAgeMinMonths);
+  appendOptionalNumberQueryParam(query, 'ageMaxMonths', effectiveAgeMaxMonths);
   appendOptionalQueryParam(query, 'sex', options.sex);
   appendOptionalQueryParam(query, 'breed', options.breed);
 
@@ -820,6 +918,8 @@ export const searchPublicListingsWithMetadata = async (
     sort: normalizedSort,
     priceMin: effectivePriceMin,
     priceMax: effectivePriceMax,
+    ageMinMonths: effectiveAgeMinMonths,
+    ageMaxMonths: effectiveAgeMaxMonths,
   };
 
   try {

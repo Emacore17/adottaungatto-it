@@ -194,6 +194,8 @@ const searchListingsQuerySchema = z
     priceMin: optionalNonNegativeNumber('priceMin'),
     priceMax: optionalNonNegativeNumber('priceMax'),
     ageText: optionalTrimmedString(80, 'ageText'),
+    ageMinMonths: optionalInteger('ageMinMonths', 0, 480),
+    ageMaxMonths: optionalInteger('ageMaxMonths', 0, 480),
     sex: optionalTrimmedString(20, 'sex'),
     breed: optionalTrimmedString(120, 'breed'),
     sort: optionalSort,
@@ -273,6 +275,18 @@ const searchListingsQuerySchema = z
         message: 'Query parameter "priceMin" cannot be greater than "priceMax".',
       });
     }
+
+    if (
+      value.ageMinMonths !== undefined &&
+      value.ageMaxMonths !== undefined &&
+      value.ageMinMonths > value.ageMaxMonths
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ageMinMonths'],
+        message: 'Query parameter "ageMinMonths" cannot be greater than "ageMaxMonths".',
+      });
+    }
   })
   .transform((value): SearchListingsQueryDto => {
     const locationScope = value.locationScope ?? value.scope;
@@ -296,6 +310,8 @@ const searchListingsQuerySchema = z
       priceMin: value.priceMin ?? null,
       priceMax: value.priceMax ?? null,
       ageText: value.ageText ?? null,
+      ...(value.ageMinMonths !== undefined ? { ageMinMonths: value.ageMinMonths } : {}),
+      ...(value.ageMaxMonths !== undefined ? { ageMaxMonths: value.ageMaxMonths } : {}),
       sex: value.sex ?? null,
       breed: value.breed ?? null,
       sort: (value.sort ?? 'relevance') as SearchSort,
@@ -311,6 +327,8 @@ export interface SearchListingsQueryDto {
   priceMin: number | null;
   priceMax: number | null;
   ageText: string | null;
+  ageMinMonths?: number | null;
+  ageMaxMonths?: number | null;
   sex: string | null;
   breed: string | null;
   sort: SearchSort;

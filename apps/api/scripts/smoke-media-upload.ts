@@ -2,6 +2,7 @@ import { loadApiEnv } from '@adottaungatto/config';
 import { config as loadDotEnv } from 'dotenv';
 import { Client } from 'pg';
 import { UserRole } from '../src/auth/roles.enum';
+import { parseListingAgeTextToMonths } from '../src/listings/listing-age';
 import { ListingsRepository } from '../src/listings/listings.repository';
 import { MinioStorageService } from '../src/listings/minio-storage.service';
 
@@ -74,6 +75,7 @@ const run = async () => {
       priceAmount: null,
       currency: 'EUR',
       ageText: '2 anni',
+      ageMonths: parseListingAgeTextToMonths('2 anni') ?? 24,
       sex: 'maschio',
       breed: 'Europeo',
       status: 'pending_review',

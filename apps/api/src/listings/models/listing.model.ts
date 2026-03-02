@@ -49,6 +49,7 @@ export interface CreateListingInput {
   priceAmount: number | null;
   currency: string;
   ageText: string;
+  ageMonths: number;
   sex: string;
   breed: string | null;
   status: ListingStatus;
@@ -69,6 +70,7 @@ export interface UpdateListingInput {
   priceAmount?: number | null;
   currency?: string;
   ageText?: string;
+  ageMonths?: number;
   sex?: string;
   breed?: string | null;
   status?: ListingStatus;

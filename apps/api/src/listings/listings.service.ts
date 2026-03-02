@@ -553,6 +553,14 @@ export class ListingsService {
   private async executeSearchWithTechnicalFallback(
     query: SearchListingsQueryDto,
   ): Promise<SearchPublishedResultRecord> {
+    if (query.ageMinMonths !== null && query.ageMinMonths !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
+    if (query.ageMaxMonths !== null && query.ageMaxMonths !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
     try {
       return await this.searchIndexService.searchPublished(query);
     } catch (error) {
