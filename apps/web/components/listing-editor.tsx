@@ -1,18 +1,31 @@
 'use client';
 
-import { Button, Card, CardContent, CardHeader, Input, Toast, cn } from '@adottaungatto/ui';
+import { Badge, Button, Card, CardContent, CardHeader, Input, Toast, cn } from '@adottaungatto/ui';
 import {
+  ArrowUpRight,
   Camera,
   CheckCircle2,
+  Files,
   ImagePlus,
   LoaderCircle,
+  Mail,
   MapPinned,
+  Phone,
+  ShieldCheck,
   Star,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ChangeEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ListingBreedOption, MyListing, MyListingMedia } from '../lib/listings';
 
 type AgeUnit = 'months' | 'years';
@@ -80,6 +93,7 @@ type ListingMediaApiPayload = {
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
+const emptyInitialMedia: MyListingMedia[] = [];
 
 const listingTypeOptions = [
   { value: 'adozione', label: 'Adozione' },
@@ -96,6 +110,10 @@ const fieldClassName =
   'h-11 rounded-[18px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_92%,white_8%)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-[border-color,box-shadow,background-color] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_14%,transparent)]';
 
 const textareaClassName = cn(fieldClassName, 'min-h-[150px] h-auto resize-y py-3 leading-6');
+const sectionCardClassName =
+  'border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] shadow-[0_22px_60px_-42px_rgba(15,23,42,0.38)]';
+const secondaryActionClassName =
+  'inline-flex h-11 items-center justify-center rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,white_16%)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]';
 
 const parseAgeFromMonths = (ageMonths: number | null | undefined) => {
   if (typeof ageMonths !== 'number' || !Number.isFinite(ageMonths) || ageMonths < 0) {
@@ -274,10 +292,68 @@ function EmptyStateMessage({ children }: { children: string }) {
   );
 }
 
+function SummaryMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_82%,white_18%)] px-4 py-4">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-base font-semibold text-[var(--color-text)]">{value}</p>
+      <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">{detail}</p>
+    </div>
+  );
+}
+
+function ReadinessItem({
+  complete,
+  label,
+  description,
+}: {
+  complete: boolean;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-[20px] border px-4 py-3 transition-colors',
+        complete
+          ? 'border-[color:color-mix(in_srgb,var(--color-primary)_28%,var(--color-border)_72%)] bg-[color:color-mix(in_srgb,var(--color-primary)_10%,transparent)]'
+          : 'border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_58%,transparent)]',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+            complete
+              ? 'border-[color:color-mix(in_srgb,var(--color-primary)_34%,transparent)] bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]'
+              : 'border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_72%,transparent)] text-[var(--color-text-muted)]',
+          )}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        </span>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-[var(--color-text)]">{label}</p>
+          <p className="text-sm leading-6 text-[var(--color-text-muted)]">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ListingEditor({
   breeds,
   initialListing = null,
-  initialMedia = [],
+  initialMedia = emptyInitialMedia,
 }: {
   breeds: ListingBreedOption[];
   initialListing?: MyListing | null;
@@ -322,6 +398,40 @@ export function ListingEditor({
       ? 'La foto di copertina attuale e gia salvata.'
       : 'Se non scegli una copertina, verra usata la prima foto caricata.';
   const listingStatusLabel = currentListingStatus.replaceAll('_', ' ');
+  const titleLength = form.title.trim().length;
+  const descriptionLength = form.description.trim().length;
+  const totalMediaCount = media.length + queuedMedia.length;
+  const locationComplete = Boolean(form.regionId && form.provinceId && form.comuneId);
+  const contactComplete = Boolean(
+    form.contactName.trim() || form.contactPhone.trim() || form.contactEmail.trim(),
+  );
+  const profileComplete = Boolean(form.listingType && form.sex && form.ageValue.trim());
+  const mediaComplete = totalMediaCount > 0;
+  const readinessItems = [
+    {
+      complete: titleLength > 0 && descriptionLength >= 40,
+      label: 'Contenuti chiari',
+      description: 'Titolo leggibile e descrizione con almeno 40 caratteri utili.',
+    },
+    {
+      complete: profileComplete,
+      label: 'Profilo del gatto',
+      description: 'Tipologia, sesso ed eta strutturata pronti per i filtri pubblici.',
+    },
+    {
+      complete: locationComplete,
+      label: 'Localita precisa',
+      description: 'Regione, provincia e comune servono per ricerca e vicinanza.',
+    },
+    {
+      complete: mediaComplete,
+      label: 'Galleria visibile',
+      description: 'Almeno una foto migliora apertura, fiducia e conversione del contatto.',
+    },
+  ];
+  const completedReadinessCount = readinessItems.filter((item) => item.complete).length;
+  const completionPercent = Math.round((completedReadinessCount / readinessItems.length) * 100);
+  const saveButtonLabel = isEditMode ? 'Salva modifiche' : 'Crea annuncio';
 
   useEffect(() => {
     queuedMediaRef.current = queuedMedia;
@@ -743,578 +853,757 @@ export function ListingEditor({
     }
   };
 
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleSubmit();
+  };
+
   return (
     <>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-        <div className="space-y-6">
-          {isEditMode ? (
-            <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_28%,var(--color-border)_72%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_10%,transparent)_0%,transparent_48%),color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)]">
-              <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-[var(--color-text)]">
-                    Modifica annuncio #{currentListingId}
-                  </p>
-                  <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                    Stato attuale:{' '}
-                    <span className="capitalize text-[var(--color-text)]">
-                      {listingStatusLabel}
-                    </span>
-                    . Le modifiche salvate restano disponibili anche dopo il refresh.
-                  </p>
-                </div>
-                <Link
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--color-border)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-                  href={`/account/listings/${currentListingId}`}
-                >
-                  Apri dettaglio privato
-                </Link>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)]">
-            <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="Scrivi un titolo chiaro e una descrizione completa. Le informazioni principali devono essere leggibili a colpo d'occhio."
-                title="Dati annuncio"
-              />
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6">
-              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-title">Titolo</FieldLabel>
-                  <Input
-                    className={fieldClassName}
-                    id="listing-title"
-                    maxLength={160}
-                    onChange={handleFieldChange('title')}
-                    placeholder="Es. Micia dolcissima cerca casa a Milano"
-                    value={form.title}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-type">Tipologia</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    id="listing-type"
-                    onChange={handleFieldChange('listingType')}
-                    value={form.listingType}
+      <form className="space-y-6 pb-28 xl:pb-0" onSubmit={handleFormSubmit}>
+        <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_12%,transparent)_0%,transparent_42%),linear-gradient(135deg,color-mix(in_srgb,var(--color-surface-overlay-strong)_92%,white_8%)_0%,color-mix(in_srgb,var(--color-surface)_84%,white_16%)_100%)] shadow-[0_30px_80px_-52px_rgba(15,23,42,0.45)]">
+          <CardContent className="space-y-6 pt-6 sm:pt-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    {isEditMode ? `Modifica annuncio #${currentListingId}` : 'Nuova bozza'}
+                  </Badge>
+                  <Badge
+                    className="border-transparent bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]"
+                    variant="secondary"
                   >
-                    {listingTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    {completionPercent}% completato
+                  </Badge>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <FieldLabel htmlFor="listing-description">Descrizione</FieldLabel>
-                <textarea
-                  className={textareaClassName}
-                  id="listing-description"
-                  maxLength={6000}
-                  onChange={handleFieldChange('description')}
-                  placeholder="Racconta il carattere del gatto, il contesto attuale, eventuali esigenze veterinarie e cosa cerchi per la sua futura casa."
-                  value={form.description}
-                />
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_170px_120px]">
                 <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-price" optional>
-                    Contributo richiesto
-                  </FieldLabel>
-                  <Input
-                    className={fieldClassName}
-                    id="listing-price"
-                    inputMode="decimal"
-                    min="0"
-                    onChange={handleFieldChange('priceAmount')}
-                    placeholder="Lascia vuoto se non previsto"
-                    step="1"
-                    type="number"
-                    value={form.priceAmount}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-currency">Valuta</FieldLabel>
-                  <Input
-                    className={fieldClassName}
-                    id="listing-currency"
-                    onChange={handleFieldChange('currency')}
-                    value={form.currency}
-                  />
-                </div>
-
-                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_66%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                  Prezzo facoltativo.
-                  <br />
-                  Se lo lasci vuoto verra mostrato come su richiesta.
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)]">
-            <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="Profilo essenziale del gatto, coerente con i filtri pubblici e con la nuova gestione dell'eta in mesi/anni."
-                title="Profilo del gatto"
-              />
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6">
-              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_160px_170px]">
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-breed">Razza</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    id="listing-breed"
-                    onChange={handleFieldChange('breed')}
-                    value={form.breed}
-                  >
-                    <option value="">Non di razza / non specificata</option>
-                    {breeds.map((breed) => (
-                      <option key={breed.slug} value={breed.label}>
-                        {breed.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-sex">Sesso</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    id="listing-sex"
-                    onChange={handleFieldChange('sex')}
-                    value={form.sex}
-                  >
-                    {sexOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-age">Eta</FieldLabel>
-                  <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-                    <Input
-                      className={fieldClassName}
-                      id="listing-age"
-                      inputMode="numeric"
-                      min="0"
-                      onChange={handleFieldChange('ageValue')}
-                      placeholder="Es. 8"
-                      step="1"
-                      type="number"
-                      value={form.ageValue}
-                    />
-                    <select
-                      className={cn(fieldClassName, 'w-full')}
-                      onChange={handleFieldChange('ageUnit')}
-                      value={form.ageUnit}
-                    >
-                      <option value="months">Mesi</option>
-                      <option value="years">Anni</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)]">
-            <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="La localita viene salvata con ids strutturati per supportare ricerca, vicinanza e future pagine geolocalizzate."
-                title="Localita"
-              />
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6">
-              <div className="grid gap-5 md:grid-cols-3">
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    id="listing-region"
-                    onChange={handleRegionChange}
-                    value={form.regionId}
-                  >
-                    <option value="">
-                      {regionsLoading ? 'Carico regioni...' : 'Seleziona regione'}
-                    </option>
-                    {regions.map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-province">Provincia</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    disabled={!form.regionId}
-                    id="listing-province"
-                    onChange={handleProvinceChange}
-                    value={form.provinceId}
-                  >
-                    <option value="">
-                      {!form.regionId
-                        ? 'Prima seleziona la regione'
-                        : provincesLoading
-                          ? 'Carico province...'
-                          : 'Seleziona provincia'}
-                    </option>
-                    {provinces.map((province) => (
-                      <option key={province.id} value={province.id}>
-                        {province.name} ({province.sigla})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="listing-comune">Comune</FieldLabel>
-                  <select
-                    className={cn(fieldClassName, 'w-full')}
-                    disabled={!form.provinceId}
-                    id="listing-comune"
-                    onChange={handleFieldChange('comuneId')}
-                    value={form.comuneId}
-                  >
-                    <option value="">
-                      {!form.provinceId
-                        ? 'Prima seleziona la provincia'
-                        : comuniLoading
-                          ? 'Carico comuni...'
-                          : 'Seleziona comune'}
-                    </option>
-                    {comuni.map((comune) => (
-                      <option key={comune.id} value={comune.id}>
-                        {comune.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)]">
-            <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="Questi dati vengono usati per mettere in contatto chi pubblica e chi e interessato all'annuncio."
-                title="Contatti"
-              />
-            </CardHeader>
-            <CardContent className="grid gap-5 pt-6 md:grid-cols-3">
-              <div className="space-y-2">
-                <FieldLabel htmlFor="contact-name" optional>
-                  Nome referente
-                </FieldLabel>
-                <Input
-                  className={fieldClassName}
-                  id="contact-name"
-                  maxLength={120}
-                  onChange={handleFieldChange('contactName')}
-                  placeholder="Es. Giulia"
-                  value={form.contactName}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <FieldLabel htmlFor="contact-phone" optional>
-                  Telefono
-                </FieldLabel>
-                <Input
-                  className={fieldClassName}
-                  id="contact-phone"
-                  maxLength={40}
-                  onChange={handleFieldChange('contactPhone')}
-                  placeholder="+39 333 1234567"
-                  value={form.contactPhone}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <FieldLabel htmlFor="contact-email" optional>
-                  Email
-                </FieldLabel>
-                <Input
-                  className={fieldClassName}
-                  id="contact-email"
-                  maxLength={320}
-                  onChange={handleFieldChange('contactEmail')}
-                  placeholder="contatto@email.it"
-                  type="email"
-                  value={form.contactEmail}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6 xl:sticky xl:top-[calc(var(--shell-header-height)+1.75rem)] xl:self-start">
-          <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_10%,transparent)_0%,transparent_44%),color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)]">
-            <CardHeader className="border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="Carica piu foto, scegli la copertina e gestisci la galleria dell'annuncio."
-                title="Foto e copertina"
-              />
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6">
-              <div className="rounded-[24px] border border-dashed border-[color:color-mix(in_srgb,var(--color-primary)_32%,var(--color-border)_68%)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_64%,transparent)] p-4">
-                <input
-                  accept="image/*"
-                  className="sr-only"
-                  id={fileInputId}
-                  multiple
-                  onChange={handleFileSelection}
-                  type="file"
-                />
-                <label
-                  className="flex cursor-pointer flex-col items-center gap-3 rounded-[20px] px-4 py-5 text-center transition-colors hover:bg-[color:color-mix(in_srgb,var(--color-surface)_72%,transparent)]"
-                  htmlFor={fileInputId}
-                >
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--color-primary)_12%,transparent)] text-[var(--color-primary)]">
-                    <ImagePlus className="h-5 w-5" />
-                  </span>
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-semibold text-[var(--color-text)]">
-                      Aggiungi foto dell'annuncio
-                    </p>
-                    <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                      JPG, PNG o WEBP. Puoi selezionare piu file in una volta sola.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                <p className="font-medium text-[var(--color-text)]">Copertina</p>
-                <p>{effectiveCoverLabel}</p>
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-[var(--color-text)]">Foto gia salvate</p>
-                {media.length === 0 ? (
-                  <EmptyStateMessage>
-                    Nessuna foto caricata. Aggiungile ora oppure salva l'annuncio e torna qui in
-                    seguito.
-                  </EmptyStateMessage>
-                ) : (
-                  <div className="space-y-3">
-                    {media.map((item) => (
-                      <div
-                        className="flex items-center gap-3 rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_90%,white_10%)] p-3"
-                        key={item.id}
-                      >
-                        <div
-                          className="h-16 w-16 shrink-0 rounded-[18px] bg-cover bg-center"
-                          style={{ backgroundImage: `url("${item.objectUrl}")` }}
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <p className="truncate text-sm font-semibold text-[var(--color-text)]">
-                            Foto #{item.position}
-                          </p>
-                          <p className="text-xs text-[var(--color-text-muted)]">
-                            {item.isPrimary ? 'Copertina attuale' : 'Foto secondaria'}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Button
-                            className="h-9 rounded-full px-3"
-                            disabled={mediaActionId === item.id || item.isPrimary}
-                            onClick={() => void handleSetCoverMedia(item.id)}
-                            size="sm"
-                            type="button"
-                            variant={item.isPrimary ? 'secondary' : 'outline'}
-                          >
-                            {mediaActionId === item.id ? (
-                              <LoaderCircle className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Star className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            className="h-9 rounded-full px-3"
-                            disabled={mediaActionId === item.id}
-                            onClick={() => void handleDeleteMedia(item.id)}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            {mediaActionId === item.id ? (
-                              <LoaderCircle className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-[var(--color-text)]">Nuove foto in coda</p>
-                {queuedMedia.length === 0 ? (
-                  <EmptyStateMessage>Nessuna nuova foto selezionata.</EmptyStateMessage>
-                ) : (
-                  <div className="space-y-3">
-                    {queuedMedia.map((item, index) => (
-                      <div
-                        className="flex items-center gap-3 rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_90%,white_10%)] p-3"
-                        key={item.id}
-                      >
-                        <div
-                          className="h-16 w-16 shrink-0 rounded-[18px] bg-cover bg-center"
-                          style={{ backgroundImage: `url("${item.previewUrl}")` }}
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <p className="truncate text-sm font-semibold text-[var(--color-text)]">
-                            {item.file.name}
-                          </p>
-                          <p className="text-xs text-[var(--color-text-muted)]">
-                            {queuedCoverId === item.id
-                              ? 'Sera la copertina dopo il salvataggio'
-                              : `Nuova foto ${index + 1}`}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Button
-                            className="h-9 rounded-full px-3"
-                            onClick={() => setQueuedCoverId(item.id)}
-                            size="sm"
-                            type="button"
-                            variant={queuedCoverId === item.id ? 'secondary' : 'outline'}
-                          >
-                            {queuedCoverId === item.id ? (
-                              <CheckCircle2 className="h-4 w-4" />
-                            ) : (
-                              <Star className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            className="h-9 rounded-full px-3"
-                            onClick={() => removeQueuedMedia(item.id)}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)]">
-            <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
-              <SectionHeading
-                description="Controllo finale prima del salvataggio, con accesso rapido ai flussi principali dell'account."
-                title="Riepilogo rapido"
-              />
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                    Stato
-                  </p>
-                  <p className="mt-1 text-sm font-semibold capitalize text-[var(--color-text)]">
-                    {listingStatusLabel}
-                  </p>
-                </div>
-                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                    Foto
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
-                    {media.length + queuedMedia.length} totali
-                  </p>
-                </div>
-                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                    Localita
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
-                    {form.comuneId ? 'Completa' : 'Da completare'}
+                  <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-[var(--color-text)] sm:text-[2rem]">
+                    Costruisci una scheda chiara, affidabile e semplice da contattare.
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-muted)] sm:text-base">
+                    Mantieni il focus su informazioni essenziali, localita precisa e una galleria
+                    leggibile. Il salvataggio crea o aggiorna subito la bozza reale nel tuo account.
                   </p>
                 </div>
               </div>
 
-              {validationError ? (
-                <div className="rounded-[22px] border border-[color:color-mix(in_srgb,var(--color-danger-border)_85%,transparent)] bg-[color:color-mix(in_srgb,var(--color-danger-bg)_92%,white_8%)] px-4 py-3 text-sm leading-6 text-[var(--color-danger-fg)]">
-                  {validationError}
-                </div>
-              ) : null}
-
-              <div className="space-y-3">
-                <Button
-                  className="h-12 w-full rounded-full text-sm font-semibold"
-                  disabled={saving}
-                  onClick={() => void handleSubmit()}
-                  type="button"
-                >
-                  {saving ? (
-                    <>
-                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                      Salvo annuncio...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="mr-2 h-4 w-4" />
-                      {isEditMode ? 'Salva modifiche' : 'Crea annuncio'}
-                    </>
-                  )}
-                </Button>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <Link
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--color-border)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-                    href="/account/annunci"
+              <div className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--color-primary)_18%,var(--color-border)_82%)] bg-[color:color-mix(in_srgb,var(--color-surface)_82%,white_18%)] px-5 py-5 shadow-[0_22px_60px_-48px_rgba(15,23,42,0.42)] lg:max-w-[320px]">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Stato annuncio
+                </p>
+                <p className="mt-2 text-lg font-semibold capitalize text-[var(--color-text)]">
+                  {listingStatusLabel}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                  {isEditMode
+                    ? 'Stai lavorando su una scheda gia esistente. Ogni salvataggio aggiorna i dati e la galleria.'
+                    : 'La prima conferma crea la bozza e ti porta direttamente nella modifica completa dell annuncio.'}
+                </p>
+                <div className="mt-5 hidden gap-3 md:grid">
+                  <Button
+                    className="h-11 rounded-full text-sm font-semibold"
+                    disabled={saving}
+                    type="submit"
                   >
-                    I miei annunci
-                  </Link>
+                    {saving ? (
+                      <>
+                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                        Salvo annuncio...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="mr-2 h-4 w-4" />
+                        {saveButtonLabel}
+                      </>
+                    )}
+                  </Button>
                   {currentListingId ? (
                     <Link
-                      className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--color-border)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+                      className={secondaryActionClassName}
                       href={`/annunci/${currentListingId}`}
                     >
                       Anteprima pubblica
+                      <ArrowUpRight className="ml-2 h-4 w-4" />
                     </Link>
                   ) : null}
                 </div>
               </div>
+            </div>
 
-              <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                <p className="inline-flex items-center gap-2 font-medium text-[var(--color-text)]">
-                  <MapPinned className="h-4 w-4 text-[var(--color-primary)]" />
-                  Consiglio
-                </p>
-                <p className="mt-1">
-                  Usa almeno 3 foto nitide, una descrizione concreta e una localita precisa: la
-                  qualita della scheda incide direttamente sulla ricerca.
-                </p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryMetric
+                detail="Titolo breve e leggibile: ideale entro 90-110 caratteri."
+                label="Titolo"
+                value={titleLength > 0 ? `${titleLength}/160 caratteri` : 'Da scrivere'}
+              />
+              <SummaryMetric
+                detail="La descrizione minima utile parte da 40 caratteri."
+                label="Descrizione"
+                value={descriptionLength > 0 ? `${descriptionLength} caratteri` : 'Da scrivere'}
+              />
+              <SummaryMetric
+                detail="Serve per filtri geografici, vicinanza e risultati piu pertinenti."
+                label="Localita"
+                value={locationComplete ? 'Completa' : 'Da completare'}
+              />
+              <SummaryMetric
+                detail="Almeno una foto aumenta fiducia e qualita percepita della scheda."
+                label="Galleria"
+                value={totalMediaCount > 0 ? `${totalMediaCount} foto` : 'Nessuna foto'}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                <span>Prontezza della scheda</span>
+                <span>
+                  {completedReadinessCount}/{readinessItems.length} sezioni
+                </span>
               </div>
-            </CardContent>
-          </Card>
+              <div className="h-2.5 rounded-full bg-[color:color-mix(in_srgb,var(--color-border)_70%,transparent)]">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--color-primary)_72%,white_28%)_0%,color-mix(in_srgb,var(--color-primary)_92%,black_8%)_100%)] transition-[width] duration-300 ease-out"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
+          <div className="space-y-6">
+            <Card className={cn('overflow-hidden', sectionCardClassName)}>
+              <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="Scrivi un titolo chiaro e una descrizione completa. Le informazioni principali devono essere leggibili a colpo d occhio."
+                  title="Dati annuncio"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-title">Titolo</FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="listing-title"
+                      maxLength={160}
+                      onChange={handleFieldChange('title')}
+                      placeholder="Es. Micia dolcissima cerca casa a Milano"
+                      value={form.title}
+                    />
+                    <p className="text-xs leading-5 text-[var(--color-text-muted)]">
+                      Meglio corto, specifico e subito comprensibile. Ora: {titleLength}/160.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-type">Tipologia</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      id="listing-type"
+                      onChange={handleFieldChange('listingType')}
+                      value={form.listingType}
+                    >
+                      {listingTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="listing-description">Descrizione</FieldLabel>
+                  <textarea
+                    className={textareaClassName}
+                    id="listing-description"
+                    maxLength={6000}
+                    onChange={handleFieldChange('description')}
+                    placeholder="Racconta il carattere del gatto, il contesto attuale, eventuali esigenze veterinarie e cosa cerchi per la sua futura casa."
+                    value={form.description}
+                  />
+                  <p className="text-xs leading-5 text-[var(--color-text-muted)]">
+                    Parti da carattere, salute, abitudini e tipo di casa ideale. Minimo utile: 40
+                    caratteri. Ora: {descriptionLength}.
+                  </p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_110px]">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-price" optional>
+                      Contributo richiesto
+                    </FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="listing-price"
+                      inputMode="decimal"
+                      min="0"
+                      onChange={handleFieldChange('priceAmount')}
+                      placeholder="Lascia vuoto se non previsto"
+                      step="1"
+                      type="number"
+                      value={form.priceAmount}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-currency">Valuta</FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="listing-currency"
+                      onChange={handleFieldChange('currency')}
+                      value={form.currency}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_66%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  Prezzo facoltativo. Se lo lasci vuoto verra mostrato come su richiesta.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={sectionCardClassName}>
+              <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="Profilo essenziale del gatto, coerente con i filtri pubblici e con la gestione dell eta in mesi o anni."
+                  title="Profilo del gatto"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_160px_170px]">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-breed">Razza</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      id="listing-breed"
+                      onChange={handleFieldChange('breed')}
+                      value={form.breed}
+                    >
+                      <option value="">Non di razza / non specificata</option>
+                      {breeds.map((breed) => (
+                        <option key={breed.slug} value={breed.label}>
+                          {breed.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-sex">Sesso</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      id="listing-sex"
+                      onChange={handleFieldChange('sex')}
+                      value={form.sex}
+                    >
+                      {sexOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-age">Eta</FieldLabel>
+                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+                      <Input
+                        className={fieldClassName}
+                        id="listing-age"
+                        inputMode="numeric"
+                        min="0"
+                        onChange={handleFieldChange('ageValue')}
+                        placeholder="Es. 8"
+                        step="1"
+                        type="number"
+                        value={form.ageValue}
+                      />
+                      <select
+                        className={cn(fieldClassName, 'w-full')}
+                        onChange={handleFieldChange('ageUnit')}
+                        value={form.ageUnit}
+                      >
+                        <option value="months">Mesi</option>
+                        <option value="years">Anni</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  Usa i mesi per i gattini e gli anni per gli adulti. La ricerca pubblica usera
+                  questo dato in modo strutturato.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={sectionCardClassName}>
+              <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="La localita viene salvata con ids strutturati per supportare ricerca, vicinanza e future pagine geolocalizzate."
+                  title="Localita"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="grid gap-5 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      id="listing-region"
+                      onChange={handleRegionChange}
+                      value={form.regionId}
+                    >
+                      <option value="">
+                        {regionsLoading ? 'Carico regioni...' : 'Seleziona regione'}
+                      </option>
+                      {regions.map((region) => (
+                        <option key={region.id} value={region.id}>
+                          {region.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-province">Provincia</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      disabled={!form.regionId}
+                      id="listing-province"
+                      onChange={handleProvinceChange}
+                      value={form.provinceId}
+                    >
+                      <option value="">
+                        {!form.regionId
+                          ? 'Prima seleziona la regione'
+                          : provincesLoading
+                            ? 'Carico province...'
+                            : 'Seleziona provincia'}
+                      </option>
+                      {provinces.map((province) => (
+                        <option key={province.id} value={province.id}>
+                          {province.name} ({province.sigla})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-comune">Comune</FieldLabel>
+                    <select
+                      className={cn(fieldClassName, 'w-full')}
+                      disabled={!form.provinceId}
+                      id="listing-comune"
+                      onChange={handleFieldChange('comuneId')}
+                      value={form.comuneId}
+                    >
+                      <option value="">
+                        {!form.provinceId
+                          ? 'Prima seleziona la provincia'
+                          : comuniLoading
+                            ? 'Carico comuni...'
+                            : 'Seleziona comune'}
+                      </option>
+                      {comuni.map((comune) => (
+                        <option key={comune.id} value={comune.id}>
+                          {comune.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={sectionCardClassName}>
+              <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="Questi dati vengono usati per mettere in contatto chi pubblica e chi e interessato all annuncio."
+                  title="Contatti"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="grid gap-4 rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_58%,transparent)] px-4 py-4 text-sm leading-6 text-[var(--color-text-muted)] sm:grid-cols-2">
+                  <p className="inline-flex items-start gap-2">
+                    <Phone className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+                    Aggiungi almeno un recapito per ridurre l attrito nel primo contatto.
+                  </p>
+                  <p className="inline-flex items-start gap-2">
+                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" />I dati
+                    restano associati alla scheda e possono essere aggiornati in qualsiasi momento.
+                  </p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="contact-name" optional>
+                      Nome referente
+                    </FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="contact-name"
+                      maxLength={120}
+                      onChange={handleFieldChange('contactName')}
+                      placeholder="Es. Giulia"
+                      value={form.contactName}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="contact-phone" optional>
+                      Telefono
+                    </FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="contact-phone"
+                      maxLength={40}
+                      onChange={handleFieldChange('contactPhone')}
+                      placeholder="+39 333 1234567"
+                      value={form.contactPhone}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="contact-email" optional>
+                      Email
+                    </FieldLabel>
+                    <Input
+                      className={fieldClassName}
+                      id="contact-email"
+                      maxLength={320}
+                      onChange={handleFieldChange('contactEmail')}
+                      placeholder="contatto@email.it"
+                      type="email"
+                      value={form.contactEmail}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6 xl:sticky xl:top-[calc(var(--shell-header-height)+1.75rem)] xl:self-start">
+            <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_10%,transparent)_0%,transparent_44%),color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)]">
+              <CardHeader className="border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="Carica piu foto, scegli la copertina e gestisci la galleria dell'annuncio."
+                  title="Foto e copertina"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="rounded-[24px] border border-dashed border-[color:color-mix(in_srgb,var(--color-primary)_32%,var(--color-border)_68%)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_64%,transparent)] p-4">
+                  <input
+                    accept="image/*"
+                    className="sr-only"
+                    id={fileInputId}
+                    multiple
+                    onChange={handleFileSelection}
+                    type="file"
+                  />
+                  <label
+                    className="flex cursor-pointer flex-col items-center gap-3 rounded-[20px] px-4 py-5 text-center transition-colors hover:bg-[color:color-mix(in_srgb,var(--color-surface)_72%,transparent)]"
+                    htmlFor={fileInputId}
+                  >
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--color-primary)_12%,transparent)] text-[var(--color-primary)]">
+                      <ImagePlus className="h-5 w-5" />
+                    </span>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-[var(--color-text)]">
+                        Aggiungi foto dell'annuncio
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                        JPG, PNG o WEBP. Puoi selezionare piu file in una volta sola.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  <p className="font-medium text-[var(--color-text)]">Copertina</p>
+                  <p>{effectiveCoverLabel}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">Foto gia salvate</p>
+                  {media.length === 0 ? (
+                    <EmptyStateMessage>
+                      Nessuna foto caricata. Aggiungile ora oppure salva l'annuncio e torna qui in
+                      seguito.
+                    </EmptyStateMessage>
+                  ) : (
+                    <div className="space-y-3">
+                      {media.map((item) => (
+                        <div
+                          className="flex items-center gap-3 rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_90%,white_10%)] p-3"
+                          key={item.id}
+                        >
+                          <div
+                            className="h-16 w-16 shrink-0 rounded-[18px] bg-cover bg-center"
+                            style={{ backgroundImage: `url("${item.objectUrl}")` }}
+                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                              Foto #{item.position}
+                            </p>
+                            <p className="text-xs text-[var(--color-text-muted)]">
+                              {item.isPrimary ? 'Copertina attuale' : 'Foto secondaria'}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              className="h-9 rounded-full px-3"
+                              disabled={mediaActionId === item.id || item.isPrimary}
+                              onClick={() => void handleSetCoverMedia(item.id)}
+                              size="sm"
+                              type="button"
+                              variant={item.isPrimary ? 'secondary' : 'outline'}
+                            >
+                              {mediaActionId === item.id ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              className="h-9 rounded-full px-3"
+                              disabled={mediaActionId === item.id}
+                              onClick={() => void handleDeleteMedia(item.id)}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              {mediaActionId === item.id ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">
+                    Nuove foto in coda
+                  </p>
+                  {queuedMedia.length === 0 ? (
+                    <EmptyStateMessage>Nessuna nuova foto selezionata.</EmptyStateMessage>
+                  ) : (
+                    <div className="space-y-3">
+                      {queuedMedia.map((item, index) => (
+                        <div
+                          className="flex items-center gap-3 rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_90%,white_10%)] p-3"
+                          key={item.id}
+                        >
+                          <div
+                            className="h-16 w-16 shrink-0 rounded-[18px] bg-cover bg-center"
+                            style={{ backgroundImage: `url("${item.previewUrl}")` }}
+                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                              {item.file.name}
+                            </p>
+                            <p className="text-xs text-[var(--color-text-muted)]">
+                              {queuedCoverId === item.id
+                                ? 'Sera la copertina dopo il salvataggio'
+                                : `Nuova foto ${index + 1}`}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              className="h-9 rounded-full px-3"
+                              onClick={() => setQueuedCoverId(item.id)}
+                              size="sm"
+                              type="button"
+                              variant={queuedCoverId === item.id ? 'secondary' : 'outline'}
+                            >
+                              {queuedCoverId === item.id ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              className="h-9 rounded-full px-3"
+                              onClick={() => removeQueuedMedia(item.id)}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={sectionCardClassName}>
+              <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
+                <SectionHeading
+                  description="Controllo finale prima del salvataggio, con azioni rapide e stato reale della scheda."
+                  title="Salvataggio e controlli"
+                />
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--color-primary)_20%,var(--color-border)_80%)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)] px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                        Scheda pronta
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-[var(--color-text)]">
+                        {completionPercent}% completata
+                      </p>
+                    </div>
+                    <Badge
+                      className="border-transparent bg-[color:color-mix(in_srgb,var(--color-surface)_84%,white_16%)]"
+                      variant="secondary"
+                    >
+                      {listingStatusLabel}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 h-2.5 rounded-full bg-[color:color-mix(in_srgb,var(--color-border)_72%,transparent)]">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--color-primary)_74%,white_26%)_0%,color-mix(in_srgb,var(--color-primary)_94%,black_6%)_100%)] transition-[width] duration-300 ease-out"
+                      style={{ width: `${completionPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                      Stato
+                    </p>
+                    <p className="mt-1 text-sm font-semibold capitalize text-[var(--color-text)]">
+                      {listingStatusLabel}
+                    </p>
+                  </div>
+                  <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                      Foto
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                      {media.length + queuedMedia.length} totali
+                    </p>
+                  </div>
+                  <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                      Localita
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                      {form.comuneId ? 'Completa' : 'Da completare'}
+                    </p>
+                  </div>
+                </div>
+
+                {validationError ? (
+                  <div
+                    className="rounded-[22px] border border-[color:color-mix(in_srgb,var(--color-danger-border)_85%,transparent)] bg-[color:color-mix(in_srgb,var(--color-danger-bg)_92%,white_8%)] px-4 py-3 text-sm leading-6 text-[var(--color-danger-fg)]"
+                    role="alert"
+                  >
+                    {validationError}
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  {readinessItems.map((item) => (
+                    <ReadinessItem
+                      complete={item.complete}
+                      description={item.description}
+                      key={item.label}
+                      label={item.label}
+                    />
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  <Button
+                    className="h-12 w-full rounded-full text-sm font-semibold"
+                    disabled={saving}
+                    type="submit"
+                  >
+                    {saving ? (
+                      <>
+                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                        Salvo annuncio...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="mr-2 h-4 w-4" />
+                        {saveButtonLabel}
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <Link className={secondaryActionClassName} href="/account/annunci">
+                      I miei annunci
+                    </Link>
+                    {currentListingId ? (
+                      <Link
+                        className={secondaryActionClassName}
+                        href={`/annunci/${currentListingId}`}
+                      >
+                        Anteprima pubblica
+                        <ArrowUpRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  <p className="inline-flex items-center gap-2 font-medium text-[var(--color-text)]">
+                    <ShieldCheck className="h-4 w-4 text-[var(--color-primary)]" />
+                    Best practice
+                  </p>
+                  <p className="mt-1">
+                    Titolo specifico, una copertina nitida e una localita precisa sono i tre
+                    elementi che migliorano di piu la qualita percepita della scheda.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+
+        <div className="fixed inset-x-0 bottom-4 z-40 px-4 xl:hidden">
+          <div className="mx-auto flex max-w-xl items-center gap-3 rounded-[26px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_88%,white_12%)] p-3 shadow-[0_28px_72px_-44px_rgba(15,23,42,0.5)] backdrop-blur-md">
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                Scheda
+              </p>
+              <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                {completedReadinessCount}/{readinessItems.length} sezioni pronte
+              </p>
+            </div>
+            <Button
+              className="h-11 rounded-full px-5 text-sm font-semibold"
+              disabled={saving}
+              type="submit"
+            >
+              {saving ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Camera className="mr-2 h-4 w-4" />
+                  Salva
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </form>
 
       <Toast
         description={toast.description}

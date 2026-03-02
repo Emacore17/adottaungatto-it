@@ -7,6 +7,9 @@ interface SessionUser {
   id: string;
   email: string;
   roles: string[];
+  preferences?: {
+    messageEmailNotificationsEnabled: boolean;
+  };
 }
 
 interface SessionPayload {

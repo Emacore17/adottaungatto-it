@@ -8,6 +8,7 @@ export interface AppUser {
   providerSubject: string;
   email: string;
   roles: UserRole[];
+  preferences?: UserPreferences;
   createdAt: string;
   updatedAt: string;
 }
@@ -17,4 +18,8 @@ export interface IdentityClaims {
   providerSubject: string;
   email: string;
   roles: UserRole[];
+}
+
+export interface UserPreferences {
+  messageEmailNotificationsEnabled: boolean;
 }

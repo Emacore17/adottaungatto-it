@@ -32,6 +32,10 @@ type CountRow = {
   count: string;
 };
 
+type UserIdRow = {
+  userId: string;
+};
+
 type ThreadSummaryRow = {
   threadId: string;
   listingId: string;
@@ -130,6 +134,7 @@ export class MessagingRepository implements OnModuleDestroy {
         WHERE listing_id = $1::bigint
           AND owner_user_id = $2::bigint
           AND requester_user_id = $3::bigint
+          AND deleted_at IS NULL
         LIMIT 1;
       `,
       [listingId, ownerUserId, requesterUserId],
@@ -162,7 +167,11 @@ export class MessagingRepository implements OnModuleDestroy {
           )
           ON CONFLICT (listing_id, owner_user_id, requester_user_id)
           DO UPDATE SET
-            listing_title_snapshot = message_threads.listing_title_snapshot
+            listing_title_snapshot = EXCLUDED.listing_title_snapshot,
+            source = EXCLUDED.source,
+            deleted_at = NULL,
+            deleted_by_user_id = NULL,
+            updated_at = NOW()
           RETURNING id::text AS "threadId";
         `,
         [
@@ -254,8 +263,43 @@ export class MessagingRepository implements OnModuleDestroy {
     return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
   }
 
+  async findLatestMessageCreatedAtBySender(
+    threadId: string,
+    senderUserId: string,
+  ): Promise<string | null> {
+    const result = await this.pool.query<{ createdAt: string }>(
+      `
+        SELECT created_at::text AS "createdAt"
+        FROM message_messages
+        WHERE thread_id = $1::bigint
+          AND sender_user_id = $2::bigint
+        ORDER BY id DESC
+        LIMIT 1;
+      `,
+      [threadId, senderUserId],
+    );
+
+    return result.rows[0]?.createdAt ?? null;
+  }
+
+  async getThreadMessageCount(threadId: string): Promise<number> {
+    const result = await this.pool.query<{ messagesCount: string }>(
+      `
+        SELECT messages_count::text AS "messagesCount"
+        FROM message_threads
+        WHERE id = $1::bigint
+          AND deleted_at IS NULL
+        LIMIT 1;
+      `,
+      [threadId],
+    );
+
+    return Number.parseInt(result.rows[0]?.messagesCount ?? '0', 10) || 0;
+  }
+
   async appendMessageToThread(input: CreateThreadMessageInput): Promise<MessageSummary> {
     const client = await this.pool.connect();
+    const messagePreview = this.buildMessagePreview(input.body);
 
     try {
       await client.query('BEGIN');
@@ -308,21 +352,94 @@ export class MessagingRepository implements OnModuleDestroy {
       await client.query(
         `
           UPDATE message_threads
-          SET latest_message_at = $2::timestamptz
+          SET
+            latest_message_at = $2::timestamptz,
+            latest_message_id = $3::bigint,
+            latest_message_preview = $4::varchar(180),
+            latest_message_sender_user_id = $5::bigint,
+            messages_count = message_threads.messages_count + 1,
+            deleted_at = NULL,
+            deleted_by_user_id = NULL
           WHERE id = $1::bigint;
         `,
-        [input.threadId, message.createdAt],
+        [
+          input.threadId,
+          message.createdAt,
+          message.messageId,
+          messagePreview,
+          input.senderUserId,
+        ],
       );
 
       await client.query(
         `
           UPDATE message_thread_participants
-          SET last_read_at = $3::timestamptz
+          SET
+            archived_at = NULL,
+            last_read_at = CASE
+              WHEN user_id = $2::bigint THEN $3::timestamptz
+              ELSE last_read_at
+            END,
+            unread_count = CASE
+              WHEN user_id = $2::bigint THEN 0
+              ELSE unread_count + 1
+            END
           WHERE thread_id = $1::bigint
-            AND user_id = $2::bigint;
+        ;
         `,
         [input.threadId, input.senderUserId, message.createdAt],
       );
+
+      if (this.env.MESSAGE_EMAIL_NOTIFICATIONS_ENABLED) {
+        await client.query(
+          `
+            INSERT INTO notification_outbox (
+              channel,
+              event_type,
+              dedupe_key,
+              payload,
+              max_attempts
+            )
+            SELECT
+              'email',
+              'message_received',
+              CONCAT('message_received_email:', $2::text, ':', recipient.user_id::text),
+              jsonb_build_object(
+                'threadId', thread.id::text,
+                'messageId', $2::text,
+                'listingId', thread.listing_id::text,
+                'listingTitle', thread.listing_title_snapshot,
+                'recipientUserId', recipient.user_id::text,
+                'recipientEmail', recipient_user.email,
+                'senderUserId', sender.id::text,
+                'senderEmail', sender.email,
+                'messagePreview', $3::text,
+                'messageCreatedAt', $4::text
+              ),
+              $5::integer
+            FROM message_threads thread
+            INNER JOIN message_thread_participants recipient
+              ON recipient.thread_id = thread.id
+             AND recipient.user_id <> $6::bigint
+             AND recipient.archived_at IS NULL
+            INNER JOIN app_users recipient_user
+              ON recipient_user.id = recipient.user_id
+             AND recipient_user.message_email_notifications_enabled = TRUE
+            INNER JOIN app_users sender
+              ON sender.id = $6::bigint
+            WHERE thread.id = $1::bigint
+            ON CONFLICT (dedupe_key) DO NOTHING;
+          `,
+          [
+            input.threadId,
+            message.messageId,
+            messagePreview,
+            message.createdAt,
+            this.env.MESSAGE_EMAIL_NOTIFICATION_MAX_ATTEMPTS,
+            input.senderUserId,
+          ],
+        );
+      }
 
       await client.query('COMMIT');
       return this.mapMessageRow(message);
@@ -352,17 +469,21 @@ export class MessagingRepository implements OnModuleDestroy {
             t.updated_at::text AS "updatedAt",
             t.latest_message_at::text AS "latestMessageAt",
             p.role::text AS "viewerRole",
-            p.last_read_at AS "lastReadAt",
+            p.unread_count::text AS "unreadCount",
             CASE
               WHEN p.role = 'owner'::message_participant_role THEN t.requester_user_id
               ELSE t.owner_user_id
             END AS "otherUserId",
+            t.latest_message_id::text AS "latestMessageId",
+            t.latest_message_preview AS "latestMessageBody",
+            t.latest_message_sender_user_id::text AS "latestMessageSenderUserId",
             COUNT(*) OVER()::text AS "totalCount"
           FROM message_thread_participants p
           INNER JOIN message_threads t ON t.id = p.thread_id
           LEFT JOIN listings l ON l.id = t.listing_id
           WHERE p.user_id = $1::bigint
             AND p.archived_at IS NULL
+            AND t.deleted_at IS NULL
           ORDER BY t.latest_message_at DESC, t.id DESC
           LIMIT $2::integer
           OFFSET $3::integer
@@ -379,42 +500,21 @@ export class MessagingRepository implements OnModuleDestroy {
           scoped_threads."viewerRole",
           other_user.email AS "otherParticipantEmail",
           other_user.provider_subject AS "otherParticipantProviderSubject",
-          COALESCE(unread_stats."unreadCount", '0') AS "unreadCount",
+          scoped_threads."unreadCount",
           scoped_threads."totalCount",
-          latest_message."latestMessageId",
-          latest_message."latestMessageBody",
-          latest_message."latestMessageCreatedAt",
-          latest_message."latestMessageSenderRole",
-          latest_message."latestMessageSenderEmail"
+          scoped_threads."latestMessageId",
+          scoped_threads."latestMessageBody",
+          scoped_threads."latestMessageAt" AS "latestMessageCreatedAt",
+          latest_sender_participant.role::text AS "latestMessageSenderRole",
+          latest_sender.email AS "latestMessageSenderEmail"
         FROM scoped_threads
         INNER JOIN app_users other_user
           ON other_user.id = scoped_threads."otherUserId"
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*)::text AS "unreadCount"
-          FROM message_messages message
-          WHERE message.thread_id = scoped_threads."threadId"::bigint
-            AND message.sender_user_id <> $1::bigint
-            AND (
-              scoped_threads."lastReadAt" IS NULL
-              OR message.created_at > scoped_threads."lastReadAt"
-            )
-        ) unread_stats ON TRUE
-        LEFT JOIN LATERAL (
-          SELECT
-            message.id::text AS "latestMessageId",
-            message.body AS "latestMessageBody",
-            message.created_at::text AS "latestMessageCreatedAt",
-            sender_participant.role::text AS "latestMessageSenderRole",
-            sender_user.email AS "latestMessageSenderEmail"
-          FROM message_messages message
-          INNER JOIN message_thread_participants sender_participant
-            ON sender_participant.thread_id = message.thread_id
-           AND sender_participant.user_id = message.sender_user_id
-          INNER JOIN app_users sender_user ON sender_user.id = message.sender_user_id
-          WHERE message.thread_id = scoped_threads."threadId"::bigint
-          ORDER BY message.id DESC
-          LIMIT 1
-        ) latest_message ON TRUE
+        LEFT JOIN app_users latest_sender
+          ON latest_sender.id = scoped_threads."latestMessageSenderUserId"::bigint
+        LEFT JOIN message_thread_participants latest_sender_participant
+          ON latest_sender_participant.thread_id = scoped_threads."threadId"::bigint
+         AND latest_sender_participant.user_id = scoped_threads."latestMessageSenderUserId"::bigint
         ORDER BY scoped_threads."latestMessageAt" DESC, scoped_threads."threadId" DESC;
       `,
       [userId, limit, offset],
@@ -449,17 +549,21 @@ export class MessagingRepository implements OnModuleDestroy {
             t.updated_at::text AS "updatedAt",
             t.latest_message_at::text AS "latestMessageAt",
             p.role::text AS "viewerRole",
-            p.last_read_at AS "lastReadAt",
+            p.unread_count::text AS "unreadCount",
             CASE
               WHEN p.role = 'owner'::message_participant_role THEN t.requester_user_id
               ELSE t.owner_user_id
-            END AS "otherUserId"
+            END AS "otherUserId",
+            t.latest_message_id::text AS "latestMessageId",
+            t.latest_message_preview AS "latestMessageBody",
+            t.latest_message_sender_user_id::text AS "latestMessageSenderUserId"
           FROM message_thread_participants p
           INNER JOIN message_threads t ON t.id = p.thread_id
           LEFT JOIN listings l ON l.id = t.listing_id
           WHERE p.user_id = $1::bigint
             AND t.id = $2::bigint
             AND p.archived_at IS NULL
+            AND t.deleted_at IS NULL
           LIMIT 1
         )
         SELECT
@@ -474,42 +578,21 @@ export class MessagingRepository implements OnModuleDestroy {
           scoped_thread."viewerRole",
           other_user.email AS "otherParticipantEmail",
           other_user.provider_subject AS "otherParticipantProviderSubject",
-          COALESCE(unread_stats."unreadCount", '0') AS "unreadCount",
+          scoped_thread."unreadCount",
           '1' AS "totalCount",
-          latest_message."latestMessageId",
-          latest_message."latestMessageBody",
-          latest_message."latestMessageCreatedAt",
-          latest_message."latestMessageSenderRole",
-          latest_message."latestMessageSenderEmail"
+          scoped_thread."latestMessageId",
+          scoped_thread."latestMessageBody",
+          scoped_thread."latestMessageAt" AS "latestMessageCreatedAt",
+          latest_sender_participant.role::text AS "latestMessageSenderRole",
+          latest_sender.email AS "latestMessageSenderEmail"
         FROM scoped_thread
         INNER JOIN app_users other_user
           ON other_user.id = scoped_thread."otherUserId"
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*)::text AS "unreadCount"
-          FROM message_messages message
-          WHERE message.thread_id = scoped_thread."threadId"::bigint
-            AND message.sender_user_id <> $1::bigint
-            AND (
-              scoped_thread."lastReadAt" IS NULL
-              OR message.created_at > scoped_thread."lastReadAt"
-            )
-        ) unread_stats ON TRUE
-        LEFT JOIN LATERAL (
-          SELECT
-            message.id::text AS "latestMessageId",
-            message.body AS "latestMessageBody",
-            message.created_at::text AS "latestMessageCreatedAt",
-            sender_participant.role::text AS "latestMessageSenderRole",
-            sender_user.email AS "latestMessageSenderEmail"
-          FROM message_messages message
-          INNER JOIN message_thread_participants sender_participant
-            ON sender_participant.thread_id = message.thread_id
-           AND sender_participant.user_id = message.sender_user_id
-          INNER JOIN app_users sender_user ON sender_user.id = message.sender_user_id
-          WHERE message.thread_id = scoped_thread."threadId"::bigint
-          ORDER BY message.id DESC
-          LIMIT 1
-        ) latest_message ON TRUE;
+        LEFT JOIN app_users latest_sender
+          ON latest_sender.id = scoped_thread."latestMessageSenderUserId"::bigint
+        LEFT JOIN message_thread_participants latest_sender_participant
+          ON latest_sender_participant.thread_id = scoped_thread."threadId"::bigint
+         AND latest_sender_participant.user_id = scoped_thread."latestMessageSenderUserId"::bigint;
       `,
       [userId, threadId],
     );
@@ -579,7 +662,9 @@ export class MessagingRepository implements OnModuleDestroy {
     await this.pool.query(
       `
         UPDATE message_thread_participants
-        SET last_read_at = GREATEST(COALESCE(last_read_at, to_timestamp(0)), $3::timestamptz)
+        SET
+          last_read_at = GREATEST(COALESCE(last_read_at, to_timestamp(0)), $3::timestamptz),
+          unread_count = 0
         WHERE thread_id = $1::bigint
           AND user_id = $2::bigint;
       `,
@@ -587,20 +672,103 @@ export class MessagingRepository implements OnModuleDestroy {
     );
   }
 
+  async archiveThreadForUser(threadId: string, userId: string, archivedAt: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+        UPDATE message_thread_participants participant
+        SET
+          archived_at = $3::timestamptz,
+          unread_count = 0
+        FROM message_threads thread
+        WHERE participant.thread_id = $1::bigint
+          AND participant.user_id = $2::bigint
+          AND thread.id = participant.thread_id
+          AND thread.deleted_at IS NULL;
+      `,
+      [threadId, userId, archivedAt],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteThreadForEveryone(
+    threadId: string,
+    actorUserId: string,
+    deletedAt: string,
+  ): Promise<boolean> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const deleteResult = await client.query(
+        `
+          UPDATE message_threads thread
+          SET
+            deleted_at = $3::timestamptz,
+            deleted_by_user_id = $2::bigint
+          WHERE thread.id = $1::bigint
+            AND thread.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM message_thread_participants participant
+              WHERE participant.thread_id = thread.id
+                AND participant.user_id = $2::bigint
+            );
+        `,
+        [threadId, actorUserId, deletedAt],
+      );
+
+      if ((deleteResult.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      await client.query(
+        `
+          UPDATE message_thread_participants
+          SET
+            archived_at = COALESCE(archived_at, $2::timestamptz),
+            unread_count = 0
+          WHERE thread_id = $1::bigint;
+        `,
+        [threadId, deletedAt],
+      );
+
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listThreadParticipantUserIds(threadId: string): Promise<string[]> {
+    const result = await this.pool.query<UserIdRow>(
+      `
+        SELECT user_id::text AS "userId"
+        FROM message_thread_participants
+        WHERE thread_id = $1::bigint
+          AND archived_at IS NULL;
+      `,
+      [threadId],
+    );
+
+    return result.rows.map((row) => row.userId);
+  }
+
   private async countUnreadMessagesForUser(userId: string): Promise<number> {
     const result = await this.pool.query<CountRow>(
       `
-        SELECT COUNT(*)::text AS "count"
+        SELECT COALESCE(SUM(participant.unread_count), 0)::text AS "count"
         FROM message_thread_participants participant
-        INNER JOIN message_messages message
-          ON message.thread_id = participant.thread_id
+        INNER JOIN message_threads thread
+          ON thread.id = participant.thread_id
         WHERE participant.user_id = $1::bigint
           AND participant.archived_at IS NULL
-          AND message.sender_user_id <> $1::bigint
-          AND (
-            participant.last_read_at IS NULL
-            OR message.created_at > participant.last_read_at
-          );
+          AND thread.deleted_at IS NULL;
       `,
       [userId],
     );
@@ -652,5 +820,14 @@ export class MessagingRepository implements OnModuleDestroy {
       body: row.body,
       createdAt: row.createdAt,
     };
+  }
+
+  private buildMessagePreview(body: string): string {
+    const normalized = body.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= 180) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, 177)}...`;
   }
 }

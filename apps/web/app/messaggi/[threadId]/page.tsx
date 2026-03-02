@@ -1,7 +1,6 @@
 import { Badge, CardContent } from '@adottaungatto/ui';
 import { notFound } from 'next/navigation';
-import { MessageThreadList } from '../../../components/message-thread-list';
-import { MessageThreadView } from '../../../components/message-thread-view';
+import { MessageThreadWorkspace } from '../../../components/message-thread-workspace';
 import { PageShell } from '../../../components/page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { fetchMessageThread, fetchMessageThreads } from '../../../lib/messages';
@@ -47,17 +46,14 @@ export default async function MessageThreadPage({ params }: MessageThreadPagePro
           </p>
         </CardContent>
       }
-      description="Conversazione privata legata all’annuncio selezionato, con storico persistente e aggiornamento leggero lato client."
+      description="Conversazione privata legata all'annuncio selezionato, con storico persistente e aggiornamento realtime leggero."
       eyebrow="Area riservata"
       title="Conversazione"
     >
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <MessageThreadList
-          currentThreadId={threadPage.thread.id}
-          threads={threadListPage.threads}
-        />
-        <MessageThreadView initialThreadPage={threadPage} />
-      </div>
+      <MessageThreadWorkspace
+        initialThreadListPage={threadListPage}
+        initialThreadPage={threadPage}
+      />
     </PageShell>
   );
 }

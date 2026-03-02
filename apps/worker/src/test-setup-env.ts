@@ -1,0 +1,24 @@
+process.env.NODE_ENV ??= 'test';
+process.env.WORKER_NAME ??= 'adottaungatto-worker-test';
+process.env.DATABASE_URL ??=
+  'postgresql://adottaungatto:adottaungatto@localhost:5432/adottaungatto';
+process.env.REDIS_URL ??= 'redis://localhost:6379';
+process.env.OPENSEARCH_URL ??= 'http://localhost:9200';
+process.env.MINIO_ENDPOINT ??= 'http://localhost:9000';
+process.env.MINIO_ACCESS_KEY ??= 'minio';
+process.env.MINIO_SECRET_KEY ??= 'minio123';
+process.env.MINIO_BUCKET_LISTING_ORIGINALS ??= 'listing-originals';
+process.env.MINIO_BUCKET_LISTING_THUMBS ??= 'listing-thumbs';
+process.env.MESSAGE_EMAIL_NOTIFICATIONS_ENABLED ??= 'true';
+process.env.MESSAGE_EMAIL_NOTIFICATION_MAX_ATTEMPTS ??= '8';
+process.env.MESSAGE_NOTIFICATION_WORKER_POLL_MS ??= '5000';
+process.env.MESSAGE_NOTIFICATION_WORKER_BATCH_SIZE ??= '10';
+process.env.MESSAGE_NOTIFICATION_WORKER_PROCESSING_TIMEOUT_SECONDS ??= '300';
+process.env.WEB_APP_URL ??= 'http://localhost:3000';
+process.env.SMTP_HOST ??= 'localhost';
+process.env.SMTP_PORT ??= '1025';
+process.env.SMTP_SECURE ??= 'false';
+process.env.SMTP_USERNAME ??= '';
+process.env.SMTP_PASSWORD ??= '';
+process.env.SMTP_FROM_EMAIL ??= 'notifiche@adottaungatto.local';
+process.env.SMTP_FROM_NAME ??= 'Adotta un Gatto';

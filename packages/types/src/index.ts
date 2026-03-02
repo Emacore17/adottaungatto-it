@@ -143,6 +143,19 @@ export interface NotificationItem {
   read: boolean;
 }
 
+export interface MessageEmailNotificationPayload {
+  threadId: string;
+  messageId: string;
+  listingId: string;
+  listingTitle: string;
+  recipientUserId: string;
+  recipientEmail: string;
+  senderUserId: string;
+  senderEmail: string;
+  messagePreview: string;
+  messageCreatedAt: string;
+}
+
 export interface AdminKpiCard {
   id: string;
   label: string;

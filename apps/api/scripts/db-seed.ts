@@ -73,6 +73,7 @@ type DemoLocationRow = {
 };
 
 type SeedUserDefinition = {
+  provider: 'dev-header' | 'keycloak';
   providerSubject: string;
   email: string;
   roles: UserRole[];
@@ -167,20 +168,51 @@ type DemoPromotionSeedStats = {
   listingIds: string[];
 };
 
+type KeycloakUserLookup = {
+  id: string;
+  username?: string;
+  email?: string;
+};
+
+type KeycloakDemoUserDefinition = {
+  username: string;
+  email: string;
+  roles: UserRole[];
+};
+
+const demoListingTitlePrefix = '[DEMO M2.11]';
+const demoAccountListingTitlePrefix = '[DEMO USER]';
+
 const demoUserDefinitions: SeedUserDefinition[] = [
   {
+    provider: 'dev-header',
     providerSubject: 'seed-m2-owner-private',
     email: 'utente.seed.demo@adottaungatto.local',
     roles: [UserRole.USER],
   },
   {
+    provider: 'dev-header',
     providerSubject: 'seed-m2-owner-gattile',
     email: 'gattile.seed.demo@adottaungatto.local',
     roles: [UserRole.USER],
   },
   {
+    provider: 'dev-header',
     providerSubject: 'seed-m2-owner-associazione',
     email: 'associazione.seed.demo@adottaungatto.local',
+    roles: [UserRole.USER],
+  },
+];
+
+const keycloakDemoUserDefinitions: KeycloakDemoUserDefinition[] = [
+  {
+    username: 'utente.demo',
+    email: 'utente.demo@adottaungatto.local',
+    roles: [UserRole.USER],
+  },
+  {
+    username: 'utente2.demo',
+    email: 'utente2.demo@adottaungatto.local',
     roles: [UserRole.USER],
   },
 ];
@@ -884,6 +916,70 @@ const resolveDemoLocations = async (client: Client): Promise<DemoLocationRow[]> 
   return locations;
 };
 
+const normalizeUrl = (value: string): string => value.replace(/\/$/, '');
+
+const requestKeycloakAdminToken = async (
+  keycloakBaseUrl: string,
+  username: string,
+  password: string,
+): Promise<string> => {
+  const response = await fetch(`${keycloakBaseUrl}/realms/master/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'admin-cli',
+      username,
+      password,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(`Keycloak admin token request failed (${response.status}): ${payload}`);
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+  };
+  if (!payload.access_token) {
+    throw new Error('Keycloak admin token request did not return an access token.');
+  }
+
+  return payload.access_token;
+};
+
+const findKeycloakUserByUsername = async (
+  keycloakBaseUrl: string,
+  realm: string,
+  accessToken: string,
+  username: string,
+): Promise<KeycloakUserLookup | null> => {
+  const url = new URL(`${keycloakBaseUrl}/admin/realms/${realm}/users`);
+  url.searchParams.set('username', username);
+  url.searchParams.set('exact', 'true');
+  url.searchParams.set('max', '1');
+
+  const response = await fetch(url, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(
+      `Keycloak user lookup failed (${response.status}) for "${username}": ${payload}`,
+    );
+  }
+
+  const users = (await response.json()) as KeycloakUserLookup[];
+  return users[0] ?? null;
+};
+
 const upsertDemoUsers = async (repository: ListingsRepository): Promise<SeedUserRecord[]> => {
   const nowIso = new Date().toISOString();
   const users: SeedUserRecord[] = [];
@@ -891,7 +987,7 @@ const upsertDemoUsers = async (repository: ListingsRepository): Promise<SeedUser
   for (const definition of demoUserDefinitions) {
     const ownerUserId = await repository.upsertOwnerUser({
       id: `seed-${definition.providerSubject}`,
-      provider: 'dev-header',
+      provider: definition.provider,
       providerSubject: definition.providerSubject,
       email: definition.email,
       roles: definition.roles,
@@ -908,38 +1004,98 @@ const upsertDemoUsers = async (repository: ListingsRepository): Promise<SeedUser
   return users;
 };
 
-const listSeedStorageKeys = async (
-  client: Client,
-  ownerUserIds: string[],
-): Promise<SeedStorageKeyRow[]> => {
-  if (ownerUserIds.length === 0) {
+const upsertKeycloakDemoUsers = async (
+  repository: ListingsRepository,
+): Promise<SeedUserRecord[]> => {
+  const env = loadApiEnv();
+  const keycloakBaseUrl = normalizeUrl(env.KEYCLOAK_URL);
+  const adminUsername = process.env.KEYCLOAK_ADMIN ?? 'admin';
+  const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin';
+  const nowIso = new Date().toISOString();
+
+  let accessToken: string;
+  try {
+    accessToken = await requestKeycloakAdminToken(keycloakBaseUrl, adminUsername, adminPassword);
+  } catch (error) {
+    console.warn(
+      `[db:seed] Demo account listings skipped: ${
+        error instanceof Error ? error.message : 'unable to authenticate with Keycloak'
+      }`,
+    );
     return [];
   }
 
+  const users: SeedUserRecord[] = [];
+  for (const definition of keycloakDemoUserDefinitions) {
+    try {
+      const keycloakUser = await findKeycloakUserByUsername(
+        keycloakBaseUrl,
+        env.KEYCLOAK_REALM,
+        accessToken,
+        definition.username,
+      );
+
+      if (!keycloakUser?.id) {
+        console.warn(
+          `[db:seed] Demo account listings skipped for "${definition.username}": user not found in Keycloak.`,
+        );
+        continue;
+      }
+
+      const ownerUserId = await repository.upsertOwnerUser({
+        id: keycloakUser.id,
+        provider: 'keycloak',
+        providerSubject: keycloakUser.id,
+        email: keycloakUser.email ?? definition.email,
+        roles: definition.roles,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      users.push({
+        provider: 'keycloak',
+        providerSubject: keycloakUser.id,
+        email: keycloakUser.email ?? definition.email,
+        roles: definition.roles,
+        ownerUserId,
+      });
+    } catch (error) {
+      console.warn(
+        `[db:seed] Demo account listings skipped for "${definition.username}": ${
+          error instanceof Error ? error.message : 'unexpected lookup failure'
+        }`,
+      );
+    }
+  }
+
+  return users;
+};
+
+const listSeedStorageKeys = async (
+  client: Client,
+  titlePrefix: string,
+): Promise<SeedStorageKeyRow[]> => {
   const result = await client.query<SeedStorageKeyRow>(
     `
       SELECT lm.storage_key AS "storageKey"
       FROM listing_media lm
       INNER JOIN listings l ON l.id = lm.listing_id
-      WHERE l.owner_user_id = ANY($1::bigint[]);
+      WHERE l.title LIKE $1
+        AND l.deleted_at IS NULL;
     `,
-    [ownerUserIds],
+    [`${titlePrefix}%`],
   );
 
   return result.rows;
 };
 
-const purgeSeedListings = async (client: Client, ownerUserIds: string[]): Promise<number> => {
-  if (ownerUserIds.length === 0) {
-    return 0;
-  }
-
+const purgeSeedListings = async (client: Client, titlePrefix: string): Promise<number> => {
   const deleted = await client.query(
     `
       DELETE FROM listings
-      WHERE owner_user_id = ANY($1::bigint[]);
+      WHERE title LIKE $1;
     `,
-    [ownerUserIds],
+    [`${titlePrefix}%`],
   );
 
   return deleted.rowCount ?? 0;
@@ -1000,7 +1156,7 @@ const buildDemoListings = (
 
     listings.push({
       ownerUserId: owner.ownerUserId,
-      title: `[DEMO M2.11] ${descriptor} a ${location.comuneName} #${listingNumber}`,
+      title: `${demoListingTitlePrefix} ${descriptor} a ${location.comuneName} #${listingNumber}`,
       description: `${descriptor} disponibile in ${location.comuneName} (${location.provinceSigla}), ${location.regionName}. Annuncio seed locale per test ricerca, moderazione e UI pubblica.`,
       listingType,
       priceAmount,
@@ -1027,6 +1183,63 @@ const buildDemoListings = (
       contactEmail: `contatto.demo+${listingNumber}@adottaungatto.local`,
       mediaCount,
     });
+  }
+
+  return listings;
+};
+
+const buildDemoAccountPublishedListings = (
+  locations: DemoLocationRow[],
+  users: SeedUserRecord[],
+): DemoListingSeed[] => {
+  const descriptors = [
+    'Micia gia pronta per una nuova casa',
+    'Gattino affettuoso e curioso',
+    'Coppia inseparabile abituata alla vita in appartamento',
+    'Gattone tranquillo e socievole',
+    'Gattina giovane abituata alle persone',
+    'Micio dolce con buona compatibilita in casa',
+  ];
+  const ageOptions = ['4 mesi', '7 mesi', '1 anno', '2 anni', '3 anni', '5 anni'];
+  const listings: DemoListingSeed[] = [];
+
+  for (const [userIndex, user] of users.entries()) {
+    for (let listingIndex = 0; listingIndex < 3; listingIndex += 1) {
+      const seedIndex = userIndex * 3 + listingIndex;
+      const descriptor = descriptors[seedIndex % descriptors.length] ?? 'Gatto in cerca di casa';
+      const location = locations[(seedIndex * 2 + userIndex) % locations.length];
+      if (!location) {
+        continue;
+      }
+
+      listings.push({
+        ownerUserId: user.ownerUserId,
+        title: `${demoAccountListingTitlePrefix} ${descriptor} a ${location.comuneName} #${String(
+          seedIndex + 1,
+        ).padStart(2, '0')}`,
+        description: `${descriptor} disponibile in ${location.comuneName} (${location.provinceSigla}), ${location.regionName}. Annuncio demo gia approvato, assegnato all account ${user.email} per testare dashboard, messaggi e modifica annunci.`,
+        listingType: listingIndex === 1 ? 'stallo' : 'adozione',
+        priceAmount: null,
+        currency: 'EUR',
+        ageText: ageOptions[seedIndex % ageOptions.length] ?? '1 anno',
+        sex: seedIndex % 2 === 0 ? 'femmina' : 'maschio',
+        breed:
+          seedIndex % 3 === 0 ? null : (CAT_BREEDS[seedIndex % CAT_BREEDS.length]?.label ?? null),
+        status: 'published',
+        publishedAt: toIsoDaysAgo(10 - seedIndex, 11),
+        regionId: location.regionId,
+        provinceId: location.provinceId,
+        comuneId: location.comuneId,
+        regionName: location.regionName,
+        provinceName: location.provinceName,
+        provinceSigla: location.provinceSigla,
+        comuneName: location.comuneName,
+        contactName: user.email.startsWith('utente2.') ? 'Utente Demo Secondo' : 'Utente Demo',
+        contactPhone: `+3934${String(1000000 + seedIndex).padStart(7, '0')}`,
+        contactEmail: user.email,
+        mediaCount: 2,
+      });
+    }
   }
 
   return listings;
@@ -1192,29 +1405,20 @@ const upsertDemoPlans = async (client: Client): Promise<DemoPlansUpsertStats> =>
 
 const seedDemoPromotions = async (
   client: Client,
-  seedOwnerUserIds: string[],
   actorUserId: string,
   planIdsByCode: Map<string, string>,
 ): Promise<DemoPromotionSeedStats> => {
-  if (seedOwnerUserIds.length === 0) {
-    return {
-      promotionsSeeded: 0,
-      eventsSeeded: 0,
-      listingIds: [],
-    };
-  }
-
   const publishedListings = await client.query<PublishedListingIdRow>(
     `
       SELECT id::text AS "id"
       FROM listings
-      WHERE owner_user_id = ANY($1::bigint[])
+      WHERE title LIKE $1
         AND status = 'published'
         AND deleted_at IS NULL
       ORDER BY COALESCE(published_at, created_at) DESC, id DESC
       LIMIT 3;
     `,
-    [seedOwnerUserIds],
+    [`${demoListingTitlePrefix}%`],
   );
 
   if (publishedListings.rows.length === 0) {
@@ -1430,20 +1634,25 @@ const run = async () => {
     const catBreedsStats = await upsertCatBreeds(client);
     const demoPlansStats = await upsertDemoPlans(client);
     const seedUsers = await upsertDemoUsers(repository);
-    const seedOwnerUserIds = seedUsers.map((user) => user.ownerUserId);
+    const demoAccountUsers = await upsertKeycloakDemoUsers(repository);
     const demoPromotionsActorUserId = seedUsers[0]?.ownerUserId;
     if (!demoPromotionsActorUserId) {
       throw new Error('No demo users available to seed promotions.');
     }
 
-    const staleMediaRows = await listSeedStorageKeys(client, seedOwnerUserIds);
+    const staleMediaRows = [
+      ...(await listSeedStorageKeys(client, demoListingTitlePrefix)),
+      ...(await listSeedStorageKeys(client, demoAccountListingTitlePrefix)),
+    ];
     let cleanedObjects = 0;
     for (const staleMedia of staleMediaRows) {
       await storageService.deleteMediaObject(staleMedia.storageKey);
       cleanedObjects += 1;
     }
 
-    const removedListings = await purgeSeedListings(client, seedOwnerUserIds);
+    const removedListings =
+      (await purgeSeedListings(client, demoListingTitlePrefix)) +
+      (await purgeSeedListings(client, demoAccountListingTitlePrefix));
     const locations = await resolveDemoLocations(client);
     const demoListings = buildDemoListings(locations, seedUsers);
     const demoSeedStats = await seedDemoListingsAndMedia(
@@ -1452,14 +1661,36 @@ const run = async () => {
       demoListings,
       demoMedia.assets,
     );
+    const demoAccountListings = buildDemoAccountPublishedListings(locations, demoAccountUsers);
+    const demoAccountSeedStats =
+      demoAccountListings.length > 0
+        ? await seedDemoListingsAndMedia(
+            repository,
+            storageService,
+            demoAccountListings,
+            demoMedia.assets,
+          )
+        : {
+            listingsSeeded: 0,
+            mediaSeeded: 0,
+            statusCounts: {
+              published: 0,
+              pending_review: 0,
+              rejected: 0,
+              suspended: 0,
+            },
+            regionsCovered: 0,
+            provincesCovered: 0,
+            comuniCovered: 0,
+          };
     const demoPromotionsStats = await seedDemoPromotions(
       client,
-      seedOwnerUserIds,
       demoPromotionsActorUserId,
       demoPlansStats.idsByCode,
     );
 
     console.log(`[db:seed] Demo users upserted: ${seedUsers.length}.`);
+    console.log(`[db:seed] Demo account users linked: ${demoAccountUsers.length}.`);
     console.log(
       `[db:seed] Cat breeds upsert: inserted=${catBreedsStats.inserted}, updated=${catBreedsStats.updated}.`,
     );
@@ -1473,7 +1704,13 @@ const run = async () => {
       `[db:seed] Demo listings seeded: ${demoSeedStats.listingsSeeded}. Demo media seeded: ${demoSeedStats.mediaSeeded}.`,
     );
     console.log(
+      `[db:seed] Demo account listings seeded: ${demoAccountSeedStats.listingsSeeded}. Demo account media seeded: ${demoAccountSeedStats.mediaSeeded}.`,
+    );
+    console.log(
       `[db:seed] Demo status distribution: published=${demoSeedStats.statusCounts.published}, pending_review=${demoSeedStats.statusCounts.pending_review}, rejected=${demoSeedStats.statusCounts.rejected}, suspended=${demoSeedStats.statusCounts.suspended}.`,
+    );
+    console.log(
+      `[db:seed] Demo account status distribution: published=${demoAccountSeedStats.statusCounts.published}, pending_review=${demoAccountSeedStats.statusCounts.pending_review}, rejected=${demoAccountSeedStats.statusCounts.rejected}, suspended=${demoAccountSeedStats.statusCounts.suspended}.`,
     );
     console.log(
       `[db:seed] Demo geography coverage: regions=${demoSeedStats.regionsCovered}, provinces=${demoSeedStats.provincesCovered}, comuni=${demoSeedStats.comuniCovered}.`,

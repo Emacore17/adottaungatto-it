@@ -97,6 +97,15 @@ describe('Messaging endpoints', () => {
   const markThreadReadForUser = vi.fn(async () => ({
     readAt: new Date().toISOString(),
   }));
+  const archiveThreadForUser = vi.fn(async () => ({
+    archivedAt: new Date().toISOString(),
+  }));
+  const deleteThreadForEveryone = vi.fn(async () => ({
+    deletedAt: new Date().toISOString(),
+  }));
+  const setTypingForUser = vi.fn(async () => ({
+    accepted: true,
+  }));
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -109,6 +118,9 @@ describe('Messaging endpoints', () => {
         getThreadForUser,
         sendMessageForUser,
         markThreadReadForUser,
+        archiveThreadForUser,
+        deleteThreadForEveryone,
+        setTypingForUser,
       })
       .compile();
 
@@ -194,5 +206,52 @@ describe('Messaging endpoints', () => {
     expect(response.status).toBe(201);
     expect(response.body.threadId).toBe('9001');
     expect(markThreadReadForUser).toHaveBeenCalledWith(expect.any(Object), '9001');
+  });
+
+  it('archives a thread only for the authenticated user', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/v1/messages/threads/9001')
+      .set(userHeaders);
+
+    expect(response.status).toBe(200);
+    expect(response.body.threadId).toBe('9001');
+    expect(archiveThreadForUser).toHaveBeenCalledWith(expect.any(Object), '9001');
+  });
+
+  it('deletes a thread for everyone when requested', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/v1/messages/threads/9001/everyone')
+      .set(userHeaders);
+
+    expect(response.status).toBe(200);
+    expect(response.body.threadId).toBe('9001');
+    expect(deleteThreadForEveryone).toHaveBeenCalledWith(expect.any(Object), '9001');
+  });
+
+  it('accepts typing events without refreshing the page', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/messages/threads/9001/typing')
+      .set(userHeaders)
+      .send({
+        isTyping: true,
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.threadId).toBe('9001');
+    expect(response.body.accepted).toBe(true);
+    expect(response.body.isTyping).toBe(true);
+    expect(setTypingForUser).toHaveBeenCalledWith(expect.any(Object), '9001', true);
+  });
+
+  it('validates typing payloads strictly', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/messages/threads/9001/typing')
+      .set(userHeaders)
+      .send({
+        isTyping: 'true',
+      });
+
+    expect(response.status).toBe(400);
+    expect(setTypingForUser).not.toHaveBeenCalled();
   });
 });

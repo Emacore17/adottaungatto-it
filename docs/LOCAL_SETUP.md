@@ -700,3 +700,32 @@ Verifica UI web:
 - compilare form contatto nella card "Contatto inserzionista"
 - verificare messaggio conferma invio
 - su mobile verificare CTA sticky "Contatta inserzionista" che porta al form
+
+## 34. Messaggistica privata + notifiche email (M5.6)
+
+Prerequisiti:
+- `pnpm db:migrate`
+- `pnpm db:seed`
+- `pnpm auth:seed`
+- `pnpm dev:api`
+- `pnpm dev:web`
+- `pnpm dev:worker`
+
+Utenti demo per test locale:
+- proprietario annuncio: `utente.demo / demo1234`
+- secondo utente: `utente2.demo / demo1234`
+
+Flusso manuale consigliato:
+- browser 1: login con `utente.demo`, pubblicare o individuare un annuncio pubblicato
+- browser 2 / incognito: login con `utente2.demo`, aprire il dettaglio annuncio e inviare un messaggio
+- browser 1: aprire `http://localhost:3000/messaggi` e verificare comparsa thread, badge non letti e possibilita di risposta
+- browser 1: aprire `http://localhost:3000/account/impostazioni` e verificare il toggle preferenze notifiche email
+- Mailpit UI: aprire `http://localhost:8025` e verificare ricezione email `Nuovo messaggio per "<titolo annuncio>"`
+
+Comportamento atteso:
+- il messaggio crea o riusa un thread unico per coppia `annuncio + inserzionista + richiedente`
+- il worker consuma l'outbox `notification_outbox` e invia email via SMTP locale (`mailpit`)
+- il mittente non riceve email sul proprio invio
+- se disattivi il toggle email in `/account/impostazioni`, i nuovi messaggi continuano ad arrivare in chat ma non in Mailpit
+- inbox e thread aperti si aggiornano in tempo reale via SSE, con polling lento solo come fallback
+- un refresh della pagina `Messaggi` mantiene thread e stati non letti coerenti

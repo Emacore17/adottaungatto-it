@@ -4,14 +4,14 @@
     "url": "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx",
     "sheetName": "CODICI al 21_02_2026",
     "referenceDate": "2026-02-21",
-    "syncedAt": "2026-03-02T08:11:05.696Z"
+    "syncedAt": "2026-03-02T15:41:55.840Z"
   },
   "centroids": {
     "source": {
       "dataset": "istat-confini-generalizzati",
       "url": "https://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati/2025/Limiti01012025_g.zip",
       "boundaryYear": 2025,
-      "syncedAt": "2026-03-02T08:11:05.696Z"
+      "syncedAt": "2026-03-02T15:41:55.840Z"
     },
     "coverage": {
       "regions": 20,

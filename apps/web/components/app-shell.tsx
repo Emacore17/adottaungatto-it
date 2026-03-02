@@ -3,7 +3,9 @@ import { Button } from '@adottaungatto/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
+import { fetchMessageThreads } from '../lib/messages';
 import { LinkButton } from './link-button';
+import { LiveMessagesLink } from './live-messages-link';
 import { MobileNavMenu } from './mobile-nav-menu';
 import { ScrollAwareHeader } from './scroll-aware-header';
 import { ShellSearch } from './shell-search';
@@ -33,6 +35,11 @@ interface AppShellProps {
 export async function AppShell({ children }: AppShellProps) {
   const env = loadWebEnv();
   const session = await getWebSession().catch(() => null);
+  const unreadMessageCount = session
+    ? await fetchMessageThreads({ limit: 1, offset: 0 })
+        .then((page) => page.unreadMessages)
+        .catch(() => 0)
+    : 0;
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
@@ -69,6 +76,7 @@ export async function AppShell({ children }: AppShellProps) {
             <ThemeToggle />
             {session ? (
               <>
+                <LiveMessagesLink initialUnreadCount={unreadMessageCount} />
                 <LinkButton
                   className="hidden h-9 px-3 sm:inline-flex"
                   href="/account"

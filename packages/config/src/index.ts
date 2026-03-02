@@ -142,6 +142,54 @@ const apiSchema = baseSchema.extend({
     .max(86_400)
     .optional()
     .default(120),
+  MESSAGE_THREAD_MAX_MESSAGES: z.coerce
+    .number()
+    .int()
+    .min(50)
+    .max(50_000)
+    .optional()
+    .default(2_000),
+  MESSAGE_THREAD_SLOWMODE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(300)
+    .optional()
+    .default(3),
+  MESSAGE_MESSAGE_MAX_URLS: z.coerce.number().int().min(0).max(20).optional().default(4),
+  MESSAGE_TYPING_EVENT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(300)
+    .optional()
+    .default(15),
+  MESSAGE_TYPING_EVENT_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .default(20),
+  MESSAGE_TYPING_EVENT_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(3)
+    .max(60)
+    .optional()
+    .default(6),
+  MESSAGE_EMAIL_NOTIFICATIONS_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  MESSAGE_EMAIL_NOTIFICATION_MAX_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .default(8),
 });
 
 const workerSchema = baseSchema.extend({
@@ -170,6 +218,63 @@ const workerSchema = baseSchema.extend({
     .min(1, 'MINIO_BUCKET_LISTING_THUMBS is required')
     .optional()
     .default('listing-thumbs'),
+  MESSAGE_EMAIL_NOTIFICATIONS_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  MESSAGE_EMAIL_NOTIFICATION_MAX_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .default(8),
+  MESSAGE_NOTIFICATION_WORKER_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(250)
+    .max(60_000)
+    .optional()
+    .default(5_000),
+  MESSAGE_NOTIFICATION_WORKER_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .default(10),
+  MESSAGE_NOTIFICATION_WORKER_PROCESSING_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(30)
+    .max(3_600)
+    .optional()
+    .default(300),
+  WEB_APP_URL: z
+    .string()
+    .url('WEB_APP_URL must be a valid URL')
+    .optional()
+    .default('http://localhost:3000'),
+  SMTP_HOST: z.string().min(1, 'SMTP_HOST is required').optional().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional().default(1025),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
+  SMTP_USERNAME: z.string().optional().default(''),
+  SMTP_PASSWORD: z.string().optional().default(''),
+  SMTP_FROM_EMAIL: z
+    .string()
+    .email('SMTP_FROM_EMAIL must be a valid email address')
+    .optional()
+    .default('notifiche@adottaungatto.local'),
+  SMTP_FROM_NAME: z
+    .string()
+    .min(1, 'SMTP_FROM_NAME is required')
+    .optional()
+    .default('Adotta un Gatto'),
 });
 
 const formatZodError = (scope: string, issues: z.ZodIssue[]) => {

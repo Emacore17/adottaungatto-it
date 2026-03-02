@@ -1,7 +1,15 @@
 'use client';
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Toast } from '@adottaungatto/ui';
-import { LoaderCircle, MessageCircle, RefreshCcw, SendHorizontal } from 'lucide-react';
+import {
+  LoaderCircle,
+  MessageCircle,
+  RefreshCcw,
+  SendHorizontal,
+  Trash2,
+  UserMinus,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { formatDate } from '../lib/formatters';
 import type { MessageSummary, MessageThreadPage } from '../lib/messages';
@@ -108,20 +116,28 @@ const parseThreadPagePayload = (value: unknown): MessageThreadPage | null => {
 };
 
 export function MessageThreadView({ initialThreadPage }: { initialThreadPage: MessageThreadPage }) {
+  const router = useRouter();
   const [threadPage, setThreadPage] = useState(initialThreadPage);
   const [composerValue, setComposerValue] = useState('');
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [deletingEveryone, setDeletingEveryone] = useState(false);
+  const [counterpartTyping, setCounterpartTyping] = useState(false);
   const [toast, setToast] = useState<ToastState>({
     open: false,
     title: '',
     variant: 'info',
   });
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const counterpartTypingTimeoutRef = useRef<number | null>(null);
+  const typingPulseIntervalRef = useRef<number | null>(null);
+  const typingActiveRef = useRef(false);
 
   useEffect(() => {
     setThreadPage(initialThreadPage);
+    setCounterpartTyping(false);
   }, [initialThreadPage]);
 
   const markRead = useEffectEvent(async (threadId: string, unreadCount: number) => {
@@ -151,6 +167,18 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
           cache: 'no-store',
         },
       );
+      if (response.status === 404) {
+        setToast({
+          open: true,
+          title: 'Conversazione non piu disponibile',
+          description: 'La conversazione e stata rimossa o non e piu accessibile.',
+          variant: 'info',
+        });
+        router.replace('/messaggi');
+        router.refresh();
+        return;
+      }
+
       const payload = parseThreadPagePayload(await response.json().catch(() => null));
       if (!response.ok || !payload) {
         throw new Error('Impossibile aggiornare la conversazione.');
@@ -171,6 +199,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
       if (payload.thread.unreadCount > 0) {
         await markRead(payload.thread.id, payload.thread.unreadCount);
       }
+      setCounterpartTyping(false);
     } catch (error) {
       setToast({
         open: true,
@@ -223,6 +252,46 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
     }
   };
 
+  const sendTypingState = useEffectEvent(async (isTyping: boolean) => {
+    await fetch(`/api/messages/threads/${threadPage.thread.id}/typing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ isTyping }),
+    }).catch(() => undefined);
+  });
+
+  const stopTyping = useEffectEvent(async () => {
+    if (!typingActiveRef.current) {
+      return;
+    }
+
+    typingActiveRef.current = false;
+    if (typingPulseIntervalRef.current !== null) {
+      window.clearInterval(typingPulseIntervalRef.current);
+      typingPulseIntervalRef.current = null;
+    }
+
+    await sendTypingState(false);
+  });
+
+  const markTyping = useEffectEvent(async () => {
+    if (typingActiveRef.current) {
+      return;
+    }
+
+    typingActiveRef.current = true;
+    await sendTypingState(true);
+
+    if (typingPulseIntervalRef.current !== null) {
+      window.clearInterval(typingPulseIntervalRef.current);
+    }
+    typingPulseIntervalRef.current = window.setInterval(() => {
+      void sendTypingState(true);
+    }, 4_000);
+  });
+
   const sendMessage = async () => {
     const body = composerValue.trim();
     if (!body) {
@@ -237,6 +306,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
 
     setSending(true);
     try {
+      await stopTyping();
       const response = await fetch(`/api/messages/threads/${threadPage.thread.id}/messages`, {
         method: 'POST',
         headers: {
@@ -274,6 +344,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
         },
       }));
       setComposerValue('');
+      setCounterpartTyping(false);
 
       window.requestAnimationFrame(() => {
         messagesContainerRef.current?.scrollTo({
@@ -293,16 +364,146 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
     }
   };
 
+  const archiveThread = async () => {
+    if (!window.confirm('Vuoi eliminare questa conversazione solo dalla tua inbox?')) {
+      return;
+    }
+
+    setArchiving(true);
+    try {
+      await stopTyping();
+      const response = await fetch(`/api/messages/threads/${threadPage.thread.id}`, {
+        method: 'DELETE',
+      });
+      const payload = asRecord(await response.json().catch(() => null));
+      if (!response.ok) {
+        throw new Error(String(payload.message ?? 'Impossibile eliminare la conversazione.'));
+      }
+
+      router.replace('/messaggi');
+      router.refresh();
+    } catch (error) {
+      setToast({
+        open: true,
+        title: 'Operazione non riuscita',
+        description:
+          error instanceof Error ? error.message : 'Impossibile eliminare la conversazione.',
+        variant: 'danger',
+      });
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const deleteThreadForEveryone = async () => {
+    if (
+      !window.confirm(
+        'Vuoi eliminare questa conversazione per entrambi? La chat verra rimossa dalla inbox di tutti i partecipanti.',
+      )
+    ) {
+      return;
+    }
+
+    setDeletingEveryone(true);
+    try {
+      await stopTyping();
+      const response = await fetch(`/api/messages/threads/${threadPage.thread.id}/everyone`, {
+        method: 'DELETE',
+      });
+      const payload = asRecord(await response.json().catch(() => null));
+      if (!response.ok) {
+        throw new Error(String(payload.message ?? 'Impossibile eliminare la conversazione.'));
+      }
+
+      router.replace('/messaggi');
+      router.refresh();
+    } catch (error) {
+      setToast({
+        open: true,
+        title: 'Eliminazione non riuscita',
+        description:
+          error instanceof Error ? error.message : 'Impossibile eliminare la conversazione.',
+        variant: 'danger',
+      });
+    } finally {
+      setDeletingEveryone(false);
+    }
+  };
+
   useEffect(() => {
     void markRead(threadPage.thread.id, threadPage.thread.unreadCount);
-    const intervalId = window.setInterval(() => {
+    const fallbackIntervalId = window.setInterval(() => {
       void refreshThread();
-    }, 12000);
+    }, 45_000);
+
+    if (typeof window.EventSource !== 'function') {
+      return () => {
+        window.clearInterval(fallbackIntervalId);
+      };
+    }
+
+    const eventSource = new window.EventSource(
+      `/api/messages/events?threadId=${threadPage.thread.id}`,
+    );
+    const handleThreadUpdated = () => {
+      void refreshThread();
+    };
+    const handleTypingChanged = (event: Event) => {
+      let payload: Record<string, unknown>;
+      try {
+        payload = asRecord(
+          (event as MessageEvent<string>).data
+            ? JSON.parse((event as MessageEvent<string>).data)
+            : null,
+        );
+      } catch {
+        return;
+      }
+
+      if (payload.threadId !== threadPage.thread.id) {
+        return;
+      }
+
+      const isTyping = payload.isTyping === 'true';
+      setCounterpartTyping(isTyping);
+      if (counterpartTypingTimeoutRef.current !== null) {
+        window.clearTimeout(counterpartTypingTimeoutRef.current);
+        counterpartTypingTimeoutRef.current = null;
+      }
+
+      if (isTyping) {
+        counterpartTypingTimeoutRef.current = window.setTimeout(() => {
+          setCounterpartTyping(false);
+          counterpartTypingTimeoutRef.current = null;
+        }, 7_000);
+      }
+    };
+
+    eventSource.addEventListener('thread_updated', handleThreadUpdated);
+    eventSource.addEventListener('typing_changed', handleTypingChanged);
+    eventSource.onerror = () => undefined;
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(fallbackIntervalId);
+      eventSource.removeEventListener('thread_updated', handleThreadUpdated);
+      eventSource.removeEventListener('typing_changed', handleTypingChanged);
+      eventSource.close();
     };
   }, [markRead, refreshThread, threadPage.thread.id, threadPage.thread.unreadCount]);
+
+  useEffect(() => {
+    return () => {
+      if (counterpartTypingTimeoutRef.current !== null) {
+        window.clearTimeout(counterpartTypingTimeoutRef.current);
+      }
+      if (typingPulseIntervalRef.current !== null) {
+        window.clearInterval(typingPulseIntervalRef.current);
+      }
+      if (typingActiveRef.current) {
+        void sendTypingState(false);
+      }
+    };
+  }, [sendTypingState]);
 
   return (
     <>
@@ -317,9 +518,42 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              {counterpartTyping ? (
+                <span className="rounded-full border border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[color:color-mix(in_srgb,var(--color-primary)_10%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)]">
+                  Sta scrivendo...
+                </span>
+              ) : null}
               <span className="rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)]">
                 Ultimo aggiornamento {formatDate(threadPage.thread.latestMessageAt)}
               </span>
+              <Button
+                className="h-10 rounded-full px-4"
+                disabled={archiving || deletingEveryone || sending}
+                onClick={() => void archiveThread()}
+                title="Elimina la conversazione dalla tua inbox"
+                type="button"
+                variant="outline"
+              >
+                {archiving ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserMinus className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                className="h-10 rounded-full px-4"
+                disabled={archiving || deletingEveryone || sending}
+                onClick={() => void deleteThreadForEveryone()}
+                title="Elimina la conversazione per entrambi"
+                type="button"
+                variant="outline"
+              >
+                {deletingEveryone ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
               <Button
                 className="h-10 rounded-full px-4"
                 disabled={refreshing}
@@ -398,17 +632,32 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
               <textarea
                 className="min-h-[124px] w-full rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_92%,white_8%)] px-4 py-3 text-sm leading-6 text-[var(--color-text)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_14%,transparent)]"
                 maxLength={2000}
-                onChange={(event) => setComposerValue(event.target.value)}
+                onBlur={() => void stopTyping()}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setComposerValue(nextValue);
+                  if (nextValue.trim().length === 0) {
+                    void stopTyping();
+                    return;
+                  }
+
+                  void markTyping();
+                }}
                 placeholder="Scrivi un messaggio chiaro e utile. Evita dati sensibili che non vuoi condividere."
                 value={composerValue}
               />
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-[var(--color-text-muted)]">
-                  {composerValue.trim().length}/2000 caratteri
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    {composerValue.trim().length}/2000 caratteri
+                  </p>
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    Slow mode, antispam e limite link sono attivi su questa chat.
+                  </p>
+                </div>
                 <Button
                   className="h-11 rounded-full px-5"
-                  disabled={sending}
+                  disabled={sending || archiving || deletingEveryone}
                   onClick={() => void sendMessage()}
                   type="button"
                 >

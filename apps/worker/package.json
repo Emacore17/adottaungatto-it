@@ -9,25 +9,29 @@
     "start": "node dist/main.js",
     "lint": "biome check .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"No tests for @adottaungatto/worker\"",
+    "test": "vitest run",
     "test:smoke:minio": "tsx src/smoke-minio.ts",
     "search:reindex": "tsx src/search-reindex.ts"
   },
   "dependencies": {
     "@adottaungatto/config": "workspace:*",
+    "@adottaungatto/types": "workspace:^",
     "@aws-sdk/client-s3": "^3.882.0",
     "@nestjs/common": "^11.0.20",
     "@nestjs/core": "^11.0.20",
     "bullmq": "^5.43.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.5.0",
+    "nodemailer": "^8.0.1",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/nodemailer": "^7.0.11",
     "@types/pg": "^8.15.4",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
   }
 }

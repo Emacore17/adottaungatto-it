@@ -13,6 +13,9 @@ const baseUser: RequestUser = {
   providerSubject: 'user-subject-1',
   email: 'user-1@example.test',
   roles: [UserRole.USER],
+  preferences: {
+    messageEmailNotificationsEnabled: true,
+  },
   createdAt: new Date(0).toISOString(),
   updatedAt: new Date(0).toISOString(),
 };
@@ -64,13 +67,20 @@ describe('MessagingService', () => {
     getOrCreateThread: vi.fn(async () => '9001'),
     countRecentMessagesBySender: vi.fn(async () => 0),
     countRecentDuplicateMessages: vi.fn(async () => 0),
+    findLatestMessageCreatedAtBySender: vi.fn<() => Promise<string | null>>(async () => null),
+    getThreadMessageCount: vi.fn(async () => 0),
     appendMessageToThread: vi.fn(async () => buildMessage()),
-    findThreadForUser: vi.fn(async () => buildThreadSummary()),
+    findThreadForUser: vi.fn<() => Promise<MessageThreadSummary | null>>(async () =>
+      buildThreadSummary(),
+    ),
     listMessagesForThread: vi.fn(async () => ({
       messages: [buildMessage()],
       hasMore: false,
     })),
     markThreadRead: vi.fn(async () => undefined),
+    archiveThreadForUser: vi.fn(async () => true),
+    deleteThreadForEveryone: vi.fn(async () => true),
+    listThreadParticipantUserIds: vi.fn(async () => ['501', '601']),
     listThreadsForUser: vi.fn(async () => ({
       threads: [buildThreadSummary()],
       pagination: {
@@ -82,12 +92,19 @@ describe('MessagingService', () => {
       unreadMessages: 0,
     })),
   };
+  const messagingEventsServiceMock = {
+    publishThreadUpdated: vi.fn(async () => undefined),
+    publishTypingChanged: vi.fn(async () => undefined),
+  };
 
   let service: MessagingService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new MessagingService(messagingRepositoryMock as never);
+    service = new MessagingService(
+      messagingRepositoryMock as never,
+      messagingEventsServiceMock as never,
+    );
   });
 
   it('creates or opens a listing thread and sends the initial message', async () => {
@@ -108,6 +125,10 @@ describe('MessagingService', () => {
         ownerUserId: '601',
       }),
     );
+    expect(messagingEventsServiceMock.publishThreadUpdated).toHaveBeenCalledWith(['501', '601'], {
+      threadId: '9001',
+      reason: 'message_created',
+    });
   });
 
   it('blocks attempts to contact your own listing', async () => {
@@ -129,6 +150,34 @@ describe('MessagingService', () => {
 
     await expect(
       service.openListingThreadForUser(baseUser, '101', 'Ciao, ci sono ancora?', 'web_listing'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.TOO_MANY_REQUESTS,
+    });
+  });
+
+  it('blocks messages with too many links', async () => {
+    const spamBody = 'https://a.test https://b.test https://c.test https://d.test https://e.test';
+
+    await expect(service.sendMessageForUser(baseUser, '9001', spamBody)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('blocks messages when a thread reached the configured storage cap', async () => {
+    messagingRepositoryMock.getThreadMessageCount.mockResolvedValueOnce(2000);
+
+    await expect(
+      service.sendMessageForUser(baseUser, '9001', 'Questo thread e troppo pieno'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rate limits repeated sends in the same thread during slow mode', async () => {
+    messagingRepositoryMock.findLatestMessageCreatedAtBySender.mockResolvedValueOnce(
+      new Date().toISOString(),
+    );
+
+    await expect(
+      service.sendMessageForUser(baseUser, '9001', 'Scrivo di nuovo troppo presto'),
     ).rejects.toMatchObject({
       status: HttpStatus.TOO_MANY_REQUESTS,
     });
@@ -159,5 +208,71 @@ describe('MessagingService', () => {
       '501',
       expect.any(String),
     );
+    expect(messagingEventsServiceMock.publishThreadUpdated).toHaveBeenCalledWith(['501'], {
+      threadId: '9001',
+      reason: 'read_state_changed',
+    });
+  });
+
+  it('archives a thread only for the current participant', async () => {
+    const result = await service.archiveThreadForUser(baseUser, '9001');
+
+    expect(result?.archivedAt).toBeTruthy();
+    expect(messagingRepositoryMock.archiveThreadForUser).toHaveBeenCalledWith(
+      '9001',
+      '501',
+      expect.any(String),
+    );
+    expect(messagingEventsServiceMock.publishThreadUpdated).toHaveBeenCalledWith(['501'], {
+      threadId: '9001',
+      reason: 'thread_archived',
+    });
+  });
+
+  it('soft deletes a thread for both participants', async () => {
+    const result = await service.deleteThreadForEveryone(baseUser, '9001');
+
+    expect(result?.deletedAt).toBeTruthy();
+    expect(messagingRepositoryMock.deleteThreadForEveryone).toHaveBeenCalledWith(
+      '9001',
+      '501',
+      expect.any(String),
+    );
+    expect(messagingEventsServiceMock.publishThreadUpdated).toHaveBeenCalledWith(['501', '601'], {
+      threadId: '9001',
+      reason: 'thread_deleted',
+    });
+  });
+
+  it('publishes typing indicator only to the other participant', async () => {
+    const result = await service.setTypingForUser(baseUser, '9001', true);
+
+    expect(result).toEqual({ accepted: true });
+    expect(messagingEventsServiceMock.publishTypingChanged).toHaveBeenCalledWith(['601'], {
+      threadId: '9001',
+      userId: '501',
+      isTyping: true,
+    });
+  });
+
+  it('returns null when archiving an inaccessible thread', async () => {
+    messagingRepositoryMock.findThreadForUser.mockResolvedValueOnce(null);
+
+    await expect(service.archiveThreadForUser(baseUser, '9999')).resolves.toBeNull();
+    expect(messagingRepositoryMock.archiveThreadForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns null when deleting an inaccessible thread for everyone', async () => {
+    messagingRepositoryMock.findThreadForUser.mockResolvedValueOnce(null);
+
+    await expect(service.deleteThreadForEveryone(baseUser, '9999')).resolves.toBeNull();
+    expect(messagingRepositoryMock.deleteThreadForEveryone).not.toHaveBeenCalled();
+  });
+
+  it('returns null when sending typing state to an inaccessible thread', async () => {
+    messagingRepositoryMock.findThreadForUser.mockResolvedValueOnce(null);
+
+    await expect(service.setTypingForUser(baseUser, '9999', true)).resolves.toBeNull();
+    expect(messagingEventsServiceMock.publishTypingChanged).not.toHaveBeenCalled();
   });
 });

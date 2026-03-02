@@ -108,6 +108,12 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      fastify:
+        specifier: ^5.7.4
+        version: 5.7.4
+      ioredis:
+        specifier: ^5.5.0
+        version: 5.9.3
       jose:
         specifier: ^5.10.0
         version: 5.10.0
@@ -236,6 +242,9 @@ importers:
       '@adottaungatto/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@adottaungatto/types':
+        specifier: workspace:^
+        version: link:../../packages/types
       '@aws-sdk/client-s3':
         specifier: ^3.882.0
         version: 3.997.0
@@ -254,6 +263,9 @@ importers:
       ioredis:
         specifier: ^5.5.0
         version: 5.9.3
+      nodemailer:
+        specifier: ^8.0.1
+        version: 8.0.1
       pg:
         specifier: ^8.16.3
         version: 8.18.0
@@ -264,6 +276,9 @@ importers:
       '@types/node':
         specifier: ^22.13.10
         version: 22.19.11
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       '@types/pg':
         specifier: ^8.15.4
         version: 8.16.0
@@ -273,6 +288,9 @@ importers:
       typescript:
         specifier: ^5.8.2
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.8
+        version: 3.2.4(@types/node@22.19.11)(jiti@1.21.7)(terser@5.46.0)(tsx@4.21.0)
 
   packages/config:
     dependencies:
@@ -1916,6 +1934,9 @@ packages:
   '@types/node@22.19.11':
     resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
+  '@types/nodemailer@7.0.11':
+    resolution: {integrity: sha512-E+U4RzR2dKrx+u3N4DlsmLaDC6mMZOM/TPROxA0UAPiTgI0y4CEFBmZE+coGWTjakDriRsXG368lNk1u9Q0a2g==}
+
   '@types/pg-pool@2.0.7':
     resolution: {integrity: sha512-U4CwmGVQcbEuqpyju8/ptOKg6gEC+Tqsvj2xS9o1g71bUh8twxnC6ZL5rZKCsGN0iyH0CwgUyc9VR5owNQF9Ng==}
 
@@ -2619,6 +2640,10 @@ packages:
 
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
+
+  nodemailer@8.0.1:
+    resolution: {integrity: sha512-5kcldIXmaEjZcHR6F28IKGSgpmZHaF1IXLWFTG+Xh3S+Cce4MiakLtWY+PlBU69fLbRa8HlaGIrC/QolUpHkhg==}
+    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -5130,6 +5155,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@7.0.11':
+    dependencies:
+      '@types/node': 22.19.11
+
   '@types/pg-pool@2.0.7':
     dependencies:
       '@types/pg': 8.16.0
@@ -5849,6 +5878,8 @@ snapshots:
     optional: true
 
   node-releases@2.0.27: {}
+
+  nodemailer@8.0.1: {}
 
   normalize-path@3.0.0: {}
 

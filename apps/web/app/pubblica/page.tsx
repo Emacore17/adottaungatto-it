@@ -11,17 +11,25 @@ export default async function PublishPage() {
   return (
     <PageShell
       aside={
-        <CardContent className="space-y-3 pt-6">
+        <CardContent className="space-y-4 pt-6">
           <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-            Flusso attivo
+            Prima di iniziare
           </p>
-          <p className="text-sm leading-6 text-[var(--color-text)]">
-            Creazione annuncio, catalogo razze, localita strutturata e upload foto sono collegati al
-            backend reale.
-          </p>
+          <div className="space-y-3 text-sm leading-6 text-[var(--color-text)]">
+            <p>
+              Titolo specifico, descrizione concreta e localita precisa migliorano subito la scheda.
+            </p>
+            <p>
+              Carica almeno una foto nitida e scegli la copertina migliore gia in fase di bozza.
+            </p>
+            <p>
+              Ogni salvataggio usa il backend reale: puoi riprendere la modifica in qualsiasi
+              momento.
+            </p>
+          </div>
         </CardContent>
       }
-      description="Crea una scheda completa con dati strutturati, localita precisa e foto gestite direttamente dal nuovo flusso listings."
+      description="Crea una scheda completa con dati strutturati, localita precisa e foto gestite in un flusso piu chiaro e affidabile."
       eyebrow="Area riservata"
       title="Pubblica annuncio"
     >
