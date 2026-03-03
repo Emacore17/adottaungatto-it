@@ -704,7 +704,7 @@ textarea:focus-visible,
   right: 0;
   z-index: 36;
   max-height: min(26rem, calc(100svh - 4rem));
-  overflow: auto;
+  overflow: visible;
   padding: 14px;
   border: 1px solid color-mix(in srgb, var(--color-border) 78%, white 22%);
   border-radius: 28px;

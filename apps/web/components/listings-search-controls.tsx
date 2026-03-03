@@ -8,8 +8,10 @@ import {
 } from '@adottaungatto/types';
 import { Badge, Button, cn } from '@adottaungatto/ui';
 import {
+  ArrowLeft,
   ArrowUpDown,
   ChevronDown,
+  ChevronRight,
   Filter,
   LocateFixed,
   MapPin,
@@ -152,6 +154,16 @@ interface FilterOption {
   label: string;
   value: string;
 }
+
+type MobileFilterStep =
+  | 'root'
+  | 'q'
+  | 'location'
+  | 'listingType'
+  | 'sex'
+  | 'breed'
+  | 'price'
+  | 'age';
 
 const OVERLAY_VIEWPORT_PADDING = 12;
 
@@ -745,11 +757,18 @@ function FiltersForm({
   const [compositePopoverPlacement, setCompositePopoverPlacement] = useState<'bottom' | 'top'>(
     'bottom',
   );
+  const [mobileStep, setMobileStep] = useState<MobileFilterStep>('root');
   const priceFieldRef = useRef<HTMLDivElement>(null);
   const ageFieldRef = useRef<HTMLDivElement>(null);
   const compositePopoverRef = useRef<HTMLDivElement>(null);
+  const listingTypeLabel = optionLabel(LISTING_TYPES, state.listingType);
+  const sexLabel = optionLabel(SEX_OPTIONS, state.sex);
+  const breedLabel = optionLabel(BREEDS, state.breed);
   const priceRangeLabel = buildPriceRangeLabel(state.priceMin, state.priceMax);
   const ageRangeLabel = buildAgeRangeLabel(state.ageMinMonths, state.ageMaxMonths);
+  const qSummaryLabel = state.q.trim() || 'Nessun testo';
+  const locationSummaryLabel =
+    state.locationLabel || state.locationQuery.trim() || 'Nessuna localita';
 
   const getCompositePopoverPlacement = (popover: 'price' | 'age'): 'bottom' | 'top' => {
     const activeField = popover === 'price' ? priceFieldRef.current : ageFieldRef.current;
@@ -820,6 +839,402 @@ function FiltersForm({
     event.preventDefault();
     onSubmit();
   };
+
+  useEffect(() => {
+    if (!compact && mobileStep !== 'root') {
+      setMobileStep('root');
+    }
+  }, [compact, mobileStep]);
+
+  const applyMobileSelection = (
+    updater: (currentState: ListingsFilterValues) => ListingsFilterValues,
+  ) => {
+    setState(updater);
+    setMobileStep('root');
+  };
+
+  const renderMobileStepButton = (
+    step: Exclude<MobileFilterStep, 'root'>,
+    label: string,
+    value: string,
+  ) => (
+    <button
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-surface-muted)]"
+      onClick={() => setMobileStep(step)}
+      type="button"
+    >
+      <span className="min-w-0 space-y-0.5">
+        <span className={cn(labelClassName, 'block text-[0.62rem]')}>{label}</span>
+        <span className="block truncate text-sm font-semibold text-[var(--color-text)]">
+          {value}
+        </span>
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
+      />
+    </button>
+  );
+
+  const renderMobileOptionList = (
+    options: ReadonlyArray<FilterOption>,
+    value: string,
+    onSelect: (nextValue: string) => void,
+  ) => (
+    <div className="space-y-1">
+      {options.map((option) => (
+        <button
+          className={cn(
+            'w-full rounded-xl px-3 py-2.5 text-left text-[0.98rem] text-[var(--color-text)] transition-colors',
+            option.value === value
+              ? 'platform-select-option-active font-semibold'
+              : 'hover:bg-[var(--color-surface-muted)]',
+          )}
+          key={`${option.value || 'empty'}-${option.label}`}
+          onClick={() => onSelect(option.value)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const mobileStepTitle =
+    mobileStep === 'q'
+      ? 'Cerca'
+      : mobileStep === 'location'
+        ? 'Dove'
+        : mobileStep === 'listingType'
+          ? 'Tipologia'
+          : mobileStep === 'sex'
+            ? 'Sesso'
+            : mobileStep === 'breed'
+              ? 'Razza'
+              : mobileStep === 'price'
+                ? 'Prezzo'
+                : mobileStep === 'age'
+                  ? 'Eta del gatto'
+                  : 'Filtri';
+
+  if (compact) {
+    return (
+      <form className={containerClassName} onSubmit={onFormSubmit}>
+        {mobileStep === 'root' ? (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
+                  Filtra gli annunci
+                </p>
+                {activeFiltersCount > 0 ? (
+                  <Badge className="shrink-0" variant="outline">
+                    {activeFiltersCount} filtri
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                Ricerca per testo, posizione, prezzo, eta e preferenze.
+              </p>
+            </div>
+
+            {state.referenceLat !== null && state.referenceLon !== null ? (
+              <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--color-border)_78%,white_22%)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,transparent)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+                      <LocateFixed
+                        aria-hidden="true"
+                        className="h-4 w-4 text-[var(--color-primary)]"
+                      />
+                      Ordinati per distanza
+                    </p>
+                    <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                      Stai vedendo gli annunci piu vicini alla tua posizione attuale.
+                    </p>
+                  </div>
+                  <button
+                    className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-border)] px-3 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+                    onClick={() =>
+                      setState((currentState) => ({
+                        ...currentState,
+                        referenceLat: null,
+                        referenceLon: null,
+                      }))
+                    }
+                    type="button"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              {renderMobileStepButton('q', 'Cerca', qSummaryLabel)}
+              {renderMobileStepButton('location', 'Dove', locationSummaryLabel)}
+              {renderMobileStepButton('listingType', 'Tipologia', listingTypeLabel)}
+              {renderMobileStepButton('sex', 'Sesso', sexLabel)}
+              {renderMobileStepButton('breed', 'Razza', breedLabel)}
+              {renderMobileStepButton('price', 'Prezzo', priceRangeLabel)}
+              {renderMobileStepButton('age', 'Eta del gatto', ageRangeLabel)}
+            </div>
+
+            {validationError ? (
+              <p className="rounded-2xl border border-[color:color-mix(in_srgb,var(--color-border-strong)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_72%,transparent)] px-4 py-3 text-sm text-[var(--color-text)]">
+                {validationError}
+              </p>
+            ) : null}
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button className="gap-2 sm:flex-1" disabled={pending} type="submit">
+                <Search aria-hidden="true" className="h-4 w-4" />
+                {pending ? 'Aggiorno...' : 'Applica filtri'}
+              </Button>
+              <Button
+                className="gap-2 sm:flex-1"
+                onClick={onReset}
+                type="button"
+                variant="secondary"
+              >
+                <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                Azzera
+              </Button>
+            </div>
+
+            {onCloseMobileSheet ? (
+              <button
+                className="w-full rounded-full border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+                onClick={onCloseMobileSheet}
+                type="button"
+              >
+                Chiudi pannello
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <div className="space-y-4">
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+              onClick={() => setMobileStep('root')}
+              type="button"
+            >
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Torna ai filtri
+            </button>
+
+            <div className="space-y-1">
+              <p className={labelClassName}>Sezione</p>
+              <h3 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
+                {mobileStepTitle}
+              </h3>
+            </div>
+
+            {mobileStep === 'q' ? (
+              <label className="space-y-2" htmlFor={qInputId}>
+                <span className={labelClassName}>Cerca</span>
+                <div className="relative">
+                  <Search
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
+                  />
+                  <input
+                    className={cn(textInputClassName, 'pl-10')}
+                    id={qInputId}
+                    onChange={(event) =>
+                      setState((currentState) => ({
+                        ...currentState,
+                        q: event.target.value,
+                      }))
+                    }
+                    placeholder="Es. micia giovane, stallo urgente, Milano"
+                    type="text"
+                    value={state.q}
+                  />
+                </div>
+              </label>
+            ) : null}
+
+            {mobileStep === 'location' ? (
+              <LocationAutocomplete
+                inputId={locationInputId}
+                inputValue={state.locationQuery}
+                label="Dove"
+                onChange={(value) =>
+                  setState((currentState) => {
+                    const shouldClearStructuredLocation =
+                      normalizeText(value) !== normalizeText(currentState.locationLabel);
+
+                    return {
+                      ...(shouldClearStructuredLocation
+                        ? clearStructuredLocation(currentState)
+                        : currentState),
+                      locationQuery: value,
+                      referenceLat: null,
+                      referenceLon: null,
+                    };
+                  })
+                }
+                onPickSuggestion={(suggestion) =>
+                  applyMobileSelection((currentState) =>
+                    applyLocationSuggestion(currentState, suggestion),
+                  )
+                }
+              />
+            ) : null}
+
+            {mobileStep === 'listingType' ? (
+              <div className="space-y-2">
+                <span className={labelClassName}>Tipologia</span>
+                {renderMobileOptionList(LISTING_TYPES, state.listingType, (value) => {
+                  applyMobileSelection((currentState) => ({
+                    ...currentState,
+                    listingType: value,
+                  }));
+                })}
+              </div>
+            ) : null}
+
+            {mobileStep === 'sex' ? (
+              <div className="space-y-2">
+                <span className={labelClassName}>Sesso</span>
+                {renderMobileOptionList(SEX_OPTIONS, state.sex, (value) => {
+                  applyMobileSelection((currentState) => ({
+                    ...currentState,
+                    sex: value,
+                  }));
+                })}
+              </div>
+            ) : null}
+
+            {mobileStep === 'breed' ? (
+              <div className="space-y-2">
+                <span className={labelClassName}>Razza</span>
+                {renderMobileOptionList(BREEDS, state.breed, (value) => {
+                  applyMobileSelection((currentState) => ({
+                    ...currentState,
+                    breed: value,
+                  }));
+                })}
+              </div>
+            ) : null}
+
+            {mobileStep === 'price' ? (
+              <div className="space-y-4">
+                <div className="filter-field-group">
+                  <span className="location-label">Prezzo minimo</span>
+                  {renderMobileOptionList(
+                    PRICE_FILTER_OPTIONS.map((option) => ({
+                      ...option,
+                      label: option.value ? `Da ${option.label}` : option.label,
+                    })),
+                    state.priceMin !== null ? String(state.priceMin) : '',
+                    (value) => {
+                      applyMobileSelection((currentState) => ({
+                        ...currentState,
+                        priceMin: numberOrNull(value),
+                      }));
+                    },
+                  )}
+                </div>
+
+                <div className="filter-field-group">
+                  <span className="location-label">Prezzo massimo</span>
+                  {renderMobileOptionList(
+                    PRICE_FILTER_OPTIONS.map((option) => ({
+                      ...option,
+                      label: option.value ? `Fino a ${option.label}` : option.label,
+                    })),
+                    state.priceMax !== null ? String(state.priceMax) : '',
+                    (value) => {
+                      applyMobileSelection((currentState) => ({
+                        ...currentState,
+                        priceMax: numberOrNull(value),
+                      }));
+                    },
+                  )}
+                </div>
+                <p className="location-meta">
+                  Seleziona un intervallo rapido senza digitare importi.
+                </p>
+                <div className="filter-reset-row">
+                  <button
+                    className="filter-reset-btn"
+                    onClick={() =>
+                      setState((currentState) => ({
+                        ...currentState,
+                        priceMin: null,
+                        priceMax: null,
+                      }))
+                    }
+                    type="button"
+                  >
+                    Azzera
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {mobileStep === 'age' ? (
+              <div className="space-y-4">
+                <div className="filter-field-group">
+                  <span className="location-label">Eta minima</span>
+                  {renderMobileOptionList(
+                    AGE_FILTER_OPTIONS.map((option) => ({
+                      ...option,
+                      label: option.value ? `Da ${option.label}` : option.label,
+                    })),
+                    state.ageMinMonths !== null ? String(state.ageMinMonths) : '',
+                    (value) => {
+                      applyMobileSelection((currentState) => ({
+                        ...currentState,
+                        ageMinMonths: numberOrNull(value),
+                      }));
+                    },
+                  )}
+                </div>
+
+                <div className="filter-field-group">
+                  <span className="location-label">Eta massima</span>
+                  {renderMobileOptionList(
+                    AGE_FILTER_OPTIONS.map((option) => ({
+                      ...option,
+                      label: option.value ? `Fino a ${option.label}` : option.label,
+                    })),
+                    state.ageMaxMonths !== null ? String(state.ageMaxMonths) : '',
+                    (value) => {
+                      applyMobileSelection((currentState) => ({
+                        ...currentState,
+                        ageMaxMonths: numberOrNull(value),
+                      }));
+                    },
+                  )}
+                </div>
+                <p className="location-meta">
+                  Le opzioni usano mesi e anni, ma il backend salva sempre il valore in mesi.
+                </p>
+                <div className="filter-reset-row">
+                  <button
+                    className="filter-reset-btn"
+                    onClick={() =>
+                      setState((currentState) => ({
+                        ...currentState,
+                        ageMinMonths: null,
+                        ageMaxMonths: null,
+                      }))
+                    }
+                    type="button"
+                  >
+                    Azzera
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </form>
+    );
+  }
 
   return (
     <form className={containerClassName} onSubmit={onFormSubmit}>
