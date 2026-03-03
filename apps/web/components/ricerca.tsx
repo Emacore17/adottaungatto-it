@@ -6,7 +6,8 @@ import {
   NO_BREED_FILTER,
   type SearchSort,
 } from '@adottaungatto/types';
-import { Badge } from '@adottaungatto/ui';
+import { Badge, cn } from '@adottaungatto/ui';
+import { ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -51,6 +52,11 @@ interface MobileSheetProps {
   onClose: () => void;
   open: boolean;
   title: string;
+}
+
+interface FilterOption {
+  label: string;
+  value: string;
 }
 
 const BREEDS = [
@@ -354,14 +360,13 @@ function MobileSheet({ children, description, onClose, open, title }: MobileShee
     <div
       className="mobile-sheet-backdrop"
       data-test-mobile-sheet="true"
-      onMouseDown={onClose}
+      onPointerDown={onClose}
       role="presentation"
     >
-      <dialog
+      <section
         aria-label={title}
         className="mobile-sheet"
-        onMouseDown={(event) => event.stopPropagation()}
-        open
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="mobile-sheet-handle" />
         <div className="mobile-sheet-header">
@@ -393,9 +398,128 @@ function MobileSheet({ children, description, onClose, open, title }: MobileShee
         </div>
 
         <div className="mobile-sheet-body">{children}</div>
-      </dialog>
+      </section>
     </div>,
     document.body,
+  );
+}
+
+function MobileFilterSelect({
+  ariaLabel,
+  className,
+  disabled = false,
+  onChange,
+  options,
+  value,
+}: {
+  ariaLabel: string;
+  className?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<FilterOption>;
+  value: string;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const selectedLabel = optionLabel(options, value);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!rootRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [open]);
+
+  return (
+    <div className={cn('relative', className)} ref={rootRef}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        className={cn(
+          'platform-select platform-select-trigger',
+          open ? 'platform-select-open' : '',
+        )}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) {
+            setOpen((currentOpen) => !currentOpen);
+          }
+        }}
+        type="button"
+      >
+        <span className="platform-select-value">{selectedLabel}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('h-4 w-4 shrink-0 transition-transform', open ? 'rotate-180' : '')}
+        />
+      </button>
+
+      {open ? (
+        <div className="platform-select-menu platform-select-menu-inline" role="presentation">
+          <div className="platform-select-options">
+            {options.map((option) => (
+              <button
+                aria-selected={option.value === value}
+                className={cn(
+                  'popover-list-item',
+                  option.value === value ? 'platform-select-option-active' : '',
+                )}
+                key={`${option.value || 'empty'}-${option.label}`}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -818,39 +942,73 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     <div className="price-popover">
       <div className="filter-grid">
         <div className="filter-field-group">
-          <label className="location-label" htmlFor="price-min">
-            Prezzo minimo
-          </label>
-          <select
-            className="filter-select"
-            id="price-min"
-            onChange={(event) => setPriceBoundary('min', event.target.value)}
-            value={search.priceMin !== null ? String(search.priceMin) : ''}
-          >
-            {PRICE_FILTER_OPTIONS.map((option) => (
-              <option key={`price-min-${option.value || 'none'}`} value={option.value}>
-                {option.value ? `Da ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
+          {isCompactSearchLayout ? (
+            <span className="location-label">Prezzo minimo</span>
+          ) : (
+            <label className="location-label" htmlFor="price-min">
+              Prezzo minimo
+            </label>
+          )}
+          {isCompactSearchLayout ? (
+            <MobileFilterSelect
+              ariaLabel="Prezzo minimo"
+              className="w-full"
+              onChange={(nextValue) => setPriceBoundary('min', nextValue)}
+              options={PRICE_FILTER_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.value ? `Da ${option.label}` : option.label,
+              }))}
+              value={search.priceMin !== null ? String(search.priceMin) : ''}
+            />
+          ) : (
+            <select
+              className="platform-select"
+              id="price-min"
+              onChange={(event) => setPriceBoundary('min', event.target.value)}
+              value={search.priceMin !== null ? String(search.priceMin) : ''}
+            >
+              {PRICE_FILTER_OPTIONS.map((option) => (
+                <option key={`price-min-${option.value || 'none'}`} value={option.value}>
+                  {option.value ? `Da ${option.label}` : option.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="filter-field-group">
-          <label className="location-label" htmlFor="price-max">
-            Prezzo massimo
-          </label>
-          <select
-            className="filter-select"
-            id="price-max"
-            onChange={(event) => setPriceBoundary('max', event.target.value)}
-            value={search.priceMax !== null ? String(search.priceMax) : ''}
-          >
-            {PRICE_FILTER_OPTIONS.map((option) => (
-              <option key={`price-max-${option.value || 'none'}`} value={option.value}>
-                {option.value ? `Fino a ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
+          {isCompactSearchLayout ? (
+            <span className="location-label">Prezzo massimo</span>
+          ) : (
+            <label className="location-label" htmlFor="price-max">
+              Prezzo massimo
+            </label>
+          )}
+          {isCompactSearchLayout ? (
+            <MobileFilterSelect
+              ariaLabel="Prezzo massimo"
+              className="w-full"
+              onChange={(nextValue) => setPriceBoundary('max', nextValue)}
+              options={PRICE_FILTER_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.value ? `Fino a ${option.label}` : option.label,
+              }))}
+              value={search.priceMax !== null ? String(search.priceMax) : ''}
+            />
+          ) : (
+            <select
+              className="platform-select"
+              id="price-max"
+              onChange={(event) => setPriceBoundary('max', event.target.value)}
+              value={search.priceMax !== null ? String(search.priceMax) : ''}
+            >
+              {PRICE_FILTER_OPTIONS.map((option) => (
+                <option key={`price-max-${option.value || 'none'}`} value={option.value}>
+                  {option.value ? `Fino a ${option.label}` : option.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -868,39 +1026,81 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     <div className="age-popover">
       <div className="filter-grid">
         <div className="filter-field-group">
-          <label className="location-label" htmlFor={ageMinInputId}>
-            Eta minima
-          </label>
-          <select
-            className="filter-select"
-            id={ageMinInputId}
-            onChange={(event) => setAgeBoundary('min', event.target.value)}
-            value={getAgeBoundaryMonths('min') !== null ? String(getAgeBoundaryMonths('min')) : ''}
-          >
-            {AGE_FILTER_OPTIONS.map((option) => (
-              <option key={`age-min-${option.value || 'none'}`} value={option.value}>
-                {option.value ? `Da ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
+          {isCompactSearchLayout ? (
+            <span className="location-label">Eta minima</span>
+          ) : (
+            <label className="location-label" htmlFor={ageMinInputId}>
+              Eta minima
+            </label>
+          )}
+          {isCompactSearchLayout ? (
+            <MobileFilterSelect
+              ariaLabel="Eta minima"
+              className="w-full"
+              onChange={(nextValue) => setAgeBoundary('min', nextValue)}
+              options={AGE_FILTER_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.value ? `Da ${option.label}` : option.label,
+              }))}
+              value={
+                getAgeBoundaryMonths('min') !== null ? String(getAgeBoundaryMonths('min')) : ''
+              }
+            />
+          ) : (
+            <select
+              className="platform-select"
+              id={ageMinInputId}
+              onChange={(event) => setAgeBoundary('min', event.target.value)}
+              value={
+                getAgeBoundaryMonths('min') !== null ? String(getAgeBoundaryMonths('min')) : ''
+              }
+            >
+              {AGE_FILTER_OPTIONS.map((option) => (
+                <option key={`age-min-${option.value || 'none'}`} value={option.value}>
+                  {option.value ? `Da ${option.label}` : option.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="filter-field-group">
-          <label className="location-label" htmlFor={ageMaxInputId}>
-            Eta massima
-          </label>
-          <select
-            className="filter-select"
-            id={ageMaxInputId}
-            onChange={(event) => setAgeBoundary('max', event.target.value)}
-            value={getAgeBoundaryMonths('max') !== null ? String(getAgeBoundaryMonths('max')) : ''}
-          >
-            {AGE_FILTER_OPTIONS.map((option) => (
-              <option key={`age-max-${option.value || 'none'}`} value={option.value}>
-                {option.value ? `Fino a ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
+          {isCompactSearchLayout ? (
+            <span className="location-label">Eta massima</span>
+          ) : (
+            <label className="location-label" htmlFor={ageMaxInputId}>
+              Eta massima
+            </label>
+          )}
+          {isCompactSearchLayout ? (
+            <MobileFilterSelect
+              ariaLabel="Eta massima"
+              className="w-full"
+              onChange={(nextValue) => setAgeBoundary('max', nextValue)}
+              options={AGE_FILTER_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.value ? `Fino a ${option.label}` : option.label,
+              }))}
+              value={
+                getAgeBoundaryMonths('max') !== null ? String(getAgeBoundaryMonths('max')) : ''
+              }
+            />
+          ) : (
+            <select
+              className="platform-select"
+              id={ageMaxInputId}
+              onChange={(event) => setAgeBoundary('max', event.target.value)}
+              value={
+                getAgeBoundaryMonths('max') !== null ? String(getAgeBoundaryMonths('max')) : ''
+              }
+            >
+              {AGE_FILTER_OPTIONS.map((option) => (
+                <option key={`age-max-${option.value || 'none'}`} value={option.value}>
+                  {option.value ? `Fino a ${option.label}` : option.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 

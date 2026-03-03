@@ -7,7 +7,16 @@ import {
   type SearchSort,
 } from '@adottaungatto/types';
 import { Badge, Button, cn } from '@adottaungatto/ui';
-import { ArrowUpDown, Filter, LocateFixed, MapPin, RotateCcw, Search, X } from 'lucide-react';
+import {
+  ArrowUpDown,
+  ChevronDown,
+  Filter,
+  LocateFixed,
+  MapPin,
+  RotateCcw,
+  Search,
+  X,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
   type Dispatch,
@@ -22,6 +31,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type { GeographySuggestion } from '../lib/geography';
 import { fetchLocationSuggestions } from '../lib/geography';
 
@@ -137,6 +147,23 @@ interface ListingsResultsToolbarProps {
   totalCount: number;
   totalPages: number;
 }
+
+interface FilterOption {
+  label: string;
+  value: string;
+}
+
+const OVERLAY_VIEWPORT_PADDING = 12;
+
+const resolveOverlayPlacement = (
+  anchorTop: number,
+  anchorBottom: number,
+  overlayHeight: number,
+): 'bottom' | 'top' => {
+  const spaceBelow = window.innerHeight - anchorBottom - OVERLAY_VIEWPORT_PADDING;
+  const spaceAbove = anchorTop - OVERLAY_VIEWPORT_PADDING;
+  return spaceBelow >= overlayHeight || spaceBelow >= spaceAbove ? 'bottom' : 'top';
+};
 
 const numberOrNull = (value: string) => {
   if (!value) {
@@ -254,6 +281,50 @@ const buildListingsHref = (state: ListingsFilterValues, page = 1) => {
   return queryString ? `/annunci?${queryString}` : '/annunci';
 };
 
+const optionLabel = (options: ReadonlyArray<FilterOption>, value: string) =>
+  options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
+
+const buildPriceRangeLabel = (priceMin: number | null, priceMax: number | null) => {
+  if (priceMin === null && priceMax === null) {
+    return 'Qualsiasi prezzo';
+  }
+
+  if (priceMin !== null && priceMax !== null) {
+    return `${priceMin} - ${priceMax} EUR`;
+  }
+
+  if (priceMin !== null) {
+    return `Da ${priceMin} EUR`;
+  }
+
+  return `Fino a ${priceMax} EUR`;
+};
+
+const formatAgeMonthsLabel = (months: number) => {
+  if (months > 0 && months % 12 === 0) {
+    const years = months / 12;
+    return `${years} ${years === 1 ? 'anno' : 'anni'}`;
+  }
+
+  return `${months} ${months === 1 ? 'mese' : 'mesi'}`;
+};
+
+const buildAgeRangeLabel = (ageMinMonths: number | null, ageMaxMonths: number | null) => {
+  if (ageMinMonths === null && ageMaxMonths === null) {
+    return 'Qualsiasi eta';
+  }
+
+  if (ageMinMonths !== null && ageMaxMonths !== null) {
+    return `${formatAgeMonthsLabel(ageMinMonths)} - ${formatAgeMonthsLabel(ageMaxMonths)}`;
+  }
+
+  if (ageMinMonths !== null) {
+    return `Da ${formatAgeMonthsLabel(ageMinMonths)}`;
+  }
+
+  return `Fino a ${formatAgeMonthsLabel(ageMaxMonths ?? 0)}`;
+};
+
 function MobileFiltersSheet({
   children,
   onClose,
@@ -263,6 +334,12 @@ function MobileFiltersSheet({
   onClose: () => void;
   open: boolean;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -284,13 +361,17 @@ function MobileFiltersSheet({
     };
   }, [onClose, open]);
 
-  if (!open) {
+  if (!open || !mounted) {
     return null;
   }
 
-  return (
-    <div className="mobile-sheet-backdrop lg:hidden" onMouseDown={onClose} role="presentation">
-      <dialog className="mobile-sheet" onMouseDown={(event) => event.stopPropagation()} open>
+  return createPortal(
+    <div className="mobile-sheet-backdrop lg:hidden" onPointerDown={onClose} role="presentation">
+      <section
+        aria-label="Filtri ricerca"
+        className="mobile-sheet"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <div className="mobile-sheet-handle" />
         <div className="mobile-sheet-header">
           <div className="mobile-sheet-heading">
@@ -310,8 +391,9 @@ function MobileFiltersSheet({
         </div>
 
         <div className="mobile-sheet-body">{children}</div>
-      </dialog>
-    </div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 
@@ -471,6 +553,161 @@ function LocationAutocomplete({
   );
 }
 
+function FilterSelect({
+  className,
+  compact = false,
+  disabled = false,
+  onChange,
+  options,
+  value,
+}: {
+  className?: string;
+  compact?: boolean;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<FilterOption>;
+  value: string;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [menuPlacement, setMenuPlacement] = useState<'bottom' | 'top'>('bottom');
+  const selectedLabel = optionLabel(options, value);
+
+  const estimateMenuHeight = () => {
+    const rowHeight = 36;
+    const contentHeight = options.length * rowHeight + 16;
+    const viewportMaxHeight = Math.min(320, Math.max(180, window.innerHeight - 288));
+    return Math.min(contentHeight, viewportMaxHeight);
+  };
+
+  const getMenuPlacement = (): 'bottom' | 'top' => {
+    if (compact) {
+      return 'bottom';
+    }
+
+    const root = rootRef.current;
+    if (!root) {
+      return 'bottom';
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const menuHeight = estimateMenuHeight();
+
+    return resolveOverlayPlacement(rootRect.top, rootRect.bottom, menuHeight);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!rootRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !compact) {
+      return;
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [compact, open]);
+
+  return (
+    <div className={cn('relative', className)} ref={rootRef}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="true"
+        className={cn(
+          'platform-select platform-select-trigger',
+          open ? 'platform-select-open' : '',
+        )}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) {
+            if (!open) {
+              setMenuPlacement(getMenuPlacement());
+            }
+            setOpen((currentOpen) => !currentOpen);
+          }
+        }}
+        type="button"
+      >
+        <span className="platform-select-value">{selectedLabel}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('h-4 w-4 shrink-0 transition-transform', open ? 'rotate-180' : '')}
+        />
+      </button>
+
+      {open ? (
+        <div
+          className={cn(
+            'platform-select-menu',
+            compact
+              ? 'platform-select-menu-inline'
+              : menuPlacement === 'top'
+                ? 'platform-select-menu-top'
+                : 'platform-select-menu-bottom',
+          )}
+          role="presentation"
+        >
+          <div className="platform-select-options">
+            {options.map((option) => (
+              <button
+                aria-selected={option.value === value}
+                className={cn(
+                  'popover-list-item',
+                  option.value === value ? 'platform-select-option-active' : '',
+                )}
+                key={`${option.value || 'empty'}-${option.label}`}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function FiltersForm({
   compact = false,
   onCloseMobileSheet,
@@ -501,8 +738,83 @@ function FiltersForm({
     : 'space-y-5 rounded-[30px] border border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] p-5 shadow-[0_18px_52px_rgb(66_40_49_/_0.08)]';
   const labelClassName =
     'text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]';
-  const inputClassName =
+  const textInputClassName =
     'h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] outline-none transition-[border-color,box-shadow] duration-200 focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_16%,transparent)]';
+  const selectClassName = 'w-full';
+  const [openCompositePopover, setOpenCompositePopover] = useState<'price' | 'age' | null>(null);
+  const [compositePopoverPlacement, setCompositePopoverPlacement] = useState<'bottom' | 'top'>(
+    'bottom',
+  );
+  const priceFieldRef = useRef<HTMLDivElement>(null);
+  const ageFieldRef = useRef<HTMLDivElement>(null);
+  const compositePopoverRef = useRef<HTMLDivElement>(null);
+  const priceRangeLabel = buildPriceRangeLabel(state.priceMin, state.priceMax);
+  const ageRangeLabel = buildAgeRangeLabel(state.ageMinMonths, state.ageMaxMonths);
+
+  const getCompositePopoverPlacement = (popover: 'price' | 'age'): 'bottom' | 'top' => {
+    const activeField = popover === 'price' ? priceFieldRef.current : ageFieldRef.current;
+    const trigger = activeField?.querySelector<HTMLButtonElement>('button.platform-select-trigger');
+    if (!trigger) {
+      return 'bottom';
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const measuredPopoverHeight = compositePopoverRef.current?.offsetHeight ?? 0;
+    const estimatedPopoverHeight = Math.min(416, Math.max(220, window.innerHeight - 64));
+    const popoverHeight = Math.max(measuredPopoverHeight, estimatedPopoverHeight);
+
+    return resolveOverlayPlacement(triggerRect.top, triggerRect.bottom, popoverHeight);
+  };
+
+  useEffect(() => {
+    if (!openCompositePopover) {
+      return;
+    }
+
+    const activeRef = openCompositePopover === 'price' ? priceFieldRef : ageFieldRef;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!activeRef.current?.contains(target)) {
+        setOpenCompositePopover(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenCompositePopover(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openCompositePopover]);
+
+  useEffect(() => {
+    if (!openCompositePopover || !compact) {
+      return;
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      compositePopoverRef.current?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [compact, openCompositePopover]);
 
   const onFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -511,18 +823,20 @@ function FiltersForm({
 
   return (
     <form className={containerClassName} onSubmit={onFormSubmit}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
           <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
             Filtra gli annunci
           </p>
-          <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-            Ricerca per testo, posizione, prezzo, eta e preferenze.
-          </p>
+          {activeFiltersCount > 0 ? (
+            <Badge className="shrink-0" variant="outline">
+              {activeFiltersCount} filtri
+            </Badge>
+          ) : null}
         </div>
-        {activeFiltersCount > 0 ? (
-          <Badge variant="outline">{activeFiltersCount} filtri</Badge>
-        ) : null}
+        <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+          Ricerca per testo, posizione, prezzo, eta e preferenze.
+        </p>
       </div>
 
       {state.referenceLat !== null && state.referenceLon !== null ? (
@@ -563,7 +877,7 @@ function FiltersForm({
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
             />
             <input
-              className={cn(inputClassName, 'pl-10')}
+              className={cn(textInputClassName, 'pl-10')}
               id={qInputId}
               onChange={(event) =>
                 setState((currentState) => ({
@@ -604,149 +918,267 @@ function FiltersForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2">
+        <div className="space-y-2">
           <span className={labelClassName}>Tipologia</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
               setState((currentState) => ({
                 ...currentState,
-                listingType: event.target.value,
+                listingType: value,
               }))
             }
+            options={LISTING_TYPES}
             value={state.listingType}
-          >
-            {LISTING_TYPES.map((option) => (
-              <option key={option.value || 'all-types'} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
 
-        <label className="space-y-2">
+        <div className="space-y-2">
           <span className={labelClassName}>Sesso</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
               setState((currentState) => ({
                 ...currentState,
-                sex: event.target.value,
+                sex: value,
               }))
             }
+            options={SEX_OPTIONS}
             value={state.sex}
-          >
-            {SEX_OPTIONS.map((option) => (
-              <option key={option.value || 'all-sex'} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
       </div>
 
-      <label className="space-y-2">
+      <div className="space-y-2">
         <span className={labelClassName}>Razza</span>
-        <select
-          className={inputClassName}
-          onChange={(event) =>
+        <FilterSelect
+          className={selectClassName}
+          compact={compact}
+          onChange={(value) =>
             setState((currentState) => ({
               ...currentState,
-              breed: event.target.value,
+              breed: value,
             }))
           }
+          options={BREEDS}
           value={state.breed}
-        >
-          {BREEDS.map((option) => (
-            <option key={option.value || 'any-breed'} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2">
-          <span className={labelClassName}>Prezzo minimo</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
-              setState((currentState) => ({
-                ...currentState,
-                priceMin: numberOrNull(event.target.value),
-              }))
-            }
-            value={state.priceMin !== null ? String(state.priceMin) : ''}
-          >
-            {PRICE_FILTER_OPTIONS.map((option) => (
-              <option key={`price-min-${option.value || 'all'}`} value={option.value}>
-                {option.value ? `Da ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2">
-          <span className={labelClassName}>Prezzo massimo</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
-              setState((currentState) => ({
-                ...currentState,
-                priceMax: numberOrNull(event.target.value),
-              }))
-            }
-            value={state.priceMax !== null ? String(state.priceMax) : ''}
-          >
-            {PRICE_FILTER_OPTIONS.map((option) => (
-              <option key={`price-max-${option.value || 'all'}`} value={option.value}>
-                {option.value ? `Fino a ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2">
-          <span className={labelClassName}>Eta minima</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
-              setState((currentState) => ({
-                ...currentState,
-                ageMinMonths: numberOrNull(event.target.value),
-              }))
-            }
-            value={state.ageMinMonths !== null ? String(state.ageMinMonths) : ''}
-          >
-            {AGE_FILTER_OPTIONS.map((option) => (
-              <option key={`age-min-${option.value || 'all'}`} value={option.value}>
-                {option.value ? `Da ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="relative space-y-2" ref={priceFieldRef}>
+        <span className={labelClassName}>Prezzo</span>
+        <button
+          aria-expanded={openCompositePopover === 'price'}
+          aria-haspopup="true"
+          className={cn(
+            'platform-select platform-select-trigger',
+            openCompositePopover === 'price' ? 'platform-select-open' : '',
+          )}
+          onClick={() =>
+            setOpenCompositePopover((currentPopover) => {
+              if (currentPopover === 'price') {
+                return null;
+              }
 
-        <label className="space-y-2">
-          <span className={labelClassName}>Eta massima</span>
-          <select
-            className={inputClassName}
-            onChange={(event) =>
-              setState((currentState) => ({
-                ...currentState,
-                ageMaxMonths: numberOrNull(event.target.value),
-              }))
-            }
-            value={state.ageMaxMonths !== null ? String(state.ageMaxMonths) : ''}
+              if (!compact) {
+                setCompositePopoverPlacement(getCompositePopoverPlacement('price'));
+              }
+              return 'price';
+            })
+          }
+          type="button"
+        >
+          <span className="platform-select-value">{priceRangeLabel}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'h-4 w-4 shrink-0 transition-transform',
+              openCompositePopover === 'price' ? 'rotate-180' : '',
+            )}
+          />
+        </button>
+
+        {openCompositePopover === 'price' ? (
+          <div
+            className={cn(
+              'filters-composite-popover',
+              compact
+                ? 'filters-composite-popover-inline'
+                : compositePopoverPlacement === 'top'
+                  ? 'filters-composite-popover-top'
+                  : 'filters-composite-popover-bottom',
+            )}
+            ref={compositePopoverRef}
           >
-            {AGE_FILTER_OPTIONS.map((option) => (
-              <option key={`age-max-${option.value || 'all'}`} value={option.value}>
-                {option.value ? `Fino a ${option.label}` : option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <div className="filter-grid">
+              <div className="filter-field-group">
+                <span className="location-label">Prezzo minimo</span>
+                <FilterSelect
+                  className={selectClassName}
+                  compact={compact}
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      priceMin: numberOrNull(value),
+                    }))
+                  }
+                  options={PRICE_FILTER_OPTIONS.map((option) => ({
+                    ...option,
+                    label: option.value ? `Da ${option.label}` : option.label,
+                  }))}
+                  value={state.priceMin !== null ? String(state.priceMin) : ''}
+                />
+              </div>
+
+              <div className="filter-field-group">
+                <span className="location-label">Prezzo massimo</span>
+                <FilterSelect
+                  className={selectClassName}
+                  compact={compact}
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      priceMax: numberOrNull(value),
+                    }))
+                  }
+                  options={PRICE_FILTER_OPTIONS.map((option) => ({
+                    ...option,
+                    label: option.value ? `Fino a ${option.label}` : option.label,
+                  }))}
+                  value={state.priceMax !== null ? String(state.priceMax) : ''}
+                />
+              </div>
+            </div>
+
+            <p className="location-meta">Seleziona un intervallo rapido senza digitare importi.</p>
+
+            <div className="filter-reset-row">
+              <button
+                className="filter-reset-btn"
+                onClick={() =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    priceMin: null,
+                    priceMax: null,
+                  }))
+                }
+                type="button"
+              >
+                Azzera
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="relative space-y-2" ref={ageFieldRef}>
+        <span className={labelClassName}>Eta del gatto</span>
+        <button
+          aria-expanded={openCompositePopover === 'age'}
+          aria-haspopup="true"
+          className={cn(
+            'platform-select platform-select-trigger',
+            openCompositePopover === 'age' ? 'platform-select-open' : '',
+          )}
+          onClick={() =>
+            setOpenCompositePopover((currentPopover) => {
+              if (currentPopover === 'age') {
+                return null;
+              }
+
+              if (!compact) {
+                setCompositePopoverPlacement(getCompositePopoverPlacement('age'));
+              }
+              return 'age';
+            })
+          }
+          type="button"
+        >
+          <span className="platform-select-value">{ageRangeLabel}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'h-4 w-4 shrink-0 transition-transform',
+              openCompositePopover === 'age' ? 'rotate-180' : '',
+            )}
+          />
+        </button>
+
+        {openCompositePopover === 'age' ? (
+          <div
+            className={cn(
+              'filters-composite-popover',
+              compact
+                ? 'filters-composite-popover-inline'
+                : compositePopoverPlacement === 'top'
+                  ? 'filters-composite-popover-top'
+                  : 'filters-composite-popover-bottom',
+            )}
+            ref={compositePopoverRef}
+          >
+            <div className="filter-grid">
+              <div className="filter-field-group">
+                <span className="location-label">Eta minima</span>
+                <FilterSelect
+                  className={selectClassName}
+                  compact={compact}
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      ageMinMonths: numberOrNull(value),
+                    }))
+                  }
+                  options={AGE_FILTER_OPTIONS.map((option) => ({
+                    ...option,
+                    label: option.value ? `Da ${option.label}` : option.label,
+                  }))}
+                  value={state.ageMinMonths !== null ? String(state.ageMinMonths) : ''}
+                />
+              </div>
+
+              <div className="filter-field-group">
+                <span className="location-label">Eta massima</span>
+                <FilterSelect
+                  className={selectClassName}
+                  compact={compact}
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      ageMaxMonths: numberOrNull(value),
+                    }))
+                  }
+                  options={AGE_FILTER_OPTIONS.map((option) => ({
+                    ...option,
+                    label: option.value ? `Fino a ${option.label}` : option.label,
+                  }))}
+                  value={state.ageMaxMonths !== null ? String(state.ageMaxMonths) : ''}
+                />
+              </div>
+            </div>
+
+            <p className="location-meta">
+              Le opzioni usano mesi e anni, ma il backend salva sempre il valore in mesi.
+            </p>
+
+            <div className="filter-reset-row">
+              <button
+                className="filter-reset-btn"
+                onClick={() =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    ageMinMonths: null,
+                    ageMaxMonths: null,
+                  }))
+                }
+                type="button"
+              >
+                Azzera
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {validationError ? (
@@ -896,20 +1328,125 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
 export function ListingsFiltersSidebar({ initialValues }: ListingsFiltersSidebarProps) {
   const { pending, reset, setState, state, submit, validationError } =
     useListingsFilterState(initialValues);
+  const stickyShellRef = useRef<HTMLDivElement>(null);
+  const stickyPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const shell = stickyShellRef.current;
+    const panel = stickyPanelRef.current;
+    if (!shell || !panel) {
+      return;
+    }
+
+    let offset = 0;
+    let minOffset = 0;
+    let stickyTop = 0;
+    let stickyStartScrollY: number | null = null;
+    let previousScrollY = window.scrollY;
+    let resizeRaf = 0;
+    const stickyStartDelay = 96;
+
+    const applyOffset = (nextOffset: number) => {
+      if (nextOffset === offset) {
+        return;
+      }
+
+      offset = nextOffset;
+      panel.style.transform = offset === 0 ? '' : `translateY(${offset}px)`;
+    };
+
+    const clampOffset = (value: number) => Math.max(minOffset, Math.min(0, value));
+
+    const measure = () => {
+      stickyTop = Number.parseFloat(window.getComputedStyle(shell).top) || 0;
+      const availableHeight = window.innerHeight - stickyTop - 8;
+      const panelHeight = panel.getBoundingClientRect().height;
+      minOffset = Math.min(0, availableHeight - panelHeight);
+
+      if (minOffset === 0) {
+        applyOffset(0);
+        return;
+      }
+
+      applyOffset(clampOffset(offset));
+    };
+
+    const onScroll = () => {
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - previousScrollY;
+      previousScrollY = currentScrollY;
+
+      const shellTop = shell.getBoundingClientRect().top;
+      const stickyEngaged = shellTop <= stickyTop + 1;
+
+      if (!stickyEngaged) {
+        stickyStartScrollY = null;
+        if (offset !== 0) {
+          applyOffset(0);
+        }
+        return;
+      }
+
+      if (stickyStartScrollY === null) {
+        stickyStartScrollY = currentScrollY;
+      }
+
+      if (currentScrollY - stickyStartScrollY < stickyStartDelay) {
+        if (offset !== 0) {
+          applyOffset(0);
+        }
+        return;
+      }
+
+      if (currentScrollY <= 0 || minOffset === 0 || delta === 0) {
+        if (currentScrollY <= 0 && offset !== 0) {
+          applyOffset(0);
+        }
+        return;
+      }
+
+      const nextOffset =
+        delta > 0 ? Math.max(minOffset, offset - delta) : Math.min(0, offset - delta);
+
+      applyOffset(nextOffset);
+    };
+
+    const onResize = () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = window.requestAnimationFrame(measure);
+    };
+
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(panel);
+
+    measure();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeObserver.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      panel.style.transform = '';
+    };
+  }, []);
 
   return (
     <aside className="hidden lg:block">
-      <div className="sticky top-[calc(var(--shell-header-height)+2rem)]">
-        <FiltersForm
-          onReset={reset}
-          onSubmit={() => {
-            void submit();
-          }}
-          pending={pending}
-          setState={setState}
-          state={state}
-          validationError={validationError}
-        />
+      <div className="sticky top-[calc(var(--shell-header-height)+0.75rem)]" ref={stickyShellRef}>
+        <div className="will-change-transform" ref={stickyPanelRef}>
+          <FiltersForm
+            onReset={reset}
+            onSubmit={() => {
+              void submit();
+            }}
+            pending={pending}
+            setState={setState}
+            state={state}
+            validationError={validationError}
+          />
+        </div>
       </div>
     </aside>
   );
@@ -966,23 +1503,18 @@ export function ListingsResultsToolbar({
               </Button>
             </div>
 
-            <label className="space-y-1.5">
+            <div className="space-y-1.5">
               <span className="inline-flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
                 <ArrowUpDown aria-hidden="true" className="h-3.5 w-3.5" />
                 Ordina per
               </span>
-              <select
-                className="h-11 min-w-[220px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] outline-none transition-[border-color,box-shadow] duration-200 focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_16%,transparent)]"
-                onChange={(event) => changeSort(event.target.value as SearchSort)}
+              <FilterSelect
+                className="min-w-[220px]"
+                onChange={(value) => changeSort(value as SearchSort)}
+                options={SORT_OPTIONS}
                 value={state.sort}
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           </div>
         </div>
       </div>

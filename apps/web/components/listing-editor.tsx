@@ -108,6 +108,7 @@ const sexOptions = [
 
 const fieldClassName =
   'h-11 rounded-[18px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_92%,white_8%)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-[border-color,box-shadow,background-color] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_14%,transparent)]';
+const selectFieldClassName = 'platform-select';
 
 const textareaClassName = cn(fieldClassName, 'min-h-[150px] h-auto resize-y py-3 leading-6');
 const sectionCardClassName =
@@ -999,7 +1000,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-type">Tipologia</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       id="listing-type"
                       onChange={handleFieldChange('listingType')}
                       value={form.listingType}
@@ -1076,7 +1077,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-breed">Razza</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       id="listing-breed"
                       onChange={handleFieldChange('breed')}
                       value={form.breed}
@@ -1093,7 +1094,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-sex">Sesso</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       id="listing-sex"
                       onChange={handleFieldChange('sex')}
                       value={form.sex}
@@ -1121,7 +1122,7 @@ export function ListingEditor({
                         value={form.ageValue}
                       />
                       <select
-                        className={cn(fieldClassName, 'w-full')}
+                        className={selectFieldClassName}
                         onChange={handleFieldChange('ageUnit')}
                         value={form.ageUnit}
                       >
@@ -1151,7 +1152,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       id="listing-region"
                       onChange={handleRegionChange}
                       value={form.regionId}
@@ -1170,7 +1171,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-province">Provincia</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       disabled={!form.regionId}
                       id="listing-province"
                       onChange={handleProvinceChange}
@@ -1194,7 +1195,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-comune">Comune</FieldLabel>
                     <select
-                      className={cn(fieldClassName, 'w-full')}
+                      className={selectFieldClassName}
                       disabled={!form.provinceId}
                       id="listing-comune"
                       onChange={handleFieldChange('comuneId')}

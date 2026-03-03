@@ -450,7 +450,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
         </section>
       </SectionReveal>
 
-      <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+      <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[380px_minmax(0,1fr)]">
         <ListingsFiltersSidebar initialValues={filters} />
 
         <div className="space-y-6">
