@@ -120,6 +120,7 @@ export interface ListingsFilterValues {
 }
 
 interface LocationAutocompleteProps {
+  compact?: boolean;
   inputId: string;
   inputValue: string;
   label: string;
@@ -155,15 +156,7 @@ interface FilterOption {
   value: string;
 }
 
-type MobileFilterStep =
-  | 'root'
-  | 'q'
-  | 'location'
-  | 'listingType'
-  | 'sex'
-  | 'breed'
-  | 'price'
-  | 'age';
+type MobileFilterStep = 'root' | 'listingType' | 'sex' | 'breed' | 'price' | 'age';
 
 const OVERLAY_VIEWPORT_PADDING = 12;
 
@@ -410,6 +403,7 @@ function MobileFiltersSheet({
 }
 
 function LocationAutocomplete({
+  compact = false,
   inputId,
   inputValue,
   label,
@@ -492,7 +486,12 @@ function LocationAutocomplete({
   return (
     <div className="relative" ref={containerRef}>
       <label className="space-y-2" htmlFor={inputId}>
-        <span className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+        <span
+          className={cn(
+            'text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]',
+            compact ? 'text-[0.68rem]' : '',
+          )}
+        >
           {label}
         </span>
         <div className="relative">
@@ -501,7 +500,10 @@ function LocationAutocomplete({
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
           />
           <input
-            className="h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-10 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_16%,transparent)]"
+            className={cn(
+              'w-full border border-[var(--color-border)] bg-[var(--color-surface)] px-10 text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_16%,transparent)]',
+              compact ? 'h-12 rounded-[18px] text-base' : 'h-11 rounded-2xl text-sm',
+            )}
             id={inputId}
             onChange={(event) => {
               onChange(event.target.value);
@@ -516,8 +518,13 @@ function LocationAutocomplete({
       </label>
 
       {open ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-30 overflow-hidden rounded-[22px] border border-[color:color-mix(in_srgb,var(--color-border)_78%,white_22%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_92%,white_8%)] shadow-[0_24px_54px_rgb(66_40_49_/_0.16)] backdrop-blur-xl">
-          <div className="max-h-72 overflow-y-auto p-2">
+        <div
+          className={cn(
+            'absolute left-0 right-0 top-[calc(100%+0.55rem)] z-30 overflow-hidden border border-[color:color-mix(in_srgb,var(--color-border)_78%,white_22%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_92%,white_8%)] shadow-[0_24px_54px_rgb(66_40_49_/_0.16)] backdrop-blur-xl',
+            compact ? 'rounded-[18px]' : 'rounded-[22px]',
+          )}
+        >
+          <div className={cn('max-h-72 overflow-y-auto', compact ? 'p-1.5' : 'p-2')}>
             {loading ? (
               <p className="px-3 py-3 text-sm text-[var(--color-text-muted)]">
                 Cerco suggerimenti...
@@ -539,7 +546,10 @@ function LocationAutocomplete({
             {!loading && !error
               ? suggestions.map((suggestion) => (
                   <button
-                    className="flex w-full flex-col rounded-[18px] px-3 py-3 text-left transition-colors hover:bg-[color:color-mix(in_srgb,var(--color-surface)_82%,transparent)]"
+                    className={cn(
+                      'flex w-full flex-col text-left transition-colors hover:bg-[color:color-mix(in_srgb,var(--color-surface)_82%,transparent)]',
+                      compact ? 'rounded-[16px] px-3.5 py-3' : 'rounded-[18px] px-3 py-3',
+                    )}
                     key={`${suggestion.type}-${suggestion.id}`}
                     onClick={() => {
                       onPickSuggestion(suggestion);
@@ -746,12 +756,14 @@ function FiltersForm({
   }, [state]);
 
   const containerClassName = compact
-    ? 'space-y-5'
+    ? 'space-y-4'
     : 'space-y-5 rounded-[30px] border border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] p-5 shadow-[0_18px_52px_rgb(66_40_49_/_0.08)]';
   const labelClassName =
     'text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]';
   const textInputClassName =
     'h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] outline-none transition-[border-color,box-shadow] duration-200 focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_16%,transparent)]';
+  const mobileFieldClassName =
+    'h-12 w-full rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-base text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]';
   const selectClassName = 'w-full';
   const [openCompositePopover, setOpenCompositePopover] = useState<'price' | 'age' | null>(null);
   const [compositePopoverPlacement, setCompositePopoverPlacement] = useState<'bottom' | 'top'>(
@@ -766,9 +778,6 @@ function FiltersForm({
   const breedLabel = optionLabel(BREEDS, state.breed);
   const priceRangeLabel = buildPriceRangeLabel(state.priceMin, state.priceMax);
   const ageRangeLabel = buildAgeRangeLabel(state.ageMinMonths, state.ageMaxMonths);
-  const qSummaryLabel = state.q.trim() || 'Nessun testo';
-  const locationSummaryLabel =
-    state.locationLabel || state.locationQuery.trim() || 'Nessuna localita';
 
   const getCompositePopoverPlacement = (popover: 'price' | 'age'): 'bottom' | 'top' => {
     const activeField = popover === 'price' ? priceFieldRef.current : ageFieldRef.current;
@@ -858,22 +867,23 @@ function FiltersForm({
     label: string,
     value: string,
   ) => (
-    <button
-      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-surface-muted)]"
-      onClick={() => setMobileStep(step)}
-      type="button"
-    >
-      <span className="min-w-0 space-y-0.5">
-        <span className={cn(labelClassName, 'block text-[0.62rem]')}>{label}</span>
-        <span className="block truncate text-sm font-semibold text-[var(--color-text)]">
-          {value}
-        </span>
-      </span>
-      <ChevronRight
-        aria-hidden="true"
-        className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
-      />
-    </button>
+    <div className="space-y-1.5">
+      <span className={labelClassName}>{label}</span>
+      <button
+        className={cn(
+          mobileFieldClassName,
+          'flex items-center justify-between gap-3 text-left transition-colors hover:bg-[var(--color-surface-muted)]',
+        )}
+        onClick={() => setMobileStep(step)}
+        type="button"
+      >
+        <span className="min-w-0 truncate">{value}</span>
+        <ChevronRight
+          aria-hidden="true"
+          className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
+        />
+      </button>
+    </div>
   );
 
   const renderMobileOptionList = (
@@ -881,11 +891,11 @@ function FiltersForm({
     value: string,
     onSelect: (nextValue: string) => void,
   ) => (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {options.map((option) => (
         <button
           className={cn(
-            'w-full rounded-xl px-3 py-2.5 text-left text-[0.98rem] text-[var(--color-text)] transition-colors',
+            'w-full rounded-[18px] px-4 py-3 text-left text-[1rem] text-[var(--color-text)] transition-colors',
             option.value === value
               ? 'platform-select-option-active font-semibold'
               : 'hover:bg-[var(--color-surface-muted)]',
@@ -901,21 +911,17 @@ function FiltersForm({
   );
 
   const mobileStepTitle =
-    mobileStep === 'q'
-      ? 'Cerca'
-      : mobileStep === 'location'
-        ? 'Dove'
-        : mobileStep === 'listingType'
-          ? 'Tipologia'
-          : mobileStep === 'sex'
-            ? 'Sesso'
-            : mobileStep === 'breed'
-              ? 'Razza'
-              : mobileStep === 'price'
-                ? 'Prezzo'
-                : mobileStep === 'age'
-                  ? 'Eta del gatto'
-                  : 'Filtri';
+    mobileStep === 'listingType'
+      ? 'Tipologia'
+      : mobileStep === 'sex'
+        ? 'Sesso'
+        : mobileStep === 'breed'
+          ? 'Razza'
+          : mobileStep === 'price'
+            ? 'Prezzo'
+            : mobileStep === 'age'
+              ? 'Eta del gatto'
+              : 'Filtri';
 
   if (compact) {
     return (
@@ -970,14 +976,62 @@ function FiltersForm({
               </div>
             ) : null}
 
-            <div className="space-y-2">
-              {renderMobileStepButton('q', 'Cerca', qSummaryLabel)}
-              {renderMobileStepButton('location', 'Dove', locationSummaryLabel)}
-              {renderMobileStepButton('listingType', 'Tipologia', listingTypeLabel)}
-              {renderMobileStepButton('sex', 'Sesso', sexLabel)}
-              {renderMobileStepButton('breed', 'Razza', breedLabel)}
-              {renderMobileStepButton('price', 'Prezzo', priceRangeLabel)}
-              {renderMobileStepButton('age', 'Eta del gatto', ageRangeLabel)}
+            <div className="space-y-3">
+              <label className="space-y-2" htmlFor={qInputId}>
+                <span className={labelClassName}>Cerca</span>
+                <div className="relative">
+                  <Search
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
+                  />
+                  <input
+                    className={cn(textInputClassName, mobileFieldClassName, 'pl-10')}
+                    id={qInputId}
+                    onChange={(event) =>
+                      setState((currentState) => ({
+                        ...currentState,
+                        q: event.target.value,
+                      }))
+                    }
+                    placeholder="Es. micia giovane, stallo urgente, Milano"
+                    type="text"
+                    value={state.q}
+                  />
+                </div>
+              </label>
+
+              <LocationAutocomplete
+                compact
+                inputId={locationInputId}
+                inputValue={state.locationQuery}
+                label="Dove"
+                onChange={(value) =>
+                  setState((currentState) => {
+                    const shouldClearStructuredLocation =
+                      normalizeText(value) !== normalizeText(currentState.locationLabel);
+
+                    return {
+                      ...(shouldClearStructuredLocation
+                        ? clearStructuredLocation(currentState)
+                        : currentState),
+                      locationQuery: value,
+                      referenceLat: null,
+                      referenceLon: null,
+                    };
+                  })
+                }
+                onPickSuggestion={(suggestion) =>
+                  setState((currentState) => applyLocationSuggestion(currentState, suggestion))
+                }
+              />
+
+              <div className="space-y-2.5">
+                {renderMobileStepButton('listingType', 'Tipologia', listingTypeLabel)}
+                {renderMobileStepButton('sex', 'Sesso', sexLabel)}
+                {renderMobileStepButton('breed', 'Razza', breedLabel)}
+                {renderMobileStepButton('price', 'Prezzo', priceRangeLabel)}
+                {renderMobileStepButton('age', 'Eta del gatto', ageRangeLabel)}
+              </div>
             </div>
 
             {validationError ? (
@@ -1013,9 +1067,9 @@ function FiltersForm({
             ) : null}
           </>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+              className="inline-flex h-11 items-center gap-2 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
               onClick={() => setMobileStep('root')}
               type="button"
             >
@@ -1023,65 +1077,12 @@ function FiltersForm({
               Torna ai filtri
             </button>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <p className={labelClassName}>Sezione</p>
               <h3 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
                 {mobileStepTitle}
               </h3>
             </div>
-
-            {mobileStep === 'q' ? (
-              <label className="space-y-2" htmlFor={qInputId}>
-                <span className={labelClassName}>Cerca</span>
-                <div className="relative">
-                  <Search
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
-                  />
-                  <input
-                    className={cn(textInputClassName, 'pl-10')}
-                    id={qInputId}
-                    onChange={(event) =>
-                      setState((currentState) => ({
-                        ...currentState,
-                        q: event.target.value,
-                      }))
-                    }
-                    placeholder="Es. micia giovane, stallo urgente, Milano"
-                    type="text"
-                    value={state.q}
-                  />
-                </div>
-              </label>
-            ) : null}
-
-            {mobileStep === 'location' ? (
-              <LocationAutocomplete
-                inputId={locationInputId}
-                inputValue={state.locationQuery}
-                label="Dove"
-                onChange={(value) =>
-                  setState((currentState) => {
-                    const shouldClearStructuredLocation =
-                      normalizeText(value) !== normalizeText(currentState.locationLabel);
-
-                    return {
-                      ...(shouldClearStructuredLocation
-                        ? clearStructuredLocation(currentState)
-                        : currentState),
-                      locationQuery: value,
-                      referenceLat: null,
-                      referenceLon: null,
-                    };
-                  })
-                }
-                onPickSuggestion={(suggestion) =>
-                  applyMobileSelection((currentState) =>
-                    applyLocationSuggestion(currentState, suggestion),
-                  )
-                }
-              />
-            ) : null}
 
             {mobileStep === 'listingType' ? (
               <div className="space-y-2">
