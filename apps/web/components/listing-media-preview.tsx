@@ -94,7 +94,7 @@ export function ListingMediaPreview({
   return (
     <div
       aria-label={title}
-      className="relative h-full min-h-[190px] overflow-hidden rounded-l-[31px] bg-[var(--color-surface-muted)] [clip-path:inset(0_round_31px_0_0_31px)]"
+      className="relative h-full min-h-[190px] overflow-hidden rounded-t-[31px] bg-[var(--color-surface-muted)] [clip-path:inset(0_round_31px_31px_0_0)] md:rounded-l-[31px] md:rounded-t-none md:[clip-path:inset(0_round_31px_0_0_31px)]"
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => {
         setIsHovered(false);

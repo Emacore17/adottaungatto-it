@@ -82,9 +82,9 @@ export function PublicListingsList({
               <ListingSponsoredBadge className="absolute left-4 top-4 z-20" />
             ) : null}
 
-            <div className="grid min-h-[220px] grid-cols-[132px_minmax(0,1fr)] md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
+            <div className="grid min-h-[220px] grid-cols-1 md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
               <Link
-                className="relative block h-full overflow-hidden rounded-l-[31px] border-r border-[var(--color-border)] isolate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+                className="relative block h-full overflow-hidden rounded-t-[31px] border-b border-[var(--color-border)] isolate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 md:rounded-l-[31px] md:rounded-t-none md:border-b-0 md:border-r"
                 href={`/annunci/${listing.id}`}
               >
                 <ListingMediaPreview
