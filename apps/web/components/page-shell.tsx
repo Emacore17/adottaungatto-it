@@ -6,11 +6,19 @@ interface PageShellProps {
   eyebrow?: string;
   title: string;
   description: string;
+  titleExtra?: ReactNode;
   aside?: ReactNode;
   children?: ReactNode;
 }
 
-export function PageShell({ eyebrow, title, description, aside, children }: PageShellProps) {
+export function PageShell({
+  eyebrow,
+  title,
+  description,
+  titleExtra,
+  aside,
+  children,
+}: PageShellProps) {
   return (
     <div className="space-y-8">
       <SectionReveal>
@@ -22,9 +30,12 @@ export function PageShell({ eyebrow, title, description, aside, children }: Page
               </Badge>
             ) : null}
             <div className="space-y-3">
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-                {title}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+                  {title}
+                </h1>
+                {titleExtra}
+              </div>
               <p className="max-w-2xl text-base text-[var(--color-text-muted)] sm:text-lg">
                 {description}
               </p>

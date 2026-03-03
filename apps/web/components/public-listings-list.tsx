@@ -1,11 +1,12 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
-import { CalendarDays, ChevronRight, CircleDollarSign, MapPin, Sparkles } from 'lucide-react';
+import { CalendarDays, ChevronRight, CircleDollarSign, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrencyAmount, formatDate } from '../lib/formatters';
 import type { PublicListingSummary } from '../lib/listings';
 import { FavoriteHeartButton } from './favorite-heart-button';
 import { LinkButton } from './link-button';
 import { ListingMediaPreview } from './listing-media-preview';
+import { ListingSponsoredBadge } from './listing-sponsored-badge';
 
 interface PublicListingsListProps {
   emptyDescription?: string;
@@ -78,10 +79,7 @@ export function PublicListingsList({
             key={listing.id}
           >
             {listing.isSponsored ? (
-              <div className="absolute left-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-[color:color-mix(in_srgb,var(--color-primary)_28%,transparent)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_84%,white_16%)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] shadow-[0_12px_24px_rgb(66_40_49_/_0.08)] backdrop-blur-md">
-                <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                Sponsorizzato
-              </div>
+              <ListingSponsoredBadge className="absolute left-4 top-4 z-20" />
             ) : null}
 
             <div className="grid min-h-[220px] grid-cols-[132px_minmax(0,1fr)] md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
