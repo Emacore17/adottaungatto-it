@@ -30,3 +30,6 @@ test-results/
 **/playwright-report/
 **/test-results/
 .playwright-cli/
+
+# local backups
+backups/

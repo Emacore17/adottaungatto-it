@@ -1,5 +1,6 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { SEARCH_INDEX_READ_ALIAS } from '@adottaungatto/types';
 import request from 'supertest';
 import { vi } from 'vitest';
 import { AnalyticsService } from '../src/analytics/analytics.service';
@@ -107,7 +108,7 @@ describe('Listings search endpoint', () => {
       .overrideProvider(SearchIndexService)
       .useValue({
         ping: vi.fn(async () => true),
-        getIndexName: vi.fn(() => 'listings_v1'),
+        getIndexName: vi.fn(() => SEARCH_INDEX_READ_ALIAS),
         searchPublished,
         indexPublishedListingById: vi.fn(async () => undefined),
         removeListingById: vi.fn(async () => undefined),

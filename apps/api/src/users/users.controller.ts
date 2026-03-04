@@ -18,6 +18,17 @@ const parseBooleanField = (body: unknown, fieldName: string): boolean => {
   return value;
 };
 
+const toPublicUser = (user: Awaited<ReturnType<UsersService['getCurrentUser']>>) => ({
+  id: user.id,
+  provider: user.provider,
+  providerSubject: user.providerSubject,
+  email: user.email,
+  roles: user.roles,
+  preferences: user.preferences,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
 @Controller('v1/users')
 export class UsersController {
   constructor(
@@ -27,7 +38,7 @@ export class UsersController {
 
   @Get('me')
   async getMe(@CurrentUser() user: RequestUser) {
-    return { user: await this.usersService.getCurrentUser(user) };
+    return { user: toPublicUser(await this.usersService.getCurrentUser(user)) };
   }
 
   @Patch('me/preferences')
@@ -38,9 +49,11 @@ export class UsersController {
     );
 
     return {
-      user: await this.usersService.updateCurrentUserMessagingPreferences(user, {
-        messageEmailNotificationsEnabled,
-      }),
+      user: toPublicUser(
+        await this.usersService.updateCurrentUserMessagingPreferences(user, {
+          messageEmailNotificationsEnabled,
+        }),
+      ),
     };
   }
 

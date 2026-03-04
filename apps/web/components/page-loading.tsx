@@ -4,7 +4,7 @@ interface PageLoadingProps {
   title?: string;
 }
 
-export function PageLoading({ title = 'Caricamento scaffold...' }: PageLoadingProps) {
+export function PageLoading({ title = 'Caricamento pagina...' }: PageLoadingProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-3">

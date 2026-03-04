@@ -409,8 +409,8 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
       </Script>
 
       <SectionReveal>
-        <section className="overflow-hidden rounded-[36px] border border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_12%,transparent)_0%,transparent_46%),linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)_0%,color-mix(in_srgb,var(--color-surface-elevated)_94%,white_6%)_100%)] px-5 py-6 shadow-[0_24px_70px_rgb(66_40_49_/_0.08)] sm:px-7 sm:py-8 lg:px-9">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <section className="overflow-hidden rounded-[32px] border border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_12%,transparent)_0%,transparent_46%),linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)_0%,color-mix(in_srgb,var(--color-surface-elevated)_94%,white_6%)_100%)] px-5 py-5 shadow-[0_22px_58px_rgb(66_40_49_/_0.08)] sm:px-6 sm:py-6 lg:px-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-4">
               <Badge className="w-fit" variant="secondary">
                 Catalogo annunci
@@ -440,17 +440,12 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
               <LinkButton href="/pubblica" variant="outline">
                 Pubblica annuncio
               </LinkButton>
-              {activeFilterLabels.length > 0 ? (
-                <LinkButton href="/annunci" variant="secondary">
-                  Rimuovi filtri
-                </LinkButton>
-              ) : null}
             </div>
           </div>
         </section>
       </SectionReveal>
 
-      <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[340px_minmax(0,1fr)]">
         <ListingsFiltersSidebar initialValues={filters} />
 
         <div className="space-y-6">
@@ -464,12 +459,30 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
           {activeFilterLabels.length > 0 ? (
             <SectionReveal delay={0.04}>
-              <div className="flex flex-wrap gap-2">
-                {activeFilterLabels.map((label) => (
-                  <Badge key={label} variant="outline">
-                    {label}
-                  </Badge>
-                ))}
+              <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_84%,white_16%)] px-4 py-4 shadow-[0_16px_40px_rgb(66_40_49_/_0.06)] sm:px-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                      Filtri attivi
+                    </p>
+                    <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                      {activeFilterLabels.length === 1
+                        ? 'Hai applicato 1 filtro. Azzera o aggiorna i criteri per ampliare il catalogo.'
+                        : `Hai applicato ${activeFilterLabels.length} filtri. Azzera o aggiorna i criteri per ampliare il catalogo.`}
+                    </p>
+                  </div>
+                  <LinkButton href="/annunci" variant="secondary">
+                    Azzera filtri
+                  </LinkButton>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {activeFilterLabels.map((label) => (
+                    <Badge key={label} variant="outline">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </SectionReveal>
           ) : null}

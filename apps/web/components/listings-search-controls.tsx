@@ -451,7 +451,7 @@ function LocationAutocomplete({
     }
 
     if (!apiBaseUrl) {
-      setError('Config API mancante per i suggerimenti.');
+      setError('La ricerca per localita non e disponibile in questo momento.');
       setLoading(false);
       return;
     }
@@ -931,7 +931,7 @@ function FiltersForm({
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-                  Filtra gli annunci
+                  Affina la ricerca
                 </p>
                 {activeFiltersCount > 0 ? (
                   <Badge className="shrink-0" variant="outline">
@@ -940,7 +940,7 @@ function FiltersForm({
                 ) : null}
               </div>
               <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                Ricerca per testo, posizione, prezzo, eta e preferenze.
+                Testo, localita, prezzo e caratteristiche principali.
               </p>
             </div>
 
@@ -1212,7 +1212,7 @@ function FiltersForm({
                   )}
                 </div>
                 <p className="location-meta">
-                  Le opzioni usano mesi e anni, ma il backend salva sempre il valore in mesi.
+                  Seleziona una fascia di eta in modo rapido.
                 </p>
                 <div className="filter-reset-row">
                   <button
@@ -1242,7 +1242,7 @@ function FiltersForm({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-            Filtra gli annunci
+            Affina la ricerca
           </p>
           {activeFiltersCount > 0 ? (
             <Badge className="shrink-0" variant="outline">
@@ -1251,7 +1251,7 @@ function FiltersForm({
           ) : null}
         </div>
         <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-          Ricerca per testo, posizione, prezzo, eta e preferenze.
+          Testo, localita, prezzo e caratteristiche principali.
         </p>
       </div>
 
@@ -1575,7 +1575,7 @@ function FiltersForm({
             </div>
 
             <p className="location-meta">
-              Le opzioni usano mesi e anni, ma il backend salva sempre il valore in mesi.
+              Seleziona una fascia di eta in modo rapido.
             </p>
 
             <div className="filter-reset-row">
@@ -1658,7 +1658,7 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
     }
 
     if (!apiBaseUrl) {
-      setValidationError('Config API mancante per cercare la localita.');
+      setValidationError('La ricerca per localita non e disponibile in questo momento.');
       return null;
     }
 

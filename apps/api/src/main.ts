@@ -7,11 +7,13 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { config as loadDotEnv } from 'dotenv';
 import { AppModule } from './app.module';
 import { captureApiException, flushApiSentry, initializeApiSentry } from './observability/sentry';
+import { assertSafeApiRuntimeConfig, createCorsOriginResolver } from './security/api-runtime-safety';
 
 const bootstrap = async () => {
   loadDotEnv({ path: '.env.local' });
   loadDotEnv();
   const env = loadApiEnv();
+  assertSafeApiRuntimeConfig(env);
   const sentryEnabled = initializeApiSentry();
 
   if (sentryEnabled) {
@@ -24,12 +26,18 @@ const bootstrap = async () => {
     });
   }
 
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
-    bufferLogs: true,
-  });
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({
+      trustProxy: env.API_TRUST_PROXY_ENABLED,
+    }),
+    {
+      bufferLogs: true,
+    },
+  );
 
   await app.register(cors, {
-    origin: true,
+    origin: createCorsOriginResolver(env),
     credentials: true,
   });
 

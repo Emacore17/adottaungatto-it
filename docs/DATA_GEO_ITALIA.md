@@ -1,91 +1,88 @@
 # DATA_GEO_ITALIA.md
 
-Documento operativo per il dataset geografico italiano usato in locale.
+Documento operativo per il dataset geografico italiano usato dall'API e dai seed locali.
 
-## Fonti dati ufficiali
+## Fonte dati
 
-- Fonte anagrafica amministrativa: ISTAT
-- Dataset: `Elenco-comuni-italiani.xlsx`
+Anagrafica amministrativa:
+
+- ISTAT `Elenco-comuni-italiani.xlsx`
 - URL: `https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx`
-- Snapshot locale corrente: sheet `CODICI al 31_01_2026`
-- Data di riferimento snapshot corrente: `2026-01-31`
+- snapshot attuale nel repo: riferimento `2026-01-31`
 
-- Fonte geometrie/centroidi: ISTAT confini amministrativi generalizzati
+Geometrie e centroidi:
+
+- confini amministrativi generalizzati ISTAT
 - URL base: `https://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati`
-- Boundary snapshot usato attualmente: `Limiti01012025_g.zip` (fallback automatico perche `2026` non disponibile al momento)
+- boundary snapshot usato attualmente: fallback `2025` perche il boundary `2026` non era disponibile al momento dell'ultimo sync
 
-## Snapshot locale versionata
+## Snapshot versionata nel repo
 
-Per garantire setup locale offline-friendly, il repo include:
+File:
+
 - `apps/api/data/geography/istat-current.json`
 
-Aggiornamento snapshot:
+Scopo:
+
+- rendere il setup locale ripetibile
+- evitare dipendenze runtime da download esterni durante `db:seed`
+- mantenere storicita minima di metadata e conteggi
+
+## Aggiornamento snapshot
+
+Comando:
+
 ```bash
 pnpm geo:sync
 ```
 
-Il comando:
-- scarica il file ISTAT ufficiale anagrafico
-- normalizza e valida regioni/province/comuni
-- arricchisce i comuni con centroidi dal boundary dataset ISTAT
-- mappa le variazioni codice 2026 tramite `legacyIstatCode107` (es. riassetto Sardegna)
-- deriva i centroidi di province e regioni aggregando i centroidi dei comuni
-- rigenera `istat-current.json` con metadata (`source`, `centroids`, `stats`, arrays seed)
+Lo script:
 
-## Copertura dataset corrente
+- scarica il file ISTAT ufficiale
+- normalizza regioni, province e comuni
+- arricchisce i comuni con centroidi
+- deriva centroidi di province e regioni
+- rigenera `istat-current.json`
 
-- Regioni: `20`
-- Unita sovracomunali (province/citta metropolitane/liberi consorzi): `110`
-- Comuni: `7895`
-- Copertura centroidi: `regions=20`, `provinces=110`, `comuni=7895`
-- Match centroidi comuni:
-  - `exact=7518` (codice attuale)
-  - `legacy=377` (mapping da codice storico 107 province)
-  - `missing=0`
+## Copertura attesa
 
-## Mapping DB
+- regioni: `20`
+- province/unita sovracomunali: `110`
+- comuni: `7895`
+- centroidi completi: `regions=20`, `provinces=110`, `comuni=7895`
 
-Tabelle target:
-- `regions`
-- `provinces`
-- `comuni`
+## Seed database
 
-Mapping campi principale (`apps/api/scripts/geo-sync-istat.ts`):
+Comando:
+
+```bash
+pnpm db:seed
+```
+
+Effetti:
+
+- upsert idempotente di `regions`, `provinces`, `comuni`
+- valorizzazione di `centroid_lat` e `centroid_lng`
+- popolamento `geom` sui comuni quando il centroide e disponibile
+- riallineamento controllato di codici obsoleti
+- generazione demo listings multi-area
+
+## Mapping essenziale
+
 - `Codice Regione` -> `regions.istat_code`
 - `Denominazione Regione` -> `regions.name`
 - `Codice dell'Unita territoriale sovracomunale` -> `provinces.istat_code`
 - `Denominazione dell'Unita territoriale sovracomunale` -> `provinces.name`
 - `Sigla automobilistica` -> `provinces.sigla`
 - `Codice Comune formato numerico` -> `comuni.istat_code`
-- `Codice Comune numerico con 107 Province (dal 2017 al 2025)` -> `comuni.legacyIstatCode107` (snapshot)
+- `Codice Comune numerico con 107 Province (dal 2017 al 2025)` -> `legacyIstatCode107`
 - `Denominazione in italiano` -> `comuni.name`
 - `Codice Catastale del Comune` -> `comuni.code_catastale`
-- centroidi da confini ISTAT -> `centroid_lat`, `centroid_lng` (regioni/province/comuni)
-
-## Seed DB (M1.5 + M3.5)
-
-Comando:
-```bash
-pnpm db:seed
-```
-
-Comportamento:
-- carica snapshot locale `istat-current.json`
-- esegue upsert idempotente su regioni/province/comuni
-- popola `centroid_lat` e `centroid_lng` su tutte le entita geografiche
-- popola `geom` (POINT) sui comuni quando il centroide e disponibile
-- gestisce codici obsoleti con pruning controllato
-- riallinea la gerarchia in caso di variazioni amministrative (es. Sardegna 2026)
 
 ## Verifica rapida post-seed
 
-Query attese:
-- `regions=20`
-- `provinces=110`
-- `comuni=7895`
-- `centroid_lat/lng` non null per tutte le righe geografiche
+SQL utile:
 
-Esempio verifica SQL:
 ```sql
 SELECT
   (SELECT COUNT(*) FROM regions WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS regions_with_centroids,
@@ -93,10 +90,14 @@ SELECT
   (SELECT COUNT(*) FROM comuni WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS comuni_with_centroids;
 ```
 
-Sardegna (riassetto amministrativo dal `2026-01-01`):
-- codici provincia/sovracomunale attesi: `113,114,115,116,117,119,312,318`
+Output atteso:
 
-## Limiti noti
+- `regions_with_centroids = 20`
+- `provinces_with_centroids = 110`
+- `comuni_with_centroids = 7895`
 
-- Il boundary dataset ISTAT puo essere pubblicato con ritardo rispetto al file anagrafico.
-- `geo:sync` usa fallback automatico all'anno precedente disponibile, mantenendo comunque i codici amministrativi aggiornati dal dataset ISTAT anagrafico.
+## Note importanti
+
+- il dataset geografico e un prerequisito della ricerca distance-aware
+- se il boundary ISTAT dell'anno corrente non esiste ancora, il sync usa il miglior fallback disponibile
+- ogni aggiornamento significativo di `istat-current.json` richiede attenzione su test di search e seed demo

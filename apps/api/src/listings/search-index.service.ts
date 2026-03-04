@@ -1,5 +1,12 @@
 import { loadApiEnv } from '@adottaungatto/config';
-import { NO_BREED_FILTER } from '@adottaungatto/types';
+import {
+  NO_BREED_FILTER,
+  SEARCH_INDEX_LEGACY_NAME,
+  SEARCH_INDEX_MAPPING,
+  SEARCH_INDEX_READ_ALIAS,
+  SEARCH_INDEX_WRITE_ALIAS,
+  buildVersionedSearchIndexName,
+} from '@adottaungatto/types';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
 import {
@@ -8,52 +15,23 @@ import {
   type SearchIndexDocumentRecord,
   type SearchPublishedResultRecord,
 } from './listings.repository';
-
-const SEARCH_INDEX_NAME = 'listings_v1';
 const SPONSORED_MAX_BOOST = 1.2;
-
-const SEARCH_INDEX_MAPPING = {
-  settings: {
-    number_of_shards: 1,
-    number_of_replicas: 0,
-  },
-  mappings: {
-    dynamic: false,
-    properties: {
-      id: { type: 'keyword' },
-      title: { type: 'text' },
-      description: { type: 'text' },
-      listingType: { type: 'keyword' },
-      priceAmount: { type: 'double' },
-      currency: { type: 'keyword' },
-      ageText: { type: 'text' },
-      sex: { type: 'keyword' },
-      breed: { type: 'keyword' },
-      status: { type: 'keyword' },
-      regionId: { type: 'keyword' },
-      provinceId: { type: 'keyword' },
-      comuneId: { type: 'keyword' },
-      regionName: { type: 'keyword' },
-      provinceName: { type: 'keyword' },
-      provinceSigla: { type: 'keyword' },
-      comuneName: { type: 'keyword' },
-      location: { type: 'geo_point' },
-      isSponsored: { type: 'boolean' },
-      promotionWeight: { type: 'double' },
-      publishedAt: { type: 'date' },
-      createdAt: { type: 'date' },
-      updatedAt: { type: 'date' },
-    },
-  },
-} as const;
 
 type OpenSearchResponse = {
   status: number;
   body: unknown;
 };
 
+type OpenSearchAliasResponse = Record<string, unknown>;
 type OpenSearchSearchHit = {
   _id?: string;
+};
+type OpenSearchBulkItemResponse = {
+  index?: {
+    _id?: string;
+    status?: number;
+    error?: unknown;
+  };
 };
 
 @Injectable()
@@ -69,7 +47,7 @@ export class SearchIndexService {
   ) {}
 
   getIndexName(): string {
-    return SEARCH_INDEX_NAME;
+    return SEARCH_INDEX_READ_ALIAS;
   }
 
   async ping(): Promise<boolean> {
@@ -86,34 +64,7 @@ export class SearchIndexService {
       return;
     }
 
-    const indexPath = `/${SEARCH_INDEX_NAME}`;
-    const headResponse = await this.request(indexPath, { method: 'HEAD', parseJson: false });
-
-    if (headResponse.status === 404) {
-      const createResponse = await this.request(indexPath, {
-        method: 'PUT',
-        body: SEARCH_INDEX_MAPPING,
-      });
-
-      if (createResponse.status < 200 || createResponse.status >= 300) {
-        throw new Error(
-          `OpenSearch index creation failed (${createResponse.status}): ${JSON.stringify(
-            createResponse.body,
-          )}`,
-        );
-      }
-
-      this.logger.log(`OpenSearch index "${SEARCH_INDEX_NAME}" created.`);
-      this.indexEnsured = true;
-      return;
-    }
-
-    if (headResponse.status < 200 || headResponse.status >= 300) {
-      throw new Error(
-        `OpenSearch index check failed (${headResponse.status}): ${JSON.stringify(headResponse.body)}`,
-      );
-    }
-
+    await this.ensureAliasesReady();
     this.indexEnsured = true;
   }
 
@@ -132,7 +83,7 @@ export class SearchIndexService {
   async removeListingById(listingId: string): Promise<void> {
     await this.ensureIndexExists();
 
-    const response = await this.request(`/${SEARCH_INDEX_NAME}/_doc/${listingId}`, {
+    const response = await this.request(`/${SEARCH_INDEX_WRITE_ALIAS}/_doc/${listingId}`, {
       method: 'DELETE',
       parseJson: false,
     });
@@ -148,31 +99,42 @@ export class SearchIndexService {
 
   async reindexAllPublishedListings(batchSize = 200): Promise<number> {
     await this.ensureIndexExists();
-    await this.clearAllDocuments();
+    const currentReadTargets = await this.listAliasTargets(SEARCH_INDEX_READ_ALIAS);
+    const currentWriteTargets = await this.listAliasTargets(SEARCH_INDEX_WRITE_ALIAS);
+    this.assertAliasTargetsAreConsistent(currentReadTargets, currentWriteTargets);
+
+    const nextIndexName = await this.createVersionedIndex();
 
     let offset = 0;
     let indexedCount = 0;
 
-    while (true) {
-      const documents = await this.listingsRepository.listPublishedSearchIndexDocuments(
-        batchSize,
-        offset,
+    try {
+      while (true) {
+        const documents = await this.listingsRepository.listPublishedSearchIndexDocuments(
+          batchSize,
+          offset,
+        );
+
+        if (documents.length === 0) {
+          break;
+        }
+
+        await this.bulkIndexDocuments(nextIndexName, documents);
+        indexedCount += documents.length;
+        offset += documents.length;
+      }
+
+      await this.refreshIndex(nextIndexName);
+      await this.swapAliases(nextIndexName, currentReadTargets, currentWriteTargets);
+      this.logger.log(
+        `OpenSearch reindex completed. activeIndex="${nextIndexName}" indexed=${indexedCount}.`,
       );
 
-      if (documents.length === 0) {
-        break;
-      }
-
-      for (const document of documents) {
-        await this.indexDocument(document);
-      }
-
-      indexedCount += documents.length;
-      offset += documents.length;
+      return indexedCount;
+    } catch (error) {
+      await this.deleteIndexIfExists(nextIndexName);
+      throw error;
     }
-
-    await this.request(`/${SEARCH_INDEX_NAME}/_refresh`, { method: 'POST', parseJson: false });
-    return indexedCount;
   }
 
   async searchPublished(query: SearchListingsQueryDto): Promise<SearchPublishedResultRecord> {
@@ -181,7 +143,7 @@ export class SearchIndexService {
       query.referencePoint ??
       (await this.listingsRepository.resolveLocationCentroid(query.locationIntent));
 
-    const response = await this.request(`/${SEARCH_INDEX_NAME}/_search`, {
+    const response = await this.request(`/${SEARCH_INDEX_READ_ALIAS}/_search`, {
       method: 'POST',
       body: this.buildSearchRequestBody(query, referencePoint),
     });
@@ -213,25 +175,8 @@ export class SearchIndexService {
     };
   }
 
-  private async clearAllDocuments(): Promise<void> {
-    const response = await this.request(`/${SEARCH_INDEX_NAME}/_delete_by_query?refresh=true`, {
-      method: 'POST',
-      body: {
-        query: {
-          match_all: {},
-        },
-      },
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `OpenSearch delete-by-query failed (${response.status}): ${JSON.stringify(response.body)}`,
-      );
-    }
-  }
-
   private async indexDocument(document: SearchIndexDocumentRecord): Promise<void> {
-    const response = await this.request(`/${SEARCH_INDEX_NAME}/_doc/${document.id}`, {
+    const response = await this.request(`/${SEARCH_INDEX_WRITE_ALIAS}/_doc/${document.id}`, {
       method: 'PUT',
       body: document,
     });
@@ -243,6 +188,299 @@ export class SearchIndexService {
         )}`,
       );
     }
+  }
+
+  private async ensureAliasesReady(): Promise<void> {
+    const readTargets = await this.listAliasTargets(SEARCH_INDEX_READ_ALIAS);
+    const writeTargets = await this.listAliasTargets(SEARCH_INDEX_WRITE_ALIAS);
+    this.assertAliasTargetsAreConsistent(readTargets, writeTargets);
+
+    if (readTargets.length === 1 && writeTargets.length === 1) {
+      return;
+    }
+
+    const bootstrapIndexName = await this.resolveBootstrapIndexName(readTargets, writeTargets);
+    await this.swapAliases(bootstrapIndexName, readTargets, writeTargets);
+
+    if (readTargets.length === 0 && writeTargets.length === 0) {
+      this.logger.log(
+        `OpenSearch aliases initialized on "${bootstrapIndexName}" (${SEARCH_INDEX_READ_ALIAS}, ${SEARCH_INDEX_WRITE_ALIAS}).`,
+      );
+      return;
+    }
+
+    this.logger.warn(
+      `OpenSearch aliases repaired on "${bootstrapIndexName}" (${SEARCH_INDEX_READ_ALIAS}, ${SEARCH_INDEX_WRITE_ALIAS}).`,
+    );
+  }
+
+  private assertAliasTargetsAreConsistent(
+    readTargets: string[],
+    writeTargets: string[],
+  ): void {
+    if (readTargets.length > 1) {
+      throw new Error(
+        `${SEARCH_INDEX_READ_ALIAS} points to multiple indices: ${readTargets.join(', ')}.`,
+      );
+    }
+
+    if (writeTargets.length > 1) {
+      throw new Error(
+        `${SEARCH_INDEX_WRITE_ALIAS} points to multiple indices: ${writeTargets.join(', ')}.`,
+      );
+    }
+
+    if (
+      readTargets.length === 1 &&
+      writeTargets.length === 1 &&
+      readTargets[0] !== writeTargets[0]
+    ) {
+      throw new Error(
+        `Search aliases are inconsistent: ${SEARCH_INDEX_READ_ALIAS}=${readTargets[0]}, ${SEARCH_INDEX_WRITE_ALIAS}=${writeTargets[0]}.`,
+      );
+    }
+  }
+
+  private async resolveBootstrapIndexName(
+    readTargets: string[],
+    writeTargets: string[],
+  ): Promise<string> {
+    const existingTarget = readTargets[0] ?? writeTargets[0];
+    if (existingTarget) {
+      return existingTarget;
+    }
+
+    if (await this.indexExists(SEARCH_INDEX_LEGACY_NAME)) {
+      return SEARCH_INDEX_LEGACY_NAME;
+    }
+
+    const createdIndexName = await this.createVersionedIndex();
+    this.logger.log(`OpenSearch bootstrap index "${createdIndexName}" created.`);
+    return createdIndexName;
+  }
+
+  private async createVersionedIndex(): Promise<string> {
+    const baseToken = Date.now().toString(36);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const versionToken = attempt === 0 ? baseToken : `${baseToken}_${attempt}`;
+      const indexName = buildVersionedSearchIndexName(versionToken);
+      if (await this.indexExists(indexName)) {
+        continue;
+      }
+
+      await this.createIndex(indexName);
+      return indexName;
+    }
+
+    throw new Error('Unable to allocate a unique OpenSearch versioned index name.');
+  }
+
+  private async createIndex(indexName: string): Promise<void> {
+    const createResponse = await this.request(`/${indexName}`, {
+      method: 'PUT',
+      body: SEARCH_INDEX_MAPPING,
+    });
+
+    if (createResponse.status < 200 || createResponse.status >= 300) {
+      throw new Error(
+        `OpenSearch index creation failed (${createResponse.status}) for ${indexName}: ${JSON.stringify(
+          createResponse.body,
+        )}`,
+      );
+    }
+  }
+
+  private async refreshIndex(indexName: string): Promise<void> {
+    const response = await this.request(`/${indexName}/_refresh`, {
+      method: 'POST',
+      parseJson: false,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`OpenSearch refresh failed (${response.status}) for index ${indexName}.`);
+    }
+  }
+
+  private async deleteIndexIfExists(indexName: string): Promise<void> {
+    try {
+      const response = await this.request(`/${indexName}`, {
+        method: 'DELETE',
+        parseJson: false,
+      });
+
+      if (response.status === 404) {
+        return;
+      }
+
+      if (response.status < 200 || response.status >= 300) {
+        this.logger.warn(`Failed to delete OpenSearch index "${indexName}" after reindex error.`);
+      }
+    } catch {
+      this.logger.warn(`Failed to delete OpenSearch index "${indexName}" after reindex error.`);
+    }
+  }
+
+  private async swapAliases(
+    targetIndexName: string,
+    currentReadTargets: string[],
+    currentWriteTargets: string[],
+  ): Promise<void> {
+    const actions: Array<Record<'add' | 'remove', { index: string; alias: string }> | {
+      add: { index: string; alias: string };
+    } | {
+      remove: { index: string; alias: string };
+    }> = [];
+
+    for (const indexName of currentReadTargets) {
+      if (indexName === targetIndexName) {
+        continue;
+      }
+
+      actions.push({
+        remove: {
+          index: indexName,
+          alias: SEARCH_INDEX_READ_ALIAS,
+        },
+      });
+    }
+
+    for (const indexName of currentWriteTargets) {
+      if (indexName === targetIndexName) {
+        continue;
+      }
+
+      actions.push({
+        remove: {
+          index: indexName,
+          alias: SEARCH_INDEX_WRITE_ALIAS,
+        },
+      });
+    }
+
+    if (!currentReadTargets.includes(targetIndexName)) {
+      actions.push({
+        add: {
+          index: targetIndexName,
+          alias: SEARCH_INDEX_READ_ALIAS,
+        },
+      });
+    }
+
+    if (!currentWriteTargets.includes(targetIndexName)) {
+      actions.push({
+        add: {
+          index: targetIndexName,
+          alias: SEARCH_INDEX_WRITE_ALIAS,
+        },
+      });
+    }
+
+    if (actions.length === 0) {
+      return;
+    }
+
+    const response = await this.request('/_aliases', {
+      method: 'POST',
+      body: {
+        actions,
+      },
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(
+        `OpenSearch alias swap failed (${response.status}): ${JSON.stringify(response.body)}`,
+      );
+    }
+  }
+
+  private async listAliasTargets(aliasName: string): Promise<string[]> {
+    const response = await this.request(`/_alias/${aliasName}`, {
+      method: 'GET',
+    });
+
+    if (response.status === 404) {
+      return [];
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(
+        `OpenSearch alias lookup failed (${response.status}) for ${aliasName}: ${JSON.stringify(
+          response.body,
+        )}`,
+      );
+    }
+
+    const payload = this.asRecord(response.body) as OpenSearchAliasResponse | null;
+    if (!payload) {
+      return [];
+    }
+
+    return Object.keys(payload).sort((left, right) => left.localeCompare(right));
+  }
+
+  private async indexExists(indexName: string): Promise<boolean> {
+    const response = await this.request(`/${indexName}`, {
+      method: 'HEAD',
+      parseJson: false,
+    });
+
+    if (response.status === 404) {
+      return false;
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`OpenSearch index check failed (${response.status}) for ${indexName}.`);
+    }
+
+    return true;
+  }
+
+  private async bulkIndexDocuments(
+    indexName: string,
+    documents: SearchIndexDocumentRecord[],
+  ): Promise<void> {
+    if (documents.length === 0) {
+      return;
+    }
+
+    const operations = documents.flatMap((document) => [
+      JSON.stringify({
+        index: {
+          _index: indexName,
+          _id: document.id,
+        },
+      }),
+      JSON.stringify(document),
+    ]);
+
+    const response = await this.request('/_bulk', {
+      method: 'POST',
+      body: `${operations.join('\n')}\n`,
+      contentType: 'application/x-ndjson',
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(
+        `OpenSearch bulk index failed (${response.status}) for ${indexName}: ${JSON.stringify(
+          response.body,
+        )}`,
+      );
+    }
+
+    const payload = this.asRecord(response.body);
+    if (!payload || payload.errors !== true) {
+      return;
+    }
+
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    const firstFailure = items.find((item) => {
+      const bulkItem = this.asRecord(item) as OpenSearchBulkItemResponse | null;
+      const result = bulkItem?.index;
+      return Boolean(result?.error) || (result?.status ?? 200) >= 400;
+    }) as OpenSearchBulkItemResponse | undefined;
+
+    const failedDocumentId = firstFailure?.index?._id ?? 'unknown';
+    throw new Error(`OpenSearch bulk index reported item errors for document ${failedDocumentId}.`);
   }
 
   private buildSearchRequestBody(
@@ -541,20 +779,27 @@ export class SearchIndexService {
       method?: 'GET' | 'PUT' | 'POST' | 'DELETE' | 'HEAD';
       body?: unknown;
       parseJson?: boolean;
+      contentType?: string;
     } = {},
   ): Promise<OpenSearchResponse> {
     const method = options.method ?? 'GET';
     const parseJson = options.parseJson ?? true;
     const url = `${this.opensearchBaseUrl}${path}`;
+    const hasBody = options.body !== undefined;
+    const requestBody = hasBody
+      ? typeof options.body === 'string'
+        ? options.body
+        : JSON.stringify(options.body)
+      : undefined;
 
     const response = await fetch(url, {
       method,
-      headers: options.body
+      headers: hasBody
         ? {
-            'Content-Type': 'application/json',
+            'Content-Type': options.contentType ?? 'application/json',
           }
         : undefined,
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body: requestBody,
     });
 
     if (!parseJson || response.status === 204 || response.headers.get('content-length') === '0') {

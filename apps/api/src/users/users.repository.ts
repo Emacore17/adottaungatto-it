@@ -65,6 +65,9 @@ export class UsersRepository implements OnModuleDestroy {
     },
   ): Promise<AppUser> {
     const persistedUser = await this.upsertFromIdentityClaims(claims);
+    if (!persistedUser.databaseId) {
+      throw new Error('Failed to resolve internal user id for messaging preferences.');
+    }
 
     const result = await this.pool.query<AppUserRow>(
       `
@@ -83,7 +86,7 @@ export class UsersRepository implements OnModuleDestroy {
           created_at::text AS "createdAt",
           updated_at::text AS "updatedAt";
       `,
-      [persistedUser.id, input.messageEmailNotificationsEnabled],
+      [persistedUser.databaseId, input.messageEmailNotificationsEnabled],
     );
 
     const row = result.rows[0];
@@ -96,7 +99,8 @@ export class UsersRepository implements OnModuleDestroy {
 
   private mapAppUserRow(row: AppUserRow): AppUser {
     return {
-      id: row.id,
+      id: row.providerSubject,
+      databaseId: row.id,
       provider: row.provider === 'keycloak' ? 'keycloak' : 'dev-header',
       providerSubject: row.providerSubject,
       email: row.email,

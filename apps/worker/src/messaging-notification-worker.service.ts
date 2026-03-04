@@ -5,6 +5,7 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
+import { IntervalWorkerTask } from './interval-worker-task';
 import type { MessagingEmailDeliveryService } from './messaging-email-delivery.service';
 import type {
   MessageEmailNotificationJob,
@@ -15,7 +16,7 @@ import type {
 export class MessagingNotificationWorkerService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly env = loadWorkerEnv();
   private readonly logger = new Logger(MessagingNotificationWorkerService.name);
-  private pollTimer: NodeJS.Timeout | null = null;
+  private pollTask: IntervalWorkerTask | null = null;
   private processing = false;
 
   constructor(
@@ -36,16 +37,15 @@ export class MessagingNotificationWorkerService implements OnApplicationBootstra
     }
 
     await this.processDueJobs();
-    this.pollTimer = setInterval(() => {
-      void this.processDueJobs();
-    }, this.env.MESSAGE_NOTIFICATION_WORKER_POLL_MS);
+    this.pollTask = new IntervalWorkerTask(this.env.MESSAGE_NOTIFICATION_WORKER_POLL_MS, async () => {
+      await this.processDueJobs();
+    });
+    this.pollTask.start();
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
+    this.pollTask?.stop();
+    this.pollTask = null;
   }
 
   async processDueJobs(): Promise<number> {

@@ -17,6 +17,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import { pickFirstHeaderValue, resolveClientIp } from '../security/request-client-ip';
 import { CatBreedsService } from './cat-breeds.service';
 import { validateCreateListingDto } from './dto/create-listing.dto';
 import { validateSearchListingsQueryDto } from './dto/search-listings-query.dto';
@@ -320,38 +321,8 @@ const parseContactPayload = (body: unknown): ContactListingInput => {
   };
 };
 
-const pickFirstHeaderValue = (value: string | string[] | undefined): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    return value[0]?.trim() || null;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-};
-
 const parseSenderIp = (request: RequestWithClientInfo): string | null => {
-  const forwardedFor = pickFirstHeaderValue(request.headers['x-forwarded-for']);
-  if (forwardedFor) {
-    const firstIp = forwardedFor
-      .split(',')
-      .map((part) => part.trim())
-      .find((part) => part.length > 0);
-    if (firstIp) {
-      return firstIp.slice(0, 64);
-    }
-  }
-
-  const realIp = pickFirstHeaderValue(request.headers['x-real-ip']);
-  if (realIp) {
-    return realIp.slice(0, 64);
-  }
-
-  const requestIp = typeof request.ip === 'string' ? request.ip.trim() : '';
-  return requestIp ? requestIp.slice(0, 64) : null;
+  return resolveClientIp(request, process.env.API_TRUST_PROXY_ENABLED === 'true');
 };
 
 const parseUserAgent = (request: RequestWithClientInfo): string | null => {

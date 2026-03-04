@@ -1,29 +1,30 @@
-import { LinkButton } from '../../components/link-button';
-import { ScaffoldPlaceholder } from '../../components/scaffold-placeholder';
+import { Badge, CardContent } from '@adottaungatto/ui';
+import { FavoritesPageContent } from '../../components/favorites-page-content';
+import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 
 export default async function FavoritesPage() {
   await requireWebSession('/preferiti');
 
   return (
-    <ScaffoldPlaceholder
-      actions={
-        <LinkButton href="/account" variant="outline">
-          Torna all'account
-        </LinkButton>
+    <WorkspacePageShell
+      aside={
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Preferiti</Badge>
+            <Badge variant="outline">Browser corrente</Badge>
+          </div>
+          <p className="text-sm leading-6 text-[var(--color-text)]">
+            Gli annunci salvati restano sincronizzati tra catalogo, dettaglio e pagina dedicata su
+            questo dispositivo.
+          </p>
+        </CardContent>
       }
-      description="I preferiti mock sono stati rimossi. La route protetta resta a disposizione per una futura feature reale."
+      description="Ritrova in un solo punto gli annunci che hai salvato con il cuore, con una vista ordinata e aggiornata."
       eyebrow="Area riservata"
-      integrations={[
-        'Protezione route via sessione.',
-        'Shell base pronta per card, collection o saved search future.',
-      ]}
-      nextSteps={[
-        'Definire modello dati e azioni dei preferiti.',
-        'Reintrodurre persistenza solo con un backend dedicato.',
-      ]}
-      route="/preferiti"
       title="Preferiti"
-    />
+    >
+      <FavoritesPageContent />
+    </WorkspacePageShell>
   );
 }

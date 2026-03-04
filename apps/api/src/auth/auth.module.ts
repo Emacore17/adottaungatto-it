@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { PublicRateLimitGuard } from '../security/public-rate-limit.guard';
+import { PublicRateLimitStore } from '../security/public-rate-limit.store';
 import { UsersModule } from '../users/users.module';
 import { HeaderAuthGuard } from './guards/header-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -10,6 +11,7 @@ import { KeycloakTokenService } from './services/keycloak-token.service';
   imports: [UsersModule],
   providers: [
     KeycloakTokenService,
+    PublicRateLimitStore,
     {
       provide: APP_GUARD,
       useClass: HeaderAuthGuard,

@@ -48,20 +48,25 @@ export function PublicListingsList({
     <div className="space-y-5">
       {listings.map((listing) => {
         const titleLabel = listing.title.trim() || 'Annuncio gatto';
-        const descriptionLabel = listing.description.trim();
+        const descriptionLabel =
+          listing.description.trim() || "Apri l'annuncio per leggere tutti i dettagli.";
         const breedLabel = listing.breed?.trim() ?? '';
         const sexLabel = listing.sex.trim();
         const ageLabel = listing.ageText.trim();
-        const listingTypeLabel = formatListingTypeLabel(listing.listingType.trim());
+        const listingTypeValue = listing.listingType.trim();
+        const listingTypeLabel = formatListingTypeLabel(listingTypeValue);
+        const listingTypeNormalized = listingTypeValue.toLowerCase();
         const publishedLabel = formatDate(listing.publishedAt ?? listing.createdAt);
         const locationLabel = listing.provinceSigla
           ? `${listing.comuneName}, ${listing.provinceName} (${listing.provinceSigla})`
           : `${listing.comuneName}, ${listing.regionName}`;
         const distanceLabel = formatDistanceLabel(listing.distanceKm);
         const priceLabel =
-          listing.priceAmount && listing.priceAmount.trim().length > 0
-            ? formatCurrencyAmount(listing.priceAmount, listing.currency)
-            : listingTypeLabel || 'Apri annuncio';
+          listingTypeNormalized.includes('adozion') ||
+          !listing.priceAmount ||
+          listing.priceAmount.trim().length === 0
+            ? 'Adozione gratuita'
+            : formatCurrencyAmount(listing.priceAmount, listing.currency);
         const previewMedia =
           listing.previewMedia && listing.previewMedia.length > 0
             ? listing.previewMedia
@@ -82,7 +87,7 @@ export function PublicListingsList({
               <ListingSponsoredBadge className="absolute left-4 top-4 z-20" />
             ) : null}
 
-            <div className="grid min-h-[220px] grid-cols-1 md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
               <Link
                 className="relative block h-full overflow-hidden rounded-t-[31px] border-b border-[var(--color-border)] isolate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 md:rounded-l-[31px] md:rounded-t-none md:border-b-0 md:border-r"
                 href={`/annunci/${listing.id}`}
@@ -96,11 +101,20 @@ export function PublicListingsList({
               </Link>
 
               <div className="flex min-w-0 flex-col gap-4 p-4 sm:p-5 md:p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-2.5">
+                    <h3 className="line-clamp-2 text-[1.2rem] font-semibold tracking-[-0.03em] text-[var(--color-text)] sm:text-[1.35rem] md:text-[1.65rem]">
+                      <Link
+                        className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+                        href={`/annunci/${listing.id}`}
+                      >
+                        {titleLabel}
+                      </Link>
+                    </h3>
+
                     <div className="flex flex-wrap items-center gap-2 text-[var(--color-text-muted)]">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-xs font-semibold">
-                        <MapPin aria-hidden="true" className="h-3.5 w-3.5" />
+                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-xs font-semibold">
+                        <MapPin aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{locationLabel}</span>
                       </span>
                       {distanceLabel ? (
@@ -110,19 +124,9 @@ export function PublicListingsList({
                       ) : null}
                     </div>
 
-                    <div className="space-y-2">
-                      <h3 className="line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-[var(--color-text)] md:text-[1.7rem]">
-                        <Link
-                          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
-                          href={`/annunci/${listing.id}`}
-                        >
-                          {titleLabel}
-                        </Link>
-                      </h3>
-                      <p className="line-clamp-3 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)] md:text-[0.98rem]">
-                        {descriptionLabel}
-                      </p>
-                    </div>
+                    <p className="line-clamp-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)] sm:line-clamp-3 md:text-[0.98rem]">
+                      {descriptionLabel}
+                    </p>
                   </div>
 
                   <div className="shrink-0">
@@ -151,7 +155,7 @@ export function PublicListingsList({
                   ) : null}
                 </div>
 
-                <div className="mt-auto flex flex-col gap-4 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="mt-auto flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--color-text-muted)]">
                     <span className="inline-flex items-center gap-2">
                       <CalendarDays aria-hidden="true" className="h-4 w-4" />
@@ -166,8 +170,11 @@ export function PublicListingsList({
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <LinkButton className="h-11 rounded-full px-5" href={`/annunci/${listing.id}`}>
+                  <div className="flex w-full items-center gap-3 sm:w-auto">
+                    <LinkButton
+                      className="h-11 w-full justify-center rounded-full px-5 sm:w-auto"
+                      href={`/annunci/${listing.id}`}
+                    >
                       Vedi annuncio
                       <ChevronRight aria-hidden="true" className="ml-1 h-4 w-4" />
                     </LinkButton>

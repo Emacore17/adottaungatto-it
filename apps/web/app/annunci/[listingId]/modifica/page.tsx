@@ -1,7 +1,7 @@
 import { CardContent } from '@adottaungatto/ui';
 import { notFound } from 'next/navigation';
 import { ListingEditor } from '../../../../components/listing-editor';
-import { PageShell } from '../../../../components/page-shell';
+import { WorkspacePageShell } from '../../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../../lib/auth';
 import {
   fetchListingBreeds,
@@ -29,23 +29,23 @@ export default async function EditListingPage({ params }: EditListingPageProps) 
   }
 
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <CardContent className="space-y-3 pt-6">
           <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
             Annuncio #{listing.id}
           </p>
           <p className="text-sm leading-6 text-[var(--color-text)]">
-            Modifica contenuti, foto e copertina mantenendo il collegamento diretto ai dati gia
-            presenti nel tuo account.
+            Aggiorna contenuti, localita e galleria da un unico editor, con anteprima e salvataggio
+            sempre a portata di mano.
           </p>
         </CardContent>
       }
-      description="Aggiorna tutti i campi dell'annuncio, riorganizza la galleria e scegli la foto copertina direttamente dalla pagina di modifica."
+      description="Aggiorna tutti i campi dell'annuncio con una gerarchia piu chiara, navigazione per sezioni e controlli rapidi anche su mobile."
       eyebrow="Area riservata"
       title={`Modifica: ${listing.title}`}
     >
       <ListingEditor breeds={breeds} initialListing={listing} initialMedia={media} />
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

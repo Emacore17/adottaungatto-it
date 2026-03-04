@@ -11,7 +11,8 @@ const userHeaders = {
 };
 
 const buildUser = (messageEmailNotificationsEnabled = true) => ({
-  id: '501',
+  id: 'user-settings-1',
+  databaseId: '501',
   provider: 'dev-header',
   providerSubject: 'user-settings-1',
   email: 'user-settings-1@example.test',
@@ -60,6 +61,9 @@ describe('Users endpoints', () => {
     const response = await request(app.getHttpServer()).get('/v1/users/me').set(userHeaders);
 
     expect(response.status).toBe(200);
+    expect(response.body.user.id).toBe('user-settings-1');
+    expect(response.body.user.providerSubject).toBe('user-settings-1');
+    expect(response.body.user).not.toHaveProperty('databaseId');
     expect(response.body.user.preferences.messageEmailNotificationsEnabled).toBe(true);
     expect(getCurrentUser).toHaveBeenCalledTimes(1);
   });

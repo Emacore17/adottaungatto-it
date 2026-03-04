@@ -4,6 +4,7 @@ export type IdentityProvider = 'dev-header' | 'keycloak';
 
 export interface AppUser {
   id: string;
+  databaseId?: string | null;
   provider: IdentityProvider;
   providerSubject: string;
   email: string;

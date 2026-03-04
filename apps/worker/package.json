@@ -11,7 +11,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:smoke:minio": "tsx src/smoke-minio.ts",
-    "search:reindex": "tsx src/search-reindex.ts"
+    "cleanup:retention": "tsx src/retention-cleanup-run-once.ts",
+    "search:cleanup": "tsx src/search-cleanup.ts",
+    "search:reindex": "tsx src/search-reindex.ts",
+    "search:verify": "tsx src/search-verify.ts"
   },
   "dependencies": {
     "@adottaungatto/config": "workspace:*",

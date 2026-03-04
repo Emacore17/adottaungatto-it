@@ -1,37 +1,12 @@
 import { loadWorkerEnv } from '@adottaungatto/config';
+import { SEARCH_INDEX_LEGACY_NAME } from '@adottaungatto/types';
 import { config as loadDotEnv } from 'dotenv';
 import { Pool } from 'pg';
+import { createSearchIndexAdminClient } from './search-index-admin';
 
 loadDotEnv({ path: '.env.local' });
 loadDotEnv();
 const env = loadWorkerEnv();
-
-const INDEX_NAME = 'listings_v1';
-const baseUrl = env.OPENSEARCH_URL.replace(/\/+$/, '');
-
-type SearchIndexDocumentRecord = {
-  id: string;
-  title: string;
-  description: string;
-  listingType: string;
-  priceAmount: number | null;
-  currency: string;
-  ageText: string;
-  sex: string;
-  breed: string | null;
-  status: string;
-  regionId: string;
-  provinceId: string;
-  comuneId: string;
-  regionName: string;
-  provinceName: string;
-  provinceSigla: string;
-  comuneName: string;
-  location: { lat: number; lon: number } | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 type SearchIndexDocumentRow = {
   id: string;
@@ -53,136 +28,63 @@ type SearchIndexDocumentRow = {
   comuneName: string;
   comuneCentroidLat: string | null;
   comuneCentroidLng: string | null;
+  isSponsored: boolean;
+  promotionWeight: string;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-const SEARCH_INDEX_MAPPING = {
-  settings: {
-    number_of_shards: 1,
-    number_of_replicas: 0,
-  },
-  mappings: {
-    dynamic: false,
-    properties: {
-      id: { type: 'keyword' },
-      title: { type: 'text' },
-      description: { type: 'text' },
-      listingType: { type: 'keyword' },
-      priceAmount: { type: 'double' },
-      currency: { type: 'keyword' },
-      ageText: { type: 'text' },
-      sex: { type: 'keyword' },
-      breed: { type: 'keyword' },
-      status: { type: 'keyword' },
-      regionId: { type: 'keyword' },
-      provinceId: { type: 'keyword' },
-      comuneId: { type: 'keyword' },
-      regionName: { type: 'keyword' },
-      provinceName: { type: 'keyword' },
-      provinceSigla: { type: 'keyword' },
-      comuneName: { type: 'keyword' },
-      location: { type: 'geo_point' },
-      publishedAt: { type: 'date' },
-      createdAt: { type: 'date' },
-      updatedAt: { type: 'date' },
-    },
-  },
-} as const;
-
-const requestOpenSearch = async (
-  path: string,
-  options: {
-    method?: 'GET' | 'PUT' | 'POST' | 'DELETE' | 'HEAD';
-    body?: unknown;
-    parseJson?: boolean;
-  } = {},
-) => {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options.method ?? 'GET',
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  if (options.parseJson === false) {
-    return {
-      status: response.status,
-      body: null,
-    };
-  }
-
-  const text = await response.text();
-  if (!text) {
-    return {
-      status: response.status,
-      body: null,
-    };
-  }
-
-  try {
-    return {
-      status: response.status,
-      body: JSON.parse(text),
-    };
-  } catch {
-    return {
-      status: response.status,
-      body: text,
-    };
-  }
+type SearchIndexDocumentRecord = {
+  id: string;
+  title: string;
+  description: string;
+  listingType: string;
+  priceAmount: number | null;
+  currency: string;
+  ageText: string;
+  sex: string;
+  breed: string | null;
+  status: string;
+  regionId: string;
+  provinceId: string;
+  comuneId: string;
+  regionName: string;
+  provinceName: string;
+  provinceSigla: string;
+  comuneName: string;
+  location: { lat: number; lon: number } | null;
+  isSponsored: boolean;
+  promotionWeight: number;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const ensureIndexExists = async () => {
-  const head = await requestOpenSearch(`/${INDEX_NAME}`, {
-    method: 'HEAD',
-    parseJson: false,
-  });
+const activePromotionJoinSql = `
+  LEFT JOIN LATERAL (
+    SELECT
+      TRUE AS "isSponsored",
+      p.promotion_weight::text AS "promotionWeight"
+    FROM listing_promotions lp
+    INNER JOIN plans p
+      ON p.id = lp.plan_id
+    WHERE lp.listing_id = l.id
+      AND lp.status = 'active'
+      AND lp.starts_at <= NOW()
+      AND lp.ends_at > NOW()
+      AND p.is_active = TRUE
+    ORDER BY p.promotion_weight DESC, lp.ends_at DESC, lp.id DESC
+    LIMIT 1
+  ) active_promotion ON TRUE
+`;
 
-  if (head.status >= 200 && head.status < 300) {
-    return;
-  }
-
-  if (head.status !== 404) {
-    throw new Error(`OpenSearch index check failed (${head.status}).`);
-  }
-
-  const created = await requestOpenSearch(`/${INDEX_NAME}`, {
-    method: 'PUT',
-    body: SEARCH_INDEX_MAPPING,
-  });
-
-  if (created.status < 200 || created.status >= 300) {
-    throw new Error(
-      `OpenSearch index creation failed (${created.status}): ${JSON.stringify(created.body)}`,
-    );
-  }
-};
-
-const clearIndexDocuments = async () => {
-  const response = await requestOpenSearch(`/${INDEX_NAME}/_delete_by_query?refresh=true`, {
-    method: 'POST',
-    body: {
-      query: {
-        match_all: {},
-      },
-    },
-  });
-
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(
-      `OpenSearch delete-by-query failed (${response.status}): ${JSON.stringify(response.body)}`,
-    );
-  }
-};
+const adminClient = createSearchIndexAdminClient(env.OPENSEARCH_URL);
 
 const toSearchDocument = (row: SearchIndexDocumentRow): SearchIndexDocumentRecord => {
   const lat = row.comuneCentroidLat ? Number.parseFloat(row.comuneCentroidLat) : Number.NaN;
   const lon = row.comuneCentroidLng ? Number.parseFloat(row.comuneCentroidLng) : Number.NaN;
-  const normalizeTimestamp = (
-    value: string | null,
-    fallbackValue: string | null,
-  ): string | null => {
+  const normalizeTimestamp = (value: string | null, fallbackValue: string | null): string | null => {
     if (value === null) {
       return fallbackValue;
     }
@@ -195,6 +97,7 @@ const toSearchDocument = (row: SearchIndexDocumentRow): SearchIndexDocumentRecor
 
     return fallbackValue;
   };
+  const promotionWeight = Number.parseFloat(row.promotionWeight);
 
   return {
     id: row.id,
@@ -221,6 +124,8 @@ const toSearchDocument = (row: SearchIndexDocumentRow): SearchIndexDocumentRecor
             lon,
           }
         : null,
+    isSponsored: row.isSponsored,
+    promotionWeight: Number.isFinite(promotionWeight) ? promotionWeight : 1,
     publishedAt: normalizeTimestamp(row.publishedAt, null),
     createdAt:
       normalizeTimestamp(row.createdAt, new Date().toISOString()) ?? new Date().toISOString(),
@@ -256,6 +161,8 @@ const listPublishedDocuments = async (
         c.name AS "comuneName",
         c.centroid_lat::text AS "comuneCentroidLat",
         c.centroid_lng::text AS "comuneCentroidLng",
+        COALESCE(active_promotion."isSponsored", FALSE) AS "isSponsored",
+        COALESCE(active_promotion."promotionWeight", '1.000') AS "promotionWeight",
         l.published_at::text AS "publishedAt",
         l.created_at::text AS "createdAt",
         l.updated_at::text AS "updatedAt"
@@ -266,6 +173,7 @@ const listPublishedDocuments = async (
         ON p.id = l.province_id
       INNER JOIN comuni c
         ON c.id = l.comune_id
+      ${activePromotionJoinSql}
       WHERE l.status = 'published'
         AND l.deleted_at IS NULL
       ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
@@ -278,21 +186,6 @@ const listPublishedDocuments = async (
   return result.rows.map((row) => toSearchDocument(row));
 };
 
-const indexDocument = async (document: SearchIndexDocumentRecord) => {
-  const response = await requestOpenSearch(`/${INDEX_NAME}/_doc/${document.id}`, {
-    method: 'PUT',
-    body: document,
-  });
-
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(
-      `OpenSearch index failed (${response.status}) for listing ${document.id}: ${JSON.stringify(
-        response.body,
-      )}`,
-    );
-  }
-};
-
 const run = async () => {
   const pool = new Pool({
     connectionString: env.DATABASE_URL,
@@ -300,33 +193,49 @@ const run = async () => {
 
   try {
     console.log(`[search:reindex] OpenSearch endpoint: ${env.OPENSEARCH_URL}`);
-    await ensureIndexExists();
-    await clearIndexDocuments();
+    const { readTargets, writeTargets } = await adminClient.ensureAliasesReady({
+      log: (message) => {
+        console.log(`[search:reindex] ${message}`);
+      },
+      warn: (message) => {
+        console.log(`[search:reindex] ${message}`);
+      },
+    });
+    const currentIndexName = readTargets[0] ?? writeTargets[0] ?? SEARCH_INDEX_LEGACY_NAME;
+    const nextIndexName = await adminClient.createVersionedIndex();
+
+    console.log(`[search:reindex] activeIndex=${currentIndexName} nextIndex=${nextIndexName}`);
 
     const batchSize = 200;
     let offset = 0;
     let indexed = 0;
 
-    while (true) {
-      const documents = await listPublishedDocuments(pool, batchSize, offset);
-      if (documents.length === 0) {
-        break;
+    try {
+      while (true) {
+        const documents = await listPublishedDocuments(pool, batchSize, offset);
+        if (documents.length === 0) {
+          break;
+        }
+
+        await adminClient.bulkIndexDocuments(nextIndexName, documents);
+        indexed += documents.length;
+        offset += documents.length;
       }
 
-      for (const document of documents) {
-        await indexDocument(document);
-      }
+      await adminClient.refreshIndex(nextIndexName);
+      await adminClient.swapAliases(nextIndexName, readTargets, writeTargets);
 
-      indexed += documents.length;
-      offset += documents.length;
+      console.log(
+        `[search:reindex] done activeIndex=${nextIndexName} indexed=${indexed} aliases=listings_read,listings_write`,
+      );
+    } catch (error) {
+      try {
+        await adminClient.deleteIndexIfExists(nextIndexName);
+      } catch {
+        console.warn(`[search:reindex] cleanup failed for index ${nextIndexName}`);
+      }
+      throw error;
     }
-
-    await requestOpenSearch(`/${INDEX_NAME}/_refresh`, {
-      method: 'POST',
-      parseJson: false,
-    });
-
-    console.log(`[search:reindex] done index=${INDEX_NAME} indexed=${indexed}`);
   } finally {
     await pool.end();
   }

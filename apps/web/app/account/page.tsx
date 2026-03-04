@@ -1,6 +1,6 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { LinkButton } from '../../components/link-button';
-import { PageShell } from '../../components/page-shell';
+import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 import { fetchMyListings } from '../../lib/listings';
 
@@ -10,7 +10,7 @@ export default async function AccountPage() {
   const roleLabel = session.user.roles.length > 0 ? session.user.roles.join(', ') : 'utente';
 
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -19,15 +19,15 @@ export default async function AccountPage() {
           </div>
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-              Utente
+              Account
             </p>
             <p className="text-sm font-medium text-[var(--color-text)]">{session.user.email}</p>
           </div>
         </div>
       }
-      description="L'account e stato ridotto a un cruscotto essenziale che conferma autenticazione, sessione e collegamento ai dati privati."
+      description="Gestisci annunci, accesso e preferenze da un unico punto, con collegamenti rapidi alle aree che usi di piu."
       eyebrow="Area riservata"
-      title="Dashboard account"
+      title="Il tuo account"
     >
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -37,29 +37,27 @@ export default async function AccountPage() {
           <CardContent className="space-y-2">
             <p className="text-3xl font-semibold text-[var(--color-text)]">{listings.length}</p>
             <p className="text-sm text-[var(--color-text-muted)]">
-              Record recuperati tramite l'endpoint autenticato dei miei annunci.
+              Schede create dal tuo account e pronte da consultare o aggiornare.
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Autenticazione</CardTitle>
+            <CardTitle>Accesso</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-[var(--color-text-muted)]">
-            <p>Cookie di sessione e lookup `/v1/users/me` ancora attivi.</p>
-            <p>Le route protette usano ancora `requireWebSession()`.</p>
+            <p>La tua sessione e attiva e ti permette di entrare nelle aree riservate.</p>
+            <p>Da qui puoi continuare verso annunci, messaggi e impostazioni.</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Prossimo rebuild</CardTitle>
+            <CardTitle>Preferenze</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-[var(--color-text-muted)]">
-            <p>
-              Reintrodurre dashboard, messaggi e impostazioni solo come flussi separati e chiari.
-            </p>
+            <p>Aggiorna le notifiche di messaggistica e mantieni ordinato il tuo profilo.</p>
           </CardContent>
         </Card>
       </div>
@@ -68,6 +66,9 @@ export default async function AccountPage() {
         <LinkButton href="/account/annunci">I miei annunci</LinkButton>
         <LinkButton href="/pubblica" variant="outline">
           Pubblica
+        </LinkButton>
+        <LinkButton href="/preferiti" variant="secondary">
+          Preferiti
         </LinkButton>
         <LinkButton href="/account/impostazioni" variant="secondary">
           Impostazioni
@@ -79,6 +80,6 @@ export default async function AccountPage() {
           Logout
         </Button>
       </form>
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

@@ -22,6 +22,11 @@
     "test:smoke:media-upload": "pnpm --filter @adottaungatto/api test:smoke:media-upload",
     "test:smoke:seed-listings": "pnpm --filter @adottaungatto/api test:smoke:seed-listings",
     "test:smoke:worker-minio": "pnpm --filter @adottaungatto/worker test:smoke:minio",
+    "cleanup:retention": "pnpm --filter @adottaungatto/worker cleanup:retention",
+    "search:cleanup": "pnpm --filter @adottaungatto/worker search:cleanup",
+    "backup:create": "pnpm --filter @adottaungatto/api backup:create",
+    "backup:verify": "pnpm --filter @adottaungatto/api backup:verify",
+    "backup:smoke": "pnpm --filter @adottaungatto/api backup:smoke",
     "minio:bootstrap": "pnpm --filter @adottaungatto/api minio:bootstrap",
     "geo:sync": "pnpm --filter @adottaungatto/api geo:sync",
     "auth:seed": "pnpm --filter @adottaungatto/api auth:seed",
@@ -30,7 +35,8 @@
     "infra:down": "docker compose down",
     "db:migrate": "pnpm --filter @adottaungatto/api db:migrate",
     "db:seed": "pnpm --filter @adottaungatto/api db:seed",
-    "search:reindex": "pnpm --filter @adottaungatto/worker search:reindex"
+    "search:reindex": "pnpm --filter @adottaungatto/worker search:reindex",
+    "search:verify": "pnpm --filter @adottaungatto/worker search:verify"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

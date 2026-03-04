@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Toast } from '@adottaungatto/ui';
 import { LoaderCircle, Mail, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 type ToastState = {
   open: boolean;
@@ -18,6 +18,9 @@ export function MessagingPreferencesForm({
   email: string;
   initialMessageEmailNotificationsEnabled: boolean;
 }) {
+  const toggleId = useId();
+  const toggleDescriptionId = `${toggleId}-description`;
+  const toggleStatusId = `${toggleId}-status`;
   const [messageEmailNotificationsEnabled, setMessageEmailNotificationsEnabled] = useState(
     initialMessageEmailNotificationsEnabled,
   );
@@ -82,12 +85,16 @@ export function MessagingPreferencesForm({
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
-          <label className="flex cursor-pointer items-start gap-4 rounded-[24px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-4">
+          <label className="flex cursor-pointer items-start gap-4 rounded-[24px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-4 transition-shadow focus-within:ring-2 focus-within:ring-[var(--color-ring)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--color-surface)]">
             <span className="relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-[color:color-mix(in_srgb,var(--color-border)_88%,white_12%)] transition-colors">
               <input
+                aria-checked={messageEmailNotificationsEnabled}
+                aria-describedby={`${toggleDescriptionId} ${toggleStatusId}`}
                 checked={messageEmailNotificationsEnabled}
                 className="peer sr-only"
+                id={toggleId}
                 onChange={(event) => setMessageEmailNotificationsEnabled(event.target.checked)}
+                role="switch"
                 type="checkbox"
               />
               <span
@@ -101,15 +108,24 @@ export function MessagingPreferencesForm({
                 <Mail className="h-4 w-4 text-[var(--color-primary)]" />
                 Avvisami via email per i nuovi messaggi
               </span>
-              <span className="block text-sm leading-6 text-[var(--color-text-muted)]">
+              <span
+                className="block text-sm leading-6 text-[var(--color-text-muted)]"
+                id={toggleDescriptionId}
+              >
                 Se disattivi questa opzione, la chat interna continua a funzionare ma non riceverai
                 email di notifica.
+              </span>
+              <span aria-live="polite" className="sr-only" id={toggleStatusId}>
+                {messageEmailNotificationsEnabled
+                  ? 'Notifiche email attive'
+                  : 'Notifiche email disattivate'}
               </span>
             </span>
           </label>
 
           <div className="flex flex-wrap gap-3">
             <Button
+              aria-busy={saving}
               className="h-11 rounded-full px-5"
               disabled={saving}
               onClick={() => void savePreferences()}

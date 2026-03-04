@@ -115,6 +115,19 @@ const sectionCardClassName =
   'border-[color:color-mix(in_srgb,var(--color-border)_80%,white_20%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] shadow-[0_22px_60px_-42px_rgba(15,23,42,0.38)]';
 const secondaryActionClassName =
   'inline-flex h-11 items-center justify-center rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,white_16%)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]';
+const sectionNavLinkClassName =
+  'inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_84%,white_16%)] px-4 text-sm font-medium text-[var(--color-text-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]';
+const mobileQuickActionClassName =
+  'inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_86%,white_14%)] px-4 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]';
+const maxMediaItems = 12;
+const maxMediaFileSizeMb = 8;
+const maxMediaFileSizeBytes = maxMediaFileSizeMb * 1024 * 1024;
+
+type EditorSectionItem = {
+  id: string;
+  label: string;
+  icon: typeof Files;
+};
 
 const parseAgeFromMonths = (ageMonths: number | null | undefined) => {
   if (typeof ageMonths !== 'number' || !Number.isFinite(ageMonths) || ageMonths < 0) {
@@ -313,6 +326,25 @@ function SummaryMetric({
   );
 }
 
+function EditorSectionNav({ items }: { items: EditorSectionItem[] }) {
+  return (
+    <nav aria-label="Sezioni editor annuncio" className="overflow-x-auto pb-1">
+      <div className="flex gap-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <a className={sectionNavLinkClassName} href={`#${item.id}`} key={item.id}>
+              <Icon aria-hidden="true" className="h-4 w-4 text-[var(--color-primary)]" />
+              {item.label}
+            </a>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 function ReadinessItem({
   complete,
   label,
@@ -433,6 +465,53 @@ export function ListingEditor({
   const completedReadinessCount = readinessItems.filter((item) => item.complete).length;
   const completionPercent = Math.round((completedReadinessCount / readinessItems.length) * 100);
   const saveButtonLabel = isEditMode ? 'Salva modifiche' : 'Crea annuncio';
+  const sectionItems: EditorSectionItem[] = [
+    { id: 'listing-data', label: 'Annuncio', icon: Files },
+    { id: 'listing-profile', label: 'Profilo', icon: Camera },
+    { id: 'listing-location', label: 'Localita', icon: MapPinned },
+    { id: 'listing-contacts', label: 'Contatti', icon: Phone },
+    { id: 'listing-media', label: 'Foto', icon: ImagePlus },
+    { id: 'listing-review', label: 'Controlli', icon: ShieldCheck },
+  ];
+  const selectedRegionName = regions.find((region) => region.id === form.regionId)?.name ?? '';
+  const selectedProvinceName =
+    provinces.find((province) => province.id === form.provinceId)?.name ?? '';
+  const selectedComuneName = comuni.find((comune) => comune.id === form.comuneId)?.name ?? '';
+  const locationSummaryLabel =
+    [selectedRegionName, selectedProvinceName, selectedComuneName].filter(Boolean).join(' / ') ||
+    'Seleziona regione, provincia e comune';
+  const locationStatusLabel = !apiBaseUrl
+    ? 'I dati geografici non sono disponibili in questo momento.'
+    : comuniLoading
+      ? 'Sto caricando i comuni disponibili.'
+      : provincesLoading
+        ? 'Sto caricando le province disponibili.'
+        : form.regionId && provinces.length === 0
+          ? 'Non ci sono province disponibili per la regione selezionata.'
+          : form.provinceId && comuni.length === 0
+            ? 'Non ci sono comuni disponibili per la provincia selezionata.'
+            : locationComplete
+              ? 'La localita e pronta per ricerca e vicinanza.'
+              : 'Completa tutti i livelli geografici per rendere la scheda piu trovabile.';
+  const remainingMediaSlots = Math.max(0, maxMediaItems - totalMediaCount);
+  const mediaCapacityLabel =
+    remainingMediaSlots > 0
+      ? `Puoi ancora aggiungere ${remainingMediaSlots} ${remainingMediaSlots === 1 ? 'foto' : 'foto'}.`
+      : 'Hai raggiunto il numero massimo di foto per questa scheda.';
+
+  const scrollToSection = (sectionId: string) => {
+    window.requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
+  const reportValidationError = (message: string, sectionId: string) => {
+    setValidationError(message);
+    scrollToSection(sectionId);
+  };
 
   useEffect(() => {
     queuedMediaRef.current = queuedMedia;
@@ -619,7 +698,42 @@ export function ListingEditor({
       return;
     }
 
-    const nextItems = files.map((file) => ({
+    if (remainingMediaSlots <= 0) {
+      setToast({
+        open: true,
+        title: 'Limite foto raggiunto',
+        description: `Puoi salvare fino a ${maxMediaItems} immagini per annuncio.`,
+        variant: 'warning',
+      });
+      scrollToSection('listing-media');
+      event.target.value = '';
+      return;
+    }
+
+    const validImageFiles = files.filter((file) => file.type.startsWith('image/'));
+    const oversizedFiles = validImageFiles.filter((file) => file.size > maxMediaFileSizeBytes);
+    const acceptedFiles = validImageFiles
+      .filter((file) => file.size <= maxMediaFileSizeBytes)
+      .slice(0, remainingMediaSlots);
+    const ignoredForLimitCount = Math.max(
+      validImageFiles.filter((file) => file.size <= maxMediaFileSizeBytes).length -
+        acceptedFiles.length,
+      0,
+    );
+
+    if (acceptedFiles.length === 0) {
+      setToast({
+        open: true,
+        title: 'Nessuna foto aggiunta',
+        description: `Seleziona immagini JPG, PNG o WEBP fino a ${maxMediaFileSizeMb} MB ciascuna.`,
+        variant: 'warning',
+      });
+      scrollToSection('listing-media');
+      event.target.value = '';
+      return;
+    }
+
+    const nextItems = acceptedFiles.map((file) => ({
       id: `${Date.now().toString()}-${Math.random().toString(36).slice(2, 9)}`,
       file,
       previewUrl: URL.createObjectURL(file),
@@ -632,6 +746,26 @@ export function ListingEditor({
       }
       return mergedItems;
     });
+
+    if (files.length !== acceptedFiles.length) {
+      const feedbackParts: string[] = [];
+      if (files.length !== validImageFiles.length) {
+        feedbackParts.push('alcuni file non sono immagini');
+      }
+      if (oversizedFiles.length > 0) {
+        feedbackParts.push(`alcuni file superano ${maxMediaFileSizeMb} MB`);
+      }
+      if (ignoredForLimitCount > 0) {
+        feedbackParts.push('hai raggiunto il limite di foto disponibili');
+      }
+
+      setToast({
+        open: true,
+        title: 'Alcune foto non sono state aggiunte',
+        description: feedbackParts.join(', '),
+        variant: 'warning',
+      });
+    }
 
     event.target.value = '';
   };
@@ -732,27 +866,33 @@ export function ListingEditor({
       priceValue.length === 0 ? null : Number.parseFloat(priceValue.replace(',', '.'));
 
     if (!title) {
-      setValidationError('Inserisci un titolo chiaro per il tuo annuncio.');
+      reportValidationError('Inserisci un titolo chiaro per il tuo annuncio.', 'listing-data');
       return;
     }
 
     if (!description || description.length < 40) {
-      setValidationError('La descrizione deve contenere almeno 40 caratteri utili.');
+      reportValidationError(
+        'La descrizione deve contenere almeno 40 caratteri utili.',
+        'listing-data',
+      );
       return;
     }
 
     if (!form.regionId || !form.provinceId || !form.comuneId) {
-      setValidationError('Seleziona regione, provincia e comune.');
+      reportValidationError('Seleziona regione, provincia e comune.', 'listing-location');
       return;
     }
 
     if (!ageValue || !Number.isInteger(ageInteger) || ageInteger < 0) {
-      setValidationError("Inserisci un'eta valida in mesi o anni.");
+      reportValidationError("Inserisci un'eta valida in mesi o anni.", 'listing-profile');
       return;
     }
 
     if (priceAmount !== null && (!Number.isFinite(priceAmount) || priceAmount < 0)) {
-      setValidationError('Il prezzo deve essere un numero positivo oppure lasciato vuoto.');
+      reportValidationError(
+        'Il prezzo deve essere un numero positivo oppure lasciato vuoto.',
+        'listing-data',
+      );
       return;
     }
 
@@ -843,6 +983,7 @@ export function ListingEditor({
       setValidationError(
         error instanceof Error ? error.message : "Impossibile salvare l'annuncio.",
       );
+      scrollToSection('listing-review');
       setToast({
         open: true,
         title: 'Salvataggio non riuscito',
@@ -883,7 +1024,7 @@ export function ListingEditor({
                   </h2>
                   <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-muted)] sm:text-base">
                     Mantieni il focus su informazioni essenziali, localita precisa e una galleria
-                    leggibile. Il salvataggio crea o aggiorna subito la bozza reale nel tuo account.
+                    leggibile. Completa una sezione per volta e salva quando hai un blocco pronto.
                   </p>
                 </div>
               </div>
@@ -897,8 +1038,8 @@ export function ListingEditor({
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
                   {isEditMode
-                    ? 'Stai lavorando su una scheda gia esistente. Ogni salvataggio aggiorna i dati e la galleria.'
-                    : 'La prima conferma crea la bozza e ti porta direttamente nella modifica completa dell annuncio.'}
+                    ? 'Stai lavorando su una scheda esistente. Aggiorna contenuti e foto senza cambiare flusso.'
+                    : 'La prima conferma crea la bozza, poi potrai completare il resto con piu calma.'}
                 </p>
                 <div className="mt-5 hidden gap-3 md:grid">
                   <Button
@@ -971,9 +1112,61 @@ export function ListingEditor({
           </CardContent>
         </Card>
 
+        <EditorSectionNav items={sectionItems} />
+
+        <Card className={cn('xl:hidden', sectionCardClassName)}>
+          <CardContent className="space-y-4 pt-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[20px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Foto
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {totalMediaCount > 0 ? `${totalMediaCount} pronte` : 'Da aggiungere'}
+                </p>
+              </div>
+              <div className="rounded-[20px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Localita
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {locationComplete ? 'Completa' : 'Da completare'}
+                </p>
+              </div>
+              <div className="rounded-[20px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Contatto
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {contactComplete ? 'Presente' : 'Facoltativo'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <label className={cn(mobileQuickActionClassName, 'cursor-pointer')} htmlFor={fileInputId}>
+                <ImagePlus className="h-4 w-4 text-[var(--color-primary)]" />
+                Aggiungi foto
+              </label>
+              {currentListingId ? (
+                <Link className={mobileQuickActionClassName} href={`/annunci/${currentListingId}`}>
+                  Anteprima
+                  <ArrowUpRight className="h-4 w-4 text-[var(--color-primary)]" />
+                </Link>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
           <div className="space-y-6">
-            <Card className={cn('overflow-hidden', sectionCardClassName)}>
+            <Card
+              className={cn(
+                'scroll-mt-[calc(var(--shell-header-height)+1.5rem)] overflow-hidden',
+                sectionCardClassName,
+              )}
+              id="listing-data"
+            >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="Scrivi un titolo chiaro e una descrizione completa. Le informazioni principali devono essere leggibili a colpo d occhio."
@@ -1065,7 +1258,13 @@ export function ListingEditor({
               </CardContent>
             </Card>
 
-            <Card className={sectionCardClassName}>
+            <Card
+              className={cn(
+                'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
+                sectionCardClassName,
+              )}
+              id="listing-profile"
+            >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="Profilo essenziale del gatto, coerente con i filtri pubblici e con la gestione dell eta in mesi o anni."
@@ -1140,7 +1339,13 @@ export function ListingEditor({
               </CardContent>
             </Card>
 
-            <Card className={sectionCardClassName}>
+            <Card
+              className={cn(
+                'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
+                sectionCardClassName,
+              )}
+              id="listing-location"
+            >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="La localita viene salvata con ids strutturati per supportare ricerca, vicinanza e future pagine geolocalizzate."
@@ -1148,6 +1353,11 @@ export function ListingEditor({
                 />
               </CardHeader>
               <CardContent className="space-y-5 pt-6">
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  <p className="font-medium text-[var(--color-text)]">{locationSummaryLabel}</p>
+                  <p>{locationStatusLabel}</p>
+                </div>
+
                 <div className="grid gap-5 md:grid-cols-3">
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
@@ -1219,7 +1429,13 @@ export function ListingEditor({
               </CardContent>
             </Card>
 
-            <Card className={sectionCardClassName}>
+            <Card
+              className={cn(
+                'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
+                sectionCardClassName,
+              )}
+              id="listing-contacts"
+            >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="Questi dati vengono usati per mettere in contatto chi pubblica e chi e interessato all annuncio."
@@ -1287,7 +1503,10 @@ export function ListingEditor({
           </div>
 
           <div className="space-y-6 xl:sticky xl:top-[calc(var(--shell-header-height)+1.75rem)] xl:self-start">
-            <Card className="overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_10%,transparent)_0%,transparent_44%),color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)]">
+            <Card
+              className="scroll-mt-[calc(var(--shell-header-height)+1.5rem)] overflow-hidden border-[color:color-mix(in_srgb,var(--color-primary)_24%,var(--color-border)_76%)] bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_10%,transparent)_0%,transparent_44%),color-mix(in_srgb,var(--color-surface-overlay-strong)_90%,white_10%)]"
+              id="listing-media"
+            >
               <CardHeader className="border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="Carica piu foto, scegli la copertina e gestisci la galleria dell'annuncio."
@@ -1295,6 +1514,13 @@ export function ListingEditor({
                 />
               </CardHeader>
               <CardContent className="space-y-5 pt-6">
+                <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  <p className="font-medium text-[var(--color-text)]">
+                    Fino a {maxMediaItems} foto, max {maxMediaFileSizeMb} MB ciascuna
+                  </p>
+                  <p>{mediaCapacityLabel}</p>
+                </div>
+
                 <div className="rounded-[24px] border border-dashed border-[color:color-mix(in_srgb,var(--color-primary)_32%,var(--color-border)_68%)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_64%,transparent)] p-4">
                   <input
                     accept="image/*"
@@ -1390,11 +1616,25 @@ export function ListingEditor({
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold text-[var(--color-text)]">
-                    Nuove foto in coda
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[var(--color-text)]">
+                      Nuove foto in coda
+                    </p>
+                    {queuedMedia.length > 0 ? (
+                      <button
+                        className="text-sm font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-text)]"
+                        onClick={resetQueuedMedia}
+                        type="button"
+                      >
+                        Svuota coda
+                      </button>
+                    ) : null}
+                  </div>
                   {queuedMedia.length === 0 ? (
-                    <EmptyStateMessage>Nessuna nuova foto selezionata.</EmptyStateMessage>
+                    <EmptyStateMessage>
+                      Nessuna nuova foto selezionata. Puoi salvare la bozza e tornare qui piu
+                      tardi per completare la galleria.
+                    </EmptyStateMessage>
                   ) : (
                     <div className="space-y-3">
                       {queuedMedia.map((item, index) => (
@@ -1448,7 +1688,13 @@ export function ListingEditor({
               </CardContent>
             </Card>
 
-            <Card className={sectionCardClassName}>
+            <Card
+              className={cn(
+                'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
+                sectionCardClassName,
+              )}
+              id="listing-review"
+            >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
                   description="Controllo finale prima del salvataggio, con azioni rapide e stato reale della scheda."
@@ -1588,6 +1834,13 @@ export function ListingEditor({
                 {completedReadinessCount}/{readinessItems.length} sezioni pronte
               </p>
             </div>
+            <label
+              className={cn(mobileQuickActionClassName, 'h-11 shrink-0 cursor-pointer rounded-full px-4')}
+              htmlFor={fileInputId}
+            >
+              <ImagePlus className="h-4 w-4 text-[var(--color-primary)]" />
+              Foto
+            </label>
             <Button
               className="h-11 rounded-full px-5 text-sm font-semibold"
               disabled={saving}

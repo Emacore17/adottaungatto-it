@@ -1,5 +1,6 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { SEARCH_INDEX_READ_ALIAS } from '@adottaungatto/types';
 import request from 'supertest';
 import { vi } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -8,7 +9,7 @@ import { SearchIndexService } from '../src/listings/search-index.service';
 describe('Health endpoint', () => {
   let app: NestFastifyApplication;
   const ping = vi.fn(async () => true);
-  const getIndexName = vi.fn(() => 'listings_v1');
+  const getIndexName = vi.fn(() => SEARCH_INDEX_READ_ALIAS);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -45,6 +46,6 @@ describe('Health endpoint', () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
     expect(response.body.service).toBe('search');
-    expect(response.body.index).toBe('listings_v1');
+    expect(response.body.index).toBe(SEARCH_INDEX_READ_ALIAS);
   });
 });

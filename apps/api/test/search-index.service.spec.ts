@@ -1,3 +1,4 @@
+import { SEARCH_INDEX_READ_ALIAS, SEARCH_INDEX_WRITE_ALIAS } from '@adottaungatto/types';
 import { vi } from 'vitest';
 import type { SearchListingsQueryDto } from '../src/listings/dto/search-listings-query.dto';
 import type { PublicListingSummaryRecord } from '../src/listings/listings.repository';
@@ -34,6 +35,50 @@ const buildSummaryRecord = (id: string, title: string): PublicListingSummaryReco
   comuneCentroidLng: 7.6869,
 });
 
+const buildSearchIndexDocument = (id: string) => ({
+  id,
+  title: `Annuncio ${id}`,
+  description: `Descrizione ${id}`,
+  listingType: 'adozione',
+  priceAmount: null,
+  currency: 'EUR',
+  ageText: '2 anni',
+  sex: 'femmina',
+  breed: 'Europeo',
+  status: 'published',
+  regionId: '1',
+  provinceId: '11',
+  comuneId: '101',
+  regionName: 'Piemonte',
+  provinceName: 'Torino',
+  provinceSigla: 'TO',
+  comuneName: 'Torino',
+  location: {
+    lat: 45.0703,
+    lon: 7.6869,
+  },
+  isSponsored: false,
+  promotionWeight: 1,
+  publishedAt: new Date().toISOString(),
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const buildAliasLookupResponse = (aliasName: string, indexName = 'listings_v1') =>
+  new Response(
+    JSON.stringify({
+      [indexName]: {
+        aliases: {
+          [aliasName]: {},
+        },
+      },
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+
 describe('SearchIndexService', () => {
   const listPublishedByIds = vi.fn();
   const findPublishedSearchIndexDocumentById = vi.fn();
@@ -59,7 +104,8 @@ describe('SearchIndexService', () => {
   it('builds OpenSearch query with filters and preserves hit order', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_READ_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_WRITE_ALIAS))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -107,13 +153,13 @@ describe('SearchIndexService', () => {
 
     const result = await service.searchPublished(query);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(resolveLocationCentroid).toHaveBeenCalledWith(query.locationIntent);
-    const searchRequest = fetchMock.mock.calls[1];
+    const searchRequest = fetchMock.mock.calls[2];
     const searchUrl = searchRequest?.[0];
     const searchOptions = searchRequest?.[1];
 
-    expect(searchUrl).toContain('/listings_v1/_search');
+    expect(searchUrl).toContain(`/${SEARCH_INDEX_READ_ALIAS}/_search`);
     expect(searchOptions?.method).toBe('POST');
     const requestBody = JSON.parse(String(searchOptions?.body));
     expect(requestBody).toMatchObject({
@@ -167,7 +213,8 @@ describe('SearchIndexService', () => {
   it('applies capped sponsored boost for relevance queries with text', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_READ_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_WRITE_ALIAS))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -205,7 +252,7 @@ describe('SearchIndexService', () => {
 
     await service.searchPublished(query);
 
-    const searchRequest = fetchMock.mock.calls[1];
+    const searchRequest = fetchMock.mock.calls[2];
     const searchOptions = searchRequest?.[1];
     const requestBody = JSON.parse(String(searchOptions?.body));
 
@@ -248,7 +295,8 @@ describe('SearchIndexService', () => {
   it('returns empty results without DB hydration when index has no hits', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_READ_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_WRITE_ALIAS))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -287,5 +335,84 @@ describe('SearchIndexService', () => {
       total: 0,
     });
     expect(listPublishedByIds).not.toHaveBeenCalled();
+  });
+
+  it('reindexes into a versioned index and swaps aliases without clearing the live index', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_READ_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_WRITE_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_READ_ALIAS))
+      .mockResolvedValueOnce(buildAliasLookupResponse(SEARCH_INDEX_WRITE_ALIAS))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ acknowledged: true }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errors: false,
+            items: [{ index: { _id: '1', status: 201 } }, { index: { _id: '2', status: 201 } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ acknowledged: true }), { status: 200 }));
+
+    global.fetch = fetchMock as typeof fetch;
+    listPublishedSearchIndexDocuments
+      .mockResolvedValueOnce([buildSearchIndexDocument('1'), buildSearchIndexDocument('2')])
+      .mockResolvedValueOnce([]);
+
+    const service = new SearchIndexService(listingsRepositoryMock as never);
+    const indexedCount = await service.reindexAllPublishedListings(200);
+
+    expect(indexedCount).toBe(2);
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(`/_alias/${SEARCH_INDEX_READ_ALIAS}`),
+        expect.stringContaining(`/_alias/${SEARCH_INDEX_WRITE_ALIAS}`),
+        expect.stringContaining('/_bulk'),
+        expect.stringContaining('/_aliases'),
+      ]),
+    );
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('_delete_by_query')]),
+    );
+
+    const createIndexCall = fetchMock.mock.calls[5];
+    expect(String(createIndexCall?.[0])).toContain('/listings_v');
+
+    const bulkCall = fetchMock.mock.calls[6];
+    expect(String(bulkCall?.[0])).toContain('/_bulk');
+    expect(bulkCall?.[1]).toMatchObject({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+      },
+    });
+    expect(String(bulkCall?.[1]?.body)).toContain('"promotionWeight":1');
+
+    const aliasSwapCall = fetchMock.mock.calls[8];
+    expect(String(aliasSwapCall?.[0])).toContain('/_aliases');
+    const aliasPayload = JSON.parse(String(aliasSwapCall?.[1]?.body));
+    expect(aliasPayload.actions).toEqual(
+      expect.arrayContaining([
+        {
+          remove: {
+            index: 'listings_v1',
+            alias: SEARCH_INDEX_READ_ALIAS,
+          },
+        },
+        {
+          remove: {
+            index: 'listings_v1',
+            alias: SEARCH_INDEX_WRITE_ALIAS,
+          },
+        },
+      ]),
+    );
+
+    nowSpy.mockRestore();
   });
 });

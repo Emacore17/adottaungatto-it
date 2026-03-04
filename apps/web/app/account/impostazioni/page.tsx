@@ -1,7 +1,7 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { LinkButton } from '../../../components/link-button';
 import { MessagingPreferencesForm } from '../../../components/messaging-preferences-form';
-import { PageShell } from '../../../components/page-shell';
+import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 
 export default async function AccountSettingsPage() {
@@ -10,7 +10,7 @@ export default async function AccountSettingsPage() {
     session.user.preferences?.messageEmailNotificationsEnabled ?? true;
 
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <CardContent className="space-y-4 pt-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -18,12 +18,12 @@ export default async function AccountSettingsPage() {
             <Badge variant="outline">Messaggistica</Badge>
           </div>
           <p className="text-sm leading-6 text-[var(--color-text)]">
-            Gestisci le preferenze realmente supportate dal backend, senza impostazioni decorative o
-            scollegate dal prodotto.
+            Gestisci le notifiche email dei messaggi e mantieni essenziali le impostazioni del tuo
+            account.
           </p>
         </CardContent>
       }
-      description="Impostazioni essenziali del tuo account, limitate alle preferenze di messaggistica gia operative."
+      description="Aggiorna le preferenze utili alla gestione delle conversazioni, senza opzioni superflue o schermate ridondanti."
       eyebrow="Area riservata"
       title="Impostazioni account"
     >
@@ -45,6 +45,6 @@ export default async function AccountSettingsPage() {
           </CardContent>
         </Card>
       </div>
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

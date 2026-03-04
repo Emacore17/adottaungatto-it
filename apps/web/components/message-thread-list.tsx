@@ -14,7 +14,7 @@ const truncateText = (value: string, maxLength: number) => {
     return normalized;
   }
 
-  return `${normalized.slice(0, maxLength - 1)}…`;
+  return `${normalized.slice(0, maxLength - 3)}...`;
 };
 
 export function MessageThreadList({

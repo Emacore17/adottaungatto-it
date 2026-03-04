@@ -56,29 +56,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="space-y-4">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-              Auth ancora attiva
+              Accesso sicuro
             </p>
             <p className="text-sm text-[var(--color-text)]">
-              Password grant Keycloak, cookie sessione e redirect `next` restano collegati.
+              Accedi per pubblicare annunci, rispondere ai messaggi e gestire le tue preferenze.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="info">/api/auth/login</Badge>
-            <Badge variant="outline">/api/auth/logout</Badge>
+            <Badge variant="info">Sessione protetta</Badge>
+            <Badge variant="outline">Redirect automatico</Badge>
           </div>
         </div>
       }
-      description="La pagina login resta funzionale ma e tornata a una forma base. Tutto il contorno prodotto e stato rimosso per ripartire da uno scaffold pulito."
+      description="Entra nel tuo account per pubblicare annunci, seguire i messaggi e aggiornare le impostazioni del profilo."
       eyebrow="Autenticazione"
-      title="Accedi allo scaffold web"
+      title="Accedi al tuo account"
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHeader>
             <CardTitle>Login</CardTitle>
-            <CardDescription>
-              La sessione viene ancora salvata nel cookie del frontend.
-            </CardDescription>
+            <CardDescription>Usa le credenziali del tuo account per continuare.</CardDescription>
           </CardHeader>
           <CardContent>
             <form action="/api/auth/login" className="space-y-4" method="post">
@@ -113,10 +111,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Route collegate</CardTitle>
+            <CardTitle>Accessi utili</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-            <p>Il login porta ancora a `/account` o al path `next` richiesto.</p>
+            <p>Se non ricordi la password, puoi avviare il recupero oppure aprire la registrazione.</p>
             <div className="flex flex-wrap gap-2">
               <LinkButton href="/registrati" variant="outline">
                 Registrati

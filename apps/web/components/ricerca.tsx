@@ -590,7 +590,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     }
 
     if (!apiBaseUrl) {
-      setLocationError('Config API mancante per i suggerimenti localita.');
+      setLocationError('La ricerca per localita non e disponibile in questo momento.');
       setLocationLoading(false);
       return;
     }
@@ -1105,7 +1105,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       </div>
 
       <p className="location-meta">
-        Le opzioni usano mesi e anni, ma il backend salva sempre il valore in mesi.
+        Seleziona una fascia di eta in modo rapido.
       </p>
 
       <div className="filter-reset-row">

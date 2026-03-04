@@ -2,42 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
+import {
+  FAVORITES_STORAGE_KEY,
+  FAVORITES_UPDATED_EVENT,
+  readFavoriteIds,
+  toggleFavoriteId,
+} from '../lib/favorites-storage';
 
 interface FavoriteHeartButtonProps {
   listingId: string;
 }
-
-const FAVORITES_STORAGE_KEY = 'adottaungatto:web:favorites';
-
-const readFavorites = (): string[] => {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
-    if (!rawValue) {
-      return [];
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-    if (!Array.isArray(parsedValue)) {
-      return [];
-    }
-
-    return parsedValue.filter((value): value is string => typeof value === 'string');
-  } catch {
-    return [];
-  }
-};
-
-const writeFavorites = (favoriteIds: string[]) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
-};
 
 export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
   const [isFavorite, setIsFavorite] = useState(false);
@@ -47,7 +21,7 @@ export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
   );
 
   useEffect(() => {
-    const favoriteIds = new Set(readFavorites());
+    const favoriteIds = new Set(readFavoriteIds());
     setIsFavorite(favoriteIds.has(listingId));
 
     const onStorage = (event: StorageEvent) => {
@@ -55,40 +29,42 @@ export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
         return;
       }
 
-      const refreshedFavorites = new Set(readFavorites());
+      const refreshedFavorites = new Set(readFavoriteIds());
+      setIsFavorite(refreshedFavorites.has(listingId));
+    };
+
+    const onFavoritesUpdated = () => {
+      const refreshedFavorites = new Set(readFavoriteIds());
       setIsFavorite(refreshedFavorites.has(listingId));
     };
 
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener(FAVORITES_UPDATED_EVENT, onFavoritesUpdated as EventListener);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(FAVORITES_UPDATED_EVENT, onFavoritesUpdated as EventListener);
+    };
   }, [listingId]);
 
   const handleToggle = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
 
-    const favoriteIds = new Set(readFavorites());
-    if (favoriteIds.has(listingId)) {
-      favoriteIds.delete(listingId);
-      setIsFavorite(false);
-    } else {
-      favoriteIds.add(listingId);
-      setIsFavorite(true);
-    }
-
-    writeFavorites([...favoriteIds]);
+    const nextFavoriteIds = toggleFavoriteId(listingId);
+    setIsFavorite(nextFavoriteIds.includes(listingId));
   };
 
   return (
     <button
       aria-label={buttonLabel}
       aria-pressed={isFavorite}
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-[var(--shadow-sm)] backdrop-blur-md transition-colors ${
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-[var(--shadow-sm)] backdrop-blur-md transition-[color,background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] ${
         isFavorite
           ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-elevated)] text-[var(--color-primary)]'
           : 'border-[var(--color-border)] bg-[var(--color-surface-overlay-strong)] text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)]'
       }`}
       onClick={handleToggle}
+      title={buttonLabel}
       type="button"
     >
       <svg

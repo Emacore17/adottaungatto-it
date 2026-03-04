@@ -1,6 +1,6 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { LinkButton } from '../../../components/link-button';
-import { PageShell } from '../../../components/page-shell';
+import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { formatDate } from '../../../lib/formatters';
 import { fetchMyListings } from '../../../lib/listings';
@@ -10,19 +10,21 @@ export default async function AccountListingsPage() {
   const listings = await fetchMyListings().catch(() => []);
 
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-            Endpoint preservato
+            Gestione annunci
           </p>
-          <p className="text-sm text-[var(--color-text)]">GET `/v1/listings/me`</p>
+          <p className="text-sm text-[var(--color-text)]">
+            Controlla lo stato delle tue schede e apri subito modifica o dettaglio.
+          </p>
           <LinkButton href="/pubblica" variant="outline">
             Nuovo annuncio
           </LinkButton>
         </div>
       }
-      description="Vista minimale dei record autenticati. Niente wizard, filtri o componenti verticali: solo dati e collegamenti essenziali."
+      description="Consulta i tuoi annunci, verifica lo stato e passa rapidamente a dettaglio o modifica."
       eyebrow="Area riservata"
       title="I miei annunci"
     >
@@ -51,8 +53,8 @@ export default async function AccountListingsPage() {
                       {listing.title}
                     </p>
                     <p className="text-sm text-[var(--color-text-muted)]">
-                      {listing.ageText} · {listing.sex}
-                      {listing.breed ? ` · ${listing.breed}` : ''}
+                      {listing.ageText} - {listing.sex}
+                      {listing.breed ? ` - ${listing.breed}` : ''}
                     </p>
                     <p className="text-sm text-[var(--color-text-muted)]">
                       Aggiornato {formatDate(listing.updatedAt)}
@@ -73,6 +75,6 @@ export default async function AccountListingsPage() {
           ))}
         </div>
       )}
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

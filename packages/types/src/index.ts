@@ -14,6 +14,14 @@ export {
   type CatBreedLabel,
   type CatBreedSlug,
 } from './cat-breeds';
+export {
+  SEARCH_INDEX_LEGACY_NAME,
+  SEARCH_INDEX_MAPPING,
+  SEARCH_INDEX_READ_ALIAS,
+  SEARCH_INDEX_VERSION_PREFIX,
+  SEARCH_INDEX_WRITE_ALIAS,
+  buildVersionedSearchIndexName,
+} from './search-index';
 
 export type LocationIntentScope =
   | 'italy'

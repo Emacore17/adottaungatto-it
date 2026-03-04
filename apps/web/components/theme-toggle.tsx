@@ -40,9 +40,11 @@ export function ThemeToggle() {
   return (
     <Button
       aria-label={isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
+      aria-pressed={isDark}
       className="h-9 w-9 p-0"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       size="sm"
+      title={isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
       type="button"
       variant="outline"
     >

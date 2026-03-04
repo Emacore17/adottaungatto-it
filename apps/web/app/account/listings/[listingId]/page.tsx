@@ -1,7 +1,7 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { notFound } from 'next/navigation';
 import { LinkButton } from '../../../../components/link-button';
-import { PageShell } from '../../../../components/page-shell';
+import { WorkspacePageShell } from '../../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../../lib/auth';
 import { formatCurrencyAmount, formatDate } from '../../../../lib/formatters';
 import { fetchMyListingById } from '../../../../lib/listings';
@@ -21,8 +21,10 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
     notFound();
   }
 
+  const profileDetails = [listing.ageText, listing.sex, listing.breed].filter(Boolean).join(', ');
+
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -37,8 +39,8 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
           </div>
         </div>
       }
-      description="Dettaglio privato minimo per confermare che la route e ancora collegata ai dati autenticati."
-      eyebrow="Account"
+      description="Controlla i dati principali del tuo annuncio, verifica stato e metadati, poi entra subito in modifica."
+      eyebrow="Area riservata"
       title={listing.title}
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -62,8 +64,7 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
                   Profilo
                 </p>
                 <p className="mt-1 text-sm font-medium text-[var(--color-text)]">
-                  {listing.ageText} · {listing.sex}
-                  {listing.breed ? ` · ${listing.breed}` : ''}
+                  {profileDetails || 'Profilo non disponibile.'}
                 </p>
               </div>
             </div>
@@ -75,9 +76,7 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
             <CardTitle>Metadati</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-            <p>
-              Localita tecnica: {listing.regionId}/{listing.provinceId}/{listing.comuneId}
-            </p>
+            <p>Riferimento localita: {listing.regionId}/{listing.provinceId}/{listing.comuneId}</p>
             <p>Creato {formatDate(listing.createdAt)}</p>
             <p>Ultimo aggiornamento {formatDate(listing.updatedAt)}</p>
             {listing.contactEmail ? <p>Contatto: {listing.contactEmail}</p> : null}
@@ -90,6 +89,6 @@ export default async function AccountListingDetailPage({ params }: ListingDetail
           </CardContent>
         </Card>
       </div>
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

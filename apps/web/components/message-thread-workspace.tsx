@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useState } from 'react';
+import { LinkButton } from './link-button';
 import { MessageThreadList } from './message-thread-list';
 import { MessageThreadView } from './message-thread-view';
 
@@ -172,11 +173,20 @@ export function MessageThreadWorkspace({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <MessageThreadList
-        currentThreadId={initialThreadPage.thread.id}
-        threads={threadListPage.threads}
-      />
-      <MessageThreadView initialThreadPage={initialThreadPage} />
+      <div className="hidden xl:block">
+        <MessageThreadList
+          currentThreadId={initialThreadPage.thread.id}
+          threads={threadListPage.threads}
+        />
+      </div>
+      <div className="space-y-4">
+        <div className="xl:hidden">
+          <LinkButton href="/messaggi" variant="ghost">
+            Torna a tutti i messaggi
+          </LinkButton>
+        </div>
+        <MessageThreadView initialThreadPage={initialThreadPage} />
+      </div>
     </div>
   );
 }

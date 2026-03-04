@@ -8,6 +8,36 @@ const baseSchema = z.object({
   NODE_ENV: nodeEnvSchema,
 });
 
+const parseOriginList = (value: string, fieldName: string, ctx: z.RefinementCtx): string[] => {
+  const origins = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (origins.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must contain at least one valid origin.`,
+    });
+    return z.NEVER;
+  }
+
+  const normalizedOrigins: string[] = [];
+  for (const origin of origins) {
+    try {
+      normalizedOrigins.push(new URL(origin).origin);
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${fieldName} contains an invalid origin: ${origin}`,
+      });
+      return z.NEVER;
+    }
+  }
+
+  return Array.from(new Set(normalizedOrigins));
+};
+
 const webSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_WEB_URL: z.string().url('NEXT_PUBLIC_WEB_URL must be a valid URL'),
@@ -58,6 +88,11 @@ const adminSchema = baseSchema.extend({
 const apiSchema = baseSchema.extend({
   API_HOST: z.string().min(1, 'API_HOST is required'),
   API_PORT: z.coerce.number().int().min(1).max(65535),
+  API_CORS_ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .default('http://localhost:3000,http://localhost:3001')
+    .transform((value, ctx) => parseOriginList(value, 'API_CORS_ALLOWED_ORIGINS', ctx)),
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
   REDIS_URL: z.string().url('REDIS_URL must be a valid URL'),
   OPENSEARCH_URL: z.string().url('OPENSEARCH_URL must be a valid URL'),
@@ -107,11 +142,77 @@ const apiSchema = baseSchema.extend({
     .min(1, 'KEYCLOAK_CLIENT_ID_MOBILE is required')
     .optional()
     .default('adottaungatto-mobile'),
+  API_TRUST_PROXY_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
   AUTH_DEV_HEADERS_ENABLED: z
     .enum(['true', 'false'])
     .optional()
     .default('true')
     .transform((value) => value === 'true'),
+  RATE_LIMIT_KEY_PREFIX: z
+    .string()
+    .min(1, 'RATE_LIMIT_KEY_PREFIX is required')
+    .optional()
+    .default('rate_limit'),
+  RATE_LIMIT_PUBLIC_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(60),
+  RATE_LIMIT_PUBLIC_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(120),
+  RATE_LIMIT_SEARCH_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(60),
+  RATE_LIMIT_SEARCH_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(80),
+  RATE_LIMIT_ANALYTICS_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(60),
+  RATE_LIMIT_ANALYTICS_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(120),
+  RATE_LIMIT_CONTACT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(60),
+  RATE_LIMIT_CONTACT_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(30),
   SEARCH_FALLBACK_MAX_STEPS: z.coerce.number().int().min(1).max(5).optional().default(5),
   MESSAGE_THREAD_CREATE_WINDOW_SECONDS: z.coerce
     .number()
@@ -251,6 +352,79 @@ const workerSchema = baseSchema.extend({
     .max(3_600)
     .optional()
     .default(300),
+  SEARCH_INDEX_STALE_CLEANUP_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  SEARCH_INDEX_STALE_CLEANUP_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .optional()
+    .default(900_000),
+  SEARCH_INDEX_STALE_RETAIN_INACTIVE_COUNT: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(20)
+    .optional()
+    .default(1),
+  RETENTION_CLEANUP_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  RETENTION_CLEANUP_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .optional()
+    .default(300_000),
+  RETENTION_CLEANUP_DELETE_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(500),
+  RETENTION_ANALYTICS_EVENTS_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(90),
+  RETENTION_ADMIN_AUDIT_LOGS_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(365),
+  RETENTION_NOTIFICATION_OUTBOX_SENT_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(14),
+  RETENTION_NOTIFICATION_OUTBOX_FAILED_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(30),
+  RETENTION_MESSAGE_THREADS_DELETED_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(30),
   WEB_APP_URL: z
     .string()
     .url('WEB_APP_URL must be a valid URL')

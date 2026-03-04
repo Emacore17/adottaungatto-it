@@ -1,40 +1,141 @@
 # API_CONTRACT.md
 
-Contratti API pubblici e protetti per lo stato corrente del progetto.
+Contratti API correnti da trattare come canonici finche non esiste una OpenAPI generata.
 
-## Versioning
+## Convenzioni generali
 
-- Base path: `/v1`
-- Formato: `application/json`
+- base path: `/v1`
+- payload: `application/json`
+- ID numerici serializzati come stringhe in molti response payload
+- auth browser canonica: `Authorization: Bearer <token>`
+- auth locale alternativa per smoke script: header dev (`x-auth-user-id`, `x-auth-email`, `x-auth-roles`) se `AUTH_DEV_HEADERS_ENABLED=true`
+- quando un rate limit pubblico blocca la richiesta, l'API restituisce `429` con body JSON e header `Retry-After`
 
-## Listings Search (M3.3-M3.5)
+## Mappa endpoint
+
+### Health
+
+- `GET /health`
+- `GET /health/search`
+
+### Users
+
+- `GET /v1/users/me`
+- `PATCH /v1/users/me/preferences`
+- `GET /v1/users/moderation-space`
+- `GET /v1/users/admin-space`
+
+### Shape attuale di `GET /v1/users/me`
+
+Response tipica:
+
+```json
+{
+  "user": {
+    "id": "kc-admin-1",
+    "provider": "keycloak",
+    "providerSubject": "kc-admin-1",
+    "email": "admin.demo@adottaungatto.local",
+    "roles": ["admin"],
+    "preferences": {
+      "messageEmailNotificationsEnabled": true
+    }
+  }
+}
+```
+
+Nota importante:
+
+- `providerSubject` e il subject esterno stabile dell'identita
+- `user.id` e allineato al subject pubblico stabile, quindi oggi coincide con `providerSubject`
+- `app_users.id` resta un identificatore interno lato server e non va esposto come ID pubblico canonico
+- le nuove feature relazionali devono preservare questa separazione tra ID pubblico e ID interno
+
+### Geography
+
+- `GET /v1/geography/regions`
+- `GET /v1/geography/provinces`
+- `GET /v1/geography/comuni`
+- `GET /v1/geography/search`
+
+### Listings
+
+- `GET /v1/listings/breeds`
+- `POST /v1/listings`
+- `GET /v1/listings/public`
+- `GET /v1/listings/public/:id`
+- `POST /v1/listings/:id/contact`
+- `GET /v1/listings/search`
+- `GET /v1/listings/me`
+- `PATCH /v1/listings/:id`
+- `DELETE /v1/listings/:id`
+- `POST /v1/listings/:id/media`
+- `GET /v1/listings/:id/media`
+- `PATCH /v1/listings/:id/media/:mediaId/cover`
+- `DELETE /v1/listings/:id/media/:mediaId`
+- `PATCH /v1/listings/:id/media/order`
+
+### Moderation
+
+- `GET /v1/admin/moderation/queue`
+- `POST /v1/admin/moderation/:listingId/approve`
+- `POST /v1/admin/moderation/:listingId/reject`
+- `POST /v1/admin/moderation/:listingId/suspend`
+- `POST /v1/admin/moderation/:listingId/restore`
+
+### Messaging
+
+- `POST /v1/messages/listings/:listingId/thread`
+- `GET /v1/messages/threads`
+- `GET /v1/messages/events`
+- `GET /v1/messages/threads/:threadId`
+- `POST /v1/messages/threads/:threadId/messages`
+- `POST /v1/messages/threads/:threadId/read`
+- `DELETE /v1/messages/threads/:threadId`
+- `DELETE /v1/messages/threads/:threadId/everyone`
+- `POST /v1/messages/threads/:threadId/typing`
+
+### Analytics
+
+- `POST /v1/analytics/events`
+- `GET /v1/admin/analytics/kpis`
+
+### Promotions
+
+- `GET /v1/admin/promotions/plans`
+- `GET /v1/admin/promotions/listings/:listingId`
+- `POST /v1/admin/promotions/listings/:listingId/assign`
+
+## Search listings: contratto chiave
 
 Endpoint pubblico:
 
 - `GET /v1/listings/search`
 
-### Query params
+### Query params supportati
 
-- `q` (opzionale): testo libero su titolo/descrizione.
-- `locationScope` (opzionale): `italy | region | province | comune | comune_plus_province`.
-- `regionId` (opzionale): richiesto per `locationScope=region`, richiesto insieme a `provinceId` e `comuneId` per `locationScope=comune`.
-- `provinceId` (opzionale): richiesto per `locationScope=province|comune_plus_province`; richiesto anche per `locationScope=comune`.
-- `comuneId` (opzionale): richiesto per `locationScope=comune`.
-- `locationLabel` (opzionale): label UI dell'intento selezionato.
-- `locationSecondaryLabel` (opzionale): label secondaria UI.
-- `listingType` (opzionale): filtro tipo annuncio.
-- `priceMin` (opzionale): prezzo minimo.
-- `priceMax` (opzionale): prezzo massimo.
-- `ageText` (opzionale): filtro età testuale.
-- `sex` (opzionale): filtro sesso.
-- `breed` (opzionale): filtro razza.
-- `sort` (opzionale): `relevance | newest | price_asc | price_desc` (default `relevance`).
-- `limit` (opzionale): default `24`, range `1..100`.
-- `offset` (opzionale): default `0`, minimo `0`.
+- `q` o `query`
+- `locationScope` o `scope`
+- `regionId`
+- `provinceId`
+- `comuneId`
+- `locationLabel`
+- `locationSecondaryLabel`
+- `referenceLat`
+- `referenceLon`
+- `listingType`, `listing_type` o `type`
+- `priceMin`
+- `priceMax`
+- `ageText`
+- `ageMinMonths`
+- `ageMaxMonths`
+- `sex`
+- `breed`
+- `sort`: `relevance | newest | price_asc | price_desc`
+- `limit` (default `24`, max `100`)
+- `offset` (default `0`)
 
 ### Contratto `LocationIntent`
-
-Il contratto canonico lato API/UI è:
 
 ```json
 {
@@ -47,13 +148,25 @@ Il contratto canonico lato API/UI è:
 }
 ```
 
-### Response shape
+### Regole di validazione principali
+
+- se si passa qualunque filtro location, `locationScope` diventa obbligatorio
+- `locationScope=italy` non accetta `regionId/provinceId/comuneId`
+- `locationScope=region` richiede `regionId`
+- `locationScope=province` e `comune_plus_province` richiedono `provinceId`
+- `locationScope=comune` richiede `regionId + provinceId + comuneId`
+- `referenceLat` e `referenceLon` devono arrivare insieme
+- `priceMin <= priceMax`
+- `ageMinMonths <= ageMaxMonths`
+
+### Shape della risposta
 
 ```json
 {
   "items": [
     {
-      "distanceKm": null
+      "id": "101",
+      "distanceKm": 12.4
     }
   ],
   "pagination": {
@@ -72,315 +185,96 @@ Il contratto canonico lato API/UI è:
 }
 ```
 
-Note:
+### Note di comportamento
 
-- `fallbackApplied`, `fallbackLevel`, `fallbackReason` sono sempre presenti nel payload.
-- ogni item include `distanceKm` (km approssimati, 1 decimale) quando la ricerca ha un riferimento geografico risolvibile; altrimenti `null`.
-- In M3.3 la query server-side usa OpenSearch (`listings_v1`) come motore primario.
-- Se OpenSearch non risponde, l'API applica fallback tecnico su query SQL per mantenere la ricerca disponibile in locale.
-- In M3.4 il fallback geografico anti-zero-results è attivo con sequenza:
-  1. area richiesta
-  2. area parent (comune -> provincia, provincia -> regione)
-  3. province vicine (level `nearby`)
-  4. regione
-  5. Italia
-- `fallbackReason` può assumere:
-  - `WIDENED_TO_PARENT_AREA`
-  - `WIDENED_TO_NEARBY_AREA`
-  - `NO_EXACT_MATCH`
-  - `NO_LOCATION_FILTER`
-- In M3.5, con `locationIntent` geolocalizzato, l'ordinamento `relevance` usa la distanza (`_geo_distance`) come segnale principale o tie-break.
-- In M5.2, con `sort=relevance` e `q` valorizzato, la search applica un boost sponsored controllato (`isSponsored` + `promotionWeight`) con cap massimo `1.2`, mantenendo la pertinenza testuale come segnale primario.
-- Se OpenSearch non e disponibile, il fallback SQL mantiene una regola equivalente: sponsored come tie-break regolato, senza sovrascrivere i bucket di pertinenza.
+- OpenSearch e il motore primario
+- in caso di indisponibilita di OpenSearch l'API usa fallback SQL
+- il fallback geografico anti-zero-results allarga progressivamente l'area di ricerca
+- `distanceKm` e valorizzato quando c'e un riferimento geografico utilizzabile
 
 ### Errori validazione
-
-Su query invalida: `400` con payload:
 
 ```json
 {
   "message": "Invalid search listings query.",
   "issues": [
     {
-      "path": "string",
-      "message": "string"
+      "path": "locationScope",
+      "message": "..."
     }
   ]
 }
 ```
 
-## Admin Promotions (M5.1)
-
-Endpoint protetti admin:
-
-- `GET /v1/admin/promotions/plans`
-- `GET /v1/admin/promotions/listings/:listingId`
-- `POST /v1/admin/promotions/listings/:listingId/assign`
-
-Autorizzazione:
-
-- ruolo richiesto: `admin` (utente/moderator ricevono `403`)
-
-### GET `/v1/admin/promotions/plans`
-
-Query params:
-
-- `includeInactive` (opzionale): `true|false` (default `false`)
-
-Response shape:
-
-```json
-{
-  "includeInactive": false,
-  "plans": [
-    {
-      "id": "11",
-      "code": "boost_24h",
-      "boostType": "boost_24h",
-      "durationHours": 24,
-      "promotionWeight": "1.120",
-      "isActive": true
-    }
-  ]
-}
-```
-
-### GET `/v1/admin/promotions/listings/:listingId`
-
-Response shape:
-
-```json
-{
-  "listingId": "101",
-  "promotions": [
-    {
-      "id": "9001",
-      "listingId": "101",
-      "status": "active",
-      "startsAt": "2026-02-25T10:00:00.000Z",
-      "endsAt": "2026-02-26T10:00:00.000Z",
-      "plan": {
-        "code": "boost_24h",
-        "durationHours": 24
-      }
-    }
-  ]
-}
-```
-
-### POST `/v1/admin/promotions/listings/:listingId/assign`
-
-Request body:
-
-```json
-{
-  "planCode": "boost_24h",
-  "startsAt": "2026-02-26T08:00:00.000Z",
-  "metadata": {
-    "source": "admin-panel"
-  }
-}
-```
-
-Note:
-
-- `planCode` obbligatorio (`[a-z0-9_]{3,80}`)
-- `startsAt` opzionale ISO datetime; se omesso la promozione parte subito
-- stato assegnato automaticamente:
-  - `active` se `startsAt <= now`
-  - `scheduled` se `startsAt > now`
-- `endsAt` calcolato da `durationHours` del piano
-- per listing `published`, l'assegnazione promozione innesca sync dell'indice search (`listings_v1`) per riflettere subito il ranking sponsored
-
-Response shape:
-
-```json
-{
-  "promotion": {
-    "id": "9001",
-    "listingId": "101",
-    "status": "active",
-    "plan": {
-      "code": "boost_24h"
-    }
-  },
-  "events": [
-    {
-      "eventType": "created"
-    },
-    {
-      "eventType": "activated"
-    }
-  ]
-}
-```
-
-Errori principali:
-
-- `400` payload non valido (`planCode`, `startsAt`, `listingId`)
-- `401` non autenticato
-- `403` ruolo non autorizzato
-- `404` listing o piano non trovati
-
-## Analytics Events + KPI (M5.3 - M5.4)
+## Preferences utente
 
 Endpoint:
 
-- `POST /v1/analytics/events` (pubblico, ingest eventi contatto)
-- `GET /v1/admin/analytics/kpis` (protetto moderator/admin)
+- `PATCH /v1/users/me/preferences`
 
-### POST `/v1/analytics/events`
-
-Request body:
+Body:
 
 ```json
 {
-  "eventType": "contact_clicked",
-  "listingId": "101",
-  "source": "web_public",
-  "metadata": {
-    "channel": "email"
-  }
+  "messageEmailNotificationsEnabled": true
 }
 ```
 
-Regole:
+Vincoli:
 
-- `eventType` consentiti: `contact_clicked | contact_sent`
-- `listingId` obbligatorio (integer string)
-- l'evento viene registrato solo se il listing esiste ed e `published`
-- `source` opzionale (default `web_public`)
+- il body deve essere un oggetto JSON
+- `messageEmailNotificationsEnabled` deve essere boolean
 
-Response shape:
+## Contatto inserzionista
 
-```json
-{
-  "event": {
-    "id": "9100",
-    "eventType": "contact_clicked",
-    "actorUserId": null,
-    "listingId": "101",
-    "source": "web_public"
-  }
-}
-```
-
-### GET `/v1/admin/analytics/kpis`
-
-Query params:
-
-- `windowDays` opzionale (`1..365`, default `30`)
-
-Response shape:
-
-```json
-{
-  "windowDays": 30,
-  "from": "2026-01-26T00:00:00.000Z",
-  "to": "2026-02-25T00:00:00.000Z",
-  "metrics": {
-    "listingView": 120,
-    "searchPerformed": 70,
-    "searchFallbackApplied": 9,
-    "contactClicked": 35,
-    "contactSent": 12,
-    "listingCreated": 28,
-    "listingPublished": 14
-  },
-  "moderation": {
-    "pendingReview": 4,
-    "approved": 18,
-    "rejected": 3
-  },
-  "funnel": {
-    "listingCreated": 28,
-    "listingPublished": 14,
-    "contactClicked": 35,
-    "contactSent": 12,
-    "publishRatePct": 50,
-    "contactFromPublishedRatePct": 85.7,
-    "contactClickToSendRatePct": 34.3
-  },
-  "derived": {
-    "fallbackRatePct": 12.9,
-    "contactRatePct": 10,
-    "publishRatePct": 50
-  }
-}
-```
-
-Note:
-
-- KPI principali disponibili: `listingView`, `searchPerformed`, `searchFallbackApplied`, `contactClicked`, `contactSent`, `listingCreated`, `listingPublished`
-- metriche moderazione incluse:
-  - `pendingReview`: snapshot coda `pending_review` corrente
-  - `approved`: numero azioni moderazione `approve` nel range selezionato
-  - `rejected`: numero azioni moderazione `reject` nel range selezionato
-- funnel base incluso:
-  - volumi: `listingCreated`, `listingPublished`, `contactClicked`, `contactSent`
-  - rate: `publishRatePct`, `contactFromPublishedRatePct`, `contactClickToSendRatePct`
-- eventi server-side tracciati automaticamente:
-  - `listing_created`
-  - `listing_view`
-  - `search_performed`
-  - `search_fallback_applied` (solo se fallback attivo)
-  - `listing_published` (transizione reale a `published`)
-
-## Listing Contact (M5.5)
-
-Endpoint pubblico:
+Endpoint:
 
 - `POST /v1/listings/:id/contact`
 
-### POST `/v1/listings/:id/contact`
-
-Request body:
+Body minimo:
 
 ```json
 {
   "name": "Mario Rossi",
-  "email": "mario.rossi@example.test",
-  "phone": "+393401112233",
-  "message": "Ciao, sono interessato all'annuncio...",
+  "email": "mario@example.com",
+  "phone": "+39 333 1234567",
+  "message": "Messaggio di almeno 20 caratteri...",
   "privacyConsent": true,
   "website": "",
   "source": "web_public_form"
 }
 ```
 
-Regole:
-
-- `name`, `email`, `message`, `privacyConsent=true` obbligatori
-- `message` minimo 20 caratteri, massimo 2000
-- `phone` opzionale
-- `website` e honeypot anti-spam: deve restare vuoto
-- listing target deve essere `published`
-- anti-abuso:
-  - rate limit per `listingId + senderIp` (finestra breve)
-  - blocco messaggi duplicati (`listingId + senderEmail + messageHash`) in finestra 24h
-
-Response shape:
-
-```json
-{
-  "contactRequest": {
-    "id": "5001",
-    "listingId": "101",
-    "createdAt": "2026-02-25T23:00:00.000Z"
-  },
-  "confirmation": {
-    "message": "Richiesta inviata con successo. L'inserzionista ti contattera tramite i recapiti indicati."
-  }
-}
-```
-
-Errori principali:
-
-- `400` payload non valido o anti-spam payload (honeypot/link eccessivi)
-- `404` listing non trovato/non pubblicato
-- `429` rate limit o richiesta duplicata recente
-
 Note:
 
-- l'invio form registra analytics server-side su evento `contact_sent`
-- i click su CTA email/telefono restano tracciati come `contact_clicked`
+- `privacyConsent` deve essere `true`
+- `website` e honeypot anti-spam e deve restare vuoto
+- rate limit e anti-abuso sono applicati lato backend
+
+## Messaging
+
+Per payload, flussi e modello dati della messaggistica usare `docs/MESSAGING.md`.
+
+## Promotions e analytics
+
+Promotions:
+
+- `GET /v1/admin/promotions/plans`
+- `GET /v1/admin/promotions/listings/:listingId`
+- `POST /v1/admin/promotions/listings/:listingId/assign`
+
+Vincoli promotions:
+
+- area admin-only (`role=admin`)
+- `planCode` deve matchare `[a-z0-9_]{3,80}`
+- `startsAt` e opzionale
+
+Analytics:
+
+- `POST /v1/analytics/events`
+- `GET /v1/admin/analytics/kpis?windowDays=30`
+
+Vincoli analytics:
+
+- endpoint pubblico analytics accetta solo gli event type pubblici supportati
+- `windowDays` deve essere un intero tra `1` e `365`

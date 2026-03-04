@@ -31,6 +31,7 @@ export class UsersService {
 
     const createdUser: AppUser = {
       id: claims.providerSubject,
+      databaseId: null,
       provider: claims.provider,
       providerSubject: claims.providerSubject,
       email: claims.email,

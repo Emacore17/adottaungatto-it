@@ -1,6 +1,6 @@
 import { Badge, CardContent } from '@adottaungatto/ui';
 import { MessagesInboxOverview } from '../../components/messages-inbox-overview';
-import { PageShell } from '../../components/page-shell';
+import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 import { fetchMessageThreads } from '../../lib/messages';
 
@@ -18,7 +18,7 @@ export default async function MessagesPage() {
   }));
 
   return (
-    <PageShell
+    <WorkspacePageShell
       aside={
         <CardContent className="space-y-4 pt-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -36,6 +36,6 @@ export default async function MessagesPage() {
       title="Messaggi"
     >
       <MessagesInboxOverview initialThreadPage={threadPage} />
-    </PageShell>
+    </WorkspacePageShell>
   );
 }

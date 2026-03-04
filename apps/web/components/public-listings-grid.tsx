@@ -57,7 +57,7 @@ export function PublicListingsGrid({
   variant = 'default',
   showDistance = false,
   emptyTitle = 'Nessun annuncio disponibile.',
-  emptyDescription = 'Collega la nuova esperienza di ricerca quando il dominio funzionale sara ridefinito.',
+  emptyDescription = 'Torna piu tardi oppure apri il catalogo completo per vedere gli ultimi annunci disponibili.',
 }: PublicListingsGridProps) {
   if (listings.length === 0) {
     return (
@@ -142,13 +142,12 @@ export function PublicListingsGrid({
         };
 
         return (
-          <Link
-            className="group block h-full focus-visible:outline-none"
-            href={`/annunci/${listing.id}`}
-            key={listing.id}
-          >
-            <article className={articleClassName}>
-              <div className="relative basis-3/5 overflow-hidden">
+          <article className={`${articleClassName} group`} key={listing.id}>
+              <Link
+                aria-label={`Apri annuncio: ${titleLabel}`}
+                className="relative block basis-3/5 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+                href={`/annunci/${listing.id}`}
+              >
                 <div
                   aria-label={imageTitleLabel || titleLabel}
                   className="h-full w-full bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-[1.1] group-hover:brightness-[1.03] group-hover:saturate-[1.06]"
@@ -165,7 +164,7 @@ export function PublicListingsGrid({
                     {imageTitleLabel || titleLabel}
                   </h3>
                 </div>
-              </div>
+              </Link>
 
               <div className={contentClassName}>
                 <div className="flex items-start justify-between gap-3">
@@ -360,16 +359,21 @@ export function PublicListingsGrid({
                   </div>
 
                   <div className="flex shrink-0 items-end gap-2">
-                    <div className="text-right leading-tight">
+                    <div className="space-y-1 text-right leading-tight">
                       <p className="whitespace-nowrap text-[16px] font-semibold">
                         {footerActionLabel}
                       </p>
+                      <Link
+                        className="inline-flex items-center justify-end text-sm font-semibold text-[var(--color-primary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+                        href={`/annunci/${listing.id}`}
+                      >
+                        Apri annuncio
+                      </Link>
                     </div>
                   </div>
                 </div>
               </div>
             </article>
-          </Link>
         );
       })}
     </div>

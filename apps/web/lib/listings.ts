@@ -382,7 +382,7 @@ const parsePublicDetail = (value: unknown): PublicListingDetail | null => {
   };
 };
 
-const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingSummary => {
+export const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingSummary => {
   const primaryMedia = listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
 
   return {

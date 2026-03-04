@@ -70,6 +70,8 @@ describe('Auth RBAC', () => {
     const response = await request(app.getHttpServer()).get('/v1/users/me').set(userHeaders);
     expect(response.status).toBe(200);
     expect(response.body.user.id).toBe('user-1');
+    expect(response.body.user.providerSubject).toBe('user-1');
+    expect(response.body.user).not.toHaveProperty('databaseId');
     expect(response.body.user.roles).toContain('user');
   });
 

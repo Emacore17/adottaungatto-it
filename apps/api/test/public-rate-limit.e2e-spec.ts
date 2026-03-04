@@ -9,6 +9,7 @@ describe('Public rate limit guard', () => {
   let app: NestFastifyApplication;
   const previousAnalyticsMax = process.env.RATE_LIMIT_ANALYTICS_MAX_REQUESTS;
   const previousAnalyticsWindow = process.env.RATE_LIMIT_ANALYTICS_WINDOW_SECONDS;
+  const previousRateLimitPrefix = process.env.RATE_LIMIT_KEY_PREFIX;
 
   const trackPublicEvent = vi.fn(async () => ({
     id: 'event-1',
@@ -23,6 +24,7 @@ describe('Public rate limit guard', () => {
   beforeAll(async () => {
     process.env.RATE_LIMIT_ANALYTICS_MAX_REQUESTS = '2';
     process.env.RATE_LIMIT_ANALYTICS_WINDOW_SECONDS = '120';
+    process.env.RATE_LIMIT_KEY_PREFIX = `rate_limit_e2e_${Date.now().toString()}`;
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -53,6 +55,12 @@ describe('Public rate limit guard', () => {
     } else {
       process.env.RATE_LIMIT_ANALYTICS_WINDOW_SECONDS = previousAnalyticsWindow;
     }
+
+    if (previousRateLimitPrefix === undefined) {
+      process.env.RATE_LIMIT_KEY_PREFIX = undefined;
+    } else {
+      process.env.RATE_LIMIT_KEY_PREFIX = previousRateLimitPrefix;
+    }
   });
 
   beforeEach(() => {
@@ -75,6 +83,7 @@ describe('Public rate limit guard', () => {
     expect(third.status).toBe(429);
     expect(third.body.message).toBe('Rate limit exceeded for analytics_events.');
     expect(typeof third.body.retryAfterSeconds).toBe('number');
+    expect(third.headers['retry-after']).toBeDefined();
     expect(trackPublicEvent).toHaveBeenCalledTimes(2);
   });
 });

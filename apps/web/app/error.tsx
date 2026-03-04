@@ -28,8 +28,8 @@ export default function RootErrorPage({ error, reset }: RootErrorPageProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-[var(--color-danger-fg)]">
-            Riprova il caricamento della pagina. Se il problema persiste puoi tornare allo scaffold
-            iniziale.
+            Riprova il caricamento della pagina. Se il problema persiste puoi tornare alla home o
+            riaprire il catalogo annunci.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={reset} type="button">
