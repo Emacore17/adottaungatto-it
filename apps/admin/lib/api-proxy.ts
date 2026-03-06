@@ -1,7 +1,6 @@
 import { loadAdminEnv } from '@adottaungatto/config';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { adminSessionCookieName } from './auth';
+import { getAdminAccessTokenFromSessionCookie } from './auth';
 
 const env = loadAdminEnv();
 
@@ -20,8 +19,7 @@ const parseApiResponsePayload = (rawText: string): unknown => {
 };
 
 export const getSessionTokenFromCookie = async (): Promise<string | null> => {
-  const cookieStore = await cookies();
-  return cookieStore.get(adminSessionCookieName)?.value ?? null;
+  return getAdminAccessTokenFromSessionCookie();
 };
 
 export const unauthorizedResponse = () =>

@@ -142,6 +142,18 @@ describe('Messaging endpoints', () => {
     expect(response.status).toBe(401);
   });
 
+  it('denies messaging routes when email is not verified', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/messages/threads')
+      .set({
+        ...userHeaders,
+        'x-auth-email-verified': 'false',
+      });
+
+    expect(response.status).toBe(403);
+    expect(listThreadsForUser).not.toHaveBeenCalled();
+  });
+
   it('opens a thread from a listing and sends the first message', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/messages/listings/101/thread')

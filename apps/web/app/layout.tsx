@@ -5,6 +5,11 @@ import type { ReactNode } from 'react';
 import { AppShell } from '../components/app-shell';
 import { ThemeProvider } from '../components/theme-provider';
 import './globals.css';
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/search.css';
+import './styles/overlays.css';
+import './styles/home-hero.css';
 import { WebQueryClientProvider } from './query-client-provider';
 import { WebVitalsReporter } from './web-vitals-reporter';
 

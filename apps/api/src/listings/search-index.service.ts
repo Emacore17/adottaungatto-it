@@ -105,14 +105,14 @@ export class SearchIndexService {
 
     const nextIndexName = await this.createVersionedIndex();
 
-    let offset = 0;
+    let lastListingId: string | null = null;
     let indexedCount = 0;
 
     try {
       while (true) {
         const documents = await this.listingsRepository.listPublishedSearchIndexDocuments(
           batchSize,
-          offset,
+          lastListingId,
         );
 
         if (documents.length === 0) {
@@ -121,7 +121,7 @@ export class SearchIndexService {
 
         await this.bulkIndexDocuments(nextIndexName, documents);
         indexedCount += documents.length;
-        offset += documents.length;
+        lastListingId = documents[documents.length - 1]?.id ?? lastListingId;
       }
 
       await this.refreshIndex(nextIndexName);

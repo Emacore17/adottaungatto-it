@@ -1,7 +1,7 @@
 'use client';
 
 import { cn, motionPresets } from '@adottaungatto/ui';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 interface SectionRevealProps {
@@ -11,15 +11,21 @@ interface SectionRevealProps {
 }
 
 export function SectionReveal({ children, className, delay = 0 }: SectionRevealProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <motion.div
       animate={motionPresets.sectionEnter.animate}
       className={cn(className)}
-      initial={motionPresets.sectionEnter.initial}
-      transition={{
-        ...motionPresets.sectionEnter.transition,
-        delay,
-      }}
+      initial={prefersReducedMotion ? false : motionPresets.sectionEnter.initial}
+      transition={
+        prefersReducedMotion
+          ? { duration: 0 }
+          : {
+              ...motionPresets.sectionEnter.transition,
+              delay,
+            }
+      }
     >
       {children}
     </motion.div>

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
+import { DatabaseModule } from './database/database.module';
 import { GeographyModule } from './geography/geography.module';
 import { HealthController } from './health/health.controller';
 import { ListingsModule } from './listings/listings.module';
@@ -14,6 +15,7 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
+    DatabaseModule,
     UsersModule,
     AuthModule,
     AnalyticsModule,

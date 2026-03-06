@@ -1,7 +1,7 @@
-import { loadWorkerEnv } from '@adottaungatto/config';
 import type { MessageEmailNotificationPayload } from '@adottaungatto/types';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
+import { WORKER_DATABASE_POOL } from './database/database.constants';
 
 type NotificationOutboxRow = {
   id: string;
@@ -19,15 +19,11 @@ export interface MessageEmailNotificationJob {
 }
 
 @Injectable()
-export class MessagingNotificationOutboxRepository implements OnModuleDestroy {
-  private readonly env = loadWorkerEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
-
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
+export class MessagingNotificationOutboxRepository {
+  constructor(
+    @Inject(WORKER_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   async claimDueMessageEmailJobs(
     limit: number,

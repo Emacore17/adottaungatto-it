@@ -1,17 +1,19 @@
 'use client';
 
+import type { SearchSort } from '@adottaungatto/types';
 import {
-  CAT_BREEDS,
-  type LocationIntentScope,
-  NO_BREED_FILTER,
-  type SearchSort,
-} from '@adottaungatto/types';
-import { Badge, Button, cn } from '@adottaungatto/ui';
+  Badge,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  cn,
+} from '@adottaungatto/ui';
 import {
-  ArrowLeft,
   ArrowUpDown,
   ChevronDown,
-  ChevronRight,
   Filter,
   LocateFixed,
   MapPin,
@@ -33,91 +35,31 @@ import {
   useRef,
   useState,
 } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  AGE_FILTER_OPTIONS,
+  BREEDS,
+  type FilterOption,
+  LISTING_TYPES,
+  PRICE_FILTER_OPTIONS,
+  SEX_OPTIONS,
+  SORT_OPTIONS,
+  buildAgeRangeLabel,
+  buildPriceRangeLabel,
+  numberOrNull,
+  optionLabel,
+} from '../features/search/filter-options';
+import {
+  type ListingsFilterValues,
+  applyLocationIntent,
+  areEquivalentSearchTexts,
+  buildListingsHref,
+  clearStructuredLocationFilter,
+  countActiveListingsFilters,
+  getListingsRangeValidationError,
+  hasStructuredLocationFilter,
+} from '../features/search/listings-query';
 import type { GeographySuggestion } from '../lib/geography';
 import { fetchLocationSuggestions } from '../lib/geography';
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-const BREEDS = [
-  { value: '', label: 'Indifferente' },
-  { value: NO_BREED_FILTER, label: 'Non di razza' },
-  ...CAT_BREEDS.map((breed) => ({
-    value: breed.label,
-    label: breed.label,
-  })),
-] as const;
-
-const LISTING_TYPES = [
-  { value: '', label: 'Tutti i tipi' },
-  { value: 'adozione', label: 'Adozione' },
-  { value: 'stallo', label: 'Stallo' },
-  { value: 'segnalazione', label: 'Segnalazione' },
-] as const;
-
-const SEX_OPTIONS = [
-  { value: '', label: 'Qualsiasi' },
-  { value: 'maschio', label: 'Maschio' },
-  { value: 'femmina', label: 'Femmina' },
-] as const;
-
-const SORT_OPTIONS: ReadonlyArray<{ value: SearchSort; label: string }> = [
-  { value: 'relevance', label: 'Piu pertinenti' },
-  { value: 'newest', label: 'Piu recenti' },
-  { value: 'price_asc', label: 'Prezzo crescente' },
-  { value: 'price_desc', label: 'Prezzo decrescente' },
-];
-
-const PRICE_FILTER_OPTIONS = [
-  { value: '', label: 'Nessun limite' },
-  { value: '0', label: 'Gratis' },
-  { value: '25', label: '25 EUR' },
-  { value: '50', label: '50 EUR' },
-  { value: '100', label: '100 EUR' },
-  { value: '150', label: '150 EUR' },
-  { value: '200', label: '200 EUR' },
-  { value: '300', label: '300 EUR' },
-  { value: '500', label: '500 EUR' },
-  { value: '800', label: '800 EUR' },
-  { value: '1000', label: '1000 EUR' },
-] as const;
-
-const AGE_FILTER_OPTIONS = [
-  { value: '', label: 'Nessun limite' },
-  { value: '1', label: '1 mese' },
-  { value: '2', label: '2 mesi' },
-  { value: '3', label: '3 mesi' },
-  { value: '6', label: '6 mesi' },
-  { value: '9', label: '9 mesi' },
-  { value: '12', label: '1 anno' },
-  { value: '18', label: '18 mesi' },
-  { value: '24', label: '2 anni' },
-  { value: '36', label: '3 anni' },
-  { value: '60', label: '5 anni' },
-  { value: '84', label: '7 anni' },
-  { value: '120', label: '10 anni' },
-] as const;
-
-export interface ListingsFilterValues {
-  q: string;
-  listingType: string;
-  sex: string;
-  breed: string;
-  ageMinMonths: number | null;
-  ageMaxMonths: number | null;
-  priceMin: number | null;
-  priceMax: number | null;
-  sort: SearchSort;
-  locationScope: LocationIntentScope | null;
-  regionId: string | null;
-  provinceId: string | null;
-  comuneId: string | null;
-  locationLabel: string | null;
-  locationSecondaryLabel: string | null;
-  locationQuery: string;
-  referenceLat: number | null;
-  referenceLon: number | null;
-}
 
 interface LocationAutocompleteProps {
   compact?: boolean;
@@ -130,7 +72,6 @@ interface LocationAutocompleteProps {
 
 interface FiltersFormProps {
   compact?: boolean;
-  onCloseMobileSheet?: () => void;
   onReset: () => void;
   onSubmit: () => void;
   pending: boolean;
@@ -151,13 +92,6 @@ interface ListingsResultsToolbarProps {
   totalPages: number;
 }
 
-interface FilterOption {
-  label: string;
-  value: string;
-}
-
-type MobileFilterStep = 'root' | 'listingType' | 'sex' | 'breed' | 'price' | 'age';
-
 const OVERLAY_VIEWPORT_PADDING = 12;
 
 const resolveOverlayPlacement = (
@@ -170,235 +104,73 @@ const resolveOverlayPlacement = (
   return spaceBelow >= overlayHeight || spaceBelow >= spaceAbove ? 'bottom' : 'top';
 };
 
-const numberOrNull = (value: string) => {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const normalizeText = (value: string | null | undefined) =>
-  (value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-const hasStructuredLocation = (state: ListingsFilterValues) =>
-  Boolean(state.locationScope && (state.locationLabel || state.regionId || state.provinceId));
-
-const clearStructuredLocation = (state: ListingsFilterValues): ListingsFilterValues => ({
-  ...state,
-  locationScope: null,
-  regionId: null,
-  provinceId: null,
-  comuneId: null,
-  locationLabel: null,
-  locationSecondaryLabel: null,
-});
-
 const applyLocationSuggestion = (
   state: ListingsFilterValues,
   suggestion: GeographySuggestion,
-): ListingsFilterValues => ({
-  ...clearStructuredLocation(state),
-  locationScope: suggestion.locationIntent.scope,
-  regionId: suggestion.locationIntent.regionId,
-  provinceId: suggestion.locationIntent.provinceId,
-  comuneId: suggestion.locationIntent.comuneId,
-  locationLabel: suggestion.locationIntent.label,
-  locationSecondaryLabel: suggestion.locationIntent.secondaryLabel,
-  locationQuery: suggestion.label,
-  referenceLat: null,
-  referenceLon: null,
-});
-
-const buildListingsHref = (state: ListingsFilterValues, page = 1) => {
-  const params = new URLSearchParams();
-  const q = state.q.trim();
-  const locationQuery = state.locationQuery.trim();
-
-  if (q) {
-    params.set('q', q);
-  }
-
-  if (state.listingType) {
-    params.set('listingType', state.listingType);
-  }
-
-  if (state.sex) {
-    params.set('sex', state.sex);
-  }
-
-  if (state.breed) {
-    params.set('breed', state.breed);
-  }
-
-  if (state.ageMinMonths !== null) {
-    params.set('ageMinMonths', String(state.ageMinMonths));
-  }
-
-  if (state.ageMaxMonths !== null) {
-    params.set('ageMaxMonths', String(state.ageMaxMonths));
-  }
-
-  if (state.priceMin !== null) {
-    params.set('priceMin', String(state.priceMin));
-  }
-
-  if (state.priceMax !== null) {
-    params.set('priceMax', String(state.priceMax));
-  }
-
-  if (hasStructuredLocation(state)) {
-    params.set('locationScope', state.locationScope ?? 'comune');
-    if (state.regionId) {
-      params.set('regionId', state.regionId);
-    }
-    if (state.provinceId) {
-      params.set('provinceId', state.provinceId);
-    }
-    if (state.comuneId) {
-      params.set('comuneId', state.comuneId);
-    }
-    if (state.locationLabel) {
-      params.set('locationLabel', state.locationLabel);
-    }
-    if (state.locationSecondaryLabel) {
-      params.set('locationSecondaryLabel', state.locationSecondaryLabel);
-    }
-  } else if (locationQuery) {
-    params.set('locationLabel', locationQuery);
-  }
-
-  if (state.referenceLat !== null && state.referenceLon !== null) {
-    params.set('referenceLat', String(state.referenceLat));
-    params.set('referenceLon', String(state.referenceLon));
-  }
-
-  if (state.sort !== 'newest' || (state.referenceLat !== null && state.referenceLon !== null)) {
-    params.set('sort', state.sort);
-  }
-
-  if (page > 1) {
-    params.set('page', String(page));
-  }
-
-  const queryString = params.toString();
-  return queryString ? `/annunci?${queryString}` : '/annunci';
-};
-
-const optionLabel = (options: ReadonlyArray<FilterOption>, value: string) =>
-  options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
-
-const buildPriceRangeLabel = (priceMin: number | null, priceMax: number | null) => {
-  if (priceMin === null && priceMax === null) {
-    return 'Qualsiasi prezzo';
-  }
-
-  if (priceMin !== null && priceMax !== null) {
-    return `${priceMin} - ${priceMax} EUR`;
-  }
-
-  if (priceMin !== null) {
-    return `Da ${priceMin} EUR`;
-  }
-
-  return `Fino a ${priceMax} EUR`;
-};
-
-const formatAgeMonthsLabel = (months: number) => {
-  if (months > 0 && months % 12 === 0) {
-    const years = months / 12;
-    return `${years} ${years === 1 ? 'anno' : 'anni'}`;
-  }
-
-  return `${months} ${months === 1 ? 'mese' : 'mesi'}`;
-};
-
-const buildAgeRangeLabel = (ageMinMonths: number | null, ageMaxMonths: number | null) => {
-  if (ageMinMonths === null && ageMaxMonths === null) {
-    return 'Qualsiasi eta';
-  }
-
-  if (ageMinMonths !== null && ageMaxMonths !== null) {
-    return `${formatAgeMonthsLabel(ageMinMonths)} - ${formatAgeMonthsLabel(ageMaxMonths)}`;
-  }
-
-  if (ageMinMonths !== null) {
-    return `Da ${formatAgeMonthsLabel(ageMinMonths)}`;
-  }
-
-  return `Fino a ${formatAgeMonthsLabel(ageMaxMonths ?? 0)}`;
-};
+): ListingsFilterValues => applyLocationIntent(state, suggestion.locationIntent, suggestion.label);
 
 function MobileFiltersSheet({
+  activeFiltersCount,
   children,
   onClose,
   open,
 }: {
+  activeFiltersCount: number;
   children: ReactNode;
   onClose: () => void;
   open: boolean;
 }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose, open]);
-
-  if (!open || !mounted) {
-    return null;
-  }
-
-  return createPortal(
-    <div className="mobile-sheet-backdrop lg:hidden" onPointerDown={onClose} role="presentation">
-      <section
-        aria-label="Filtri ricerca"
-        className="mobile-sheet"
-        onPointerDown={(event) => event.stopPropagation()}
+  return (
+    <Dialog onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)} open={open}>
+      <DialogContent
+        aria-describedby="mobile-filters-description"
+        className={cn(
+          '[&>button]:hidden lg:hidden',
+          'left-0 right-0 top-auto bottom-0 h-[min(92dvh,52rem)] w-full max-w-none translate-x-0 translate-y-0',
+          'rounded-t-[28px] rounded-b-none border-x-0 border-b-0 bg-[var(--color-surface-overlay-strong)] p-0 shadow-[0_-18px_44px_rgb(14_10_12_/_0.2)]',
+          'data-[state=closed]:translate-y-8 data-[state=closed]:scale-100 data-[state=open]:translate-y-0',
+        )}
       >
-        <div className="mobile-sheet-handle" />
-        <div className="mobile-sheet-header">
-          <div className="mobile-sheet-heading">
-            <h2 className="mobile-sheet-title">Filtri ricerca</h2>
-            <p className="mobile-sheet-description">
-              Aggiorna posizione, eta, razza, prezzo e tipologia in un unico pannello.
-            </p>
-          </div>
-          <button
-            aria-label="Chiudi filtri"
-            className="mobile-sheet-close"
-            onClick={onClose}
-            type="button"
-          >
-            <X aria-hidden="true" className="h-5 w-5" />
-          </button>
-        </div>
+        <div className="mx-auto mt-2.5 h-1 w-11 rounded-full bg-[color:color-mix(in_srgb,var(--color-text-muted)_28%,transparent)]" />
 
-        <div className="mobile-sheet-body">{children}</div>
-      </section>
-    </div>,
-    document.body,
+        <header className="sticky top-0 z-20 border-b border-[color:color-mix(in_srgb,var(--color-border)_84%,white_16%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_95%,white_5%)] px-4 pb-3 pt-4 backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <DialogTitle className="text-base font-semibold tracking-tight text-[var(--color-text)]">
+                Filtri ricerca
+              </DialogTitle>
+              <DialogDescription
+                className="text-[0.82rem] leading-5 text-[var(--color-text-muted)]"
+                id="mobile-filters-description"
+              >
+                Posizione, tipologia, razza, prezzo ed eta.
+              </DialogDescription>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {activeFiltersCount > 0 ? (
+                <Badge className="h-8 shrink-0 rounded-full px-2.5 text-xs" variant="outline">
+                  {activeFiltersCount}
+                </Badge>
+              ) : null}
+              <DialogClose asChild>
+                <button
+                  aria-label="Chiudi filtri"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+                  type="button"
+                >
+                  <X aria-hidden="true" className="h-5 w-5" />
+                </button>
+              </DialogClose>
+            </div>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -450,17 +222,11 @@ function LocationAutocomplete({
       return;
     }
 
-    if (!apiBaseUrl) {
-      setError('La ricerca per localita non e disponibile in questo momento.');
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    void fetchLocationSuggestions(apiBaseUrl, normalizedQuery, 8)
+    void fetchLocationSuggestions(normalizedQuery, 8)
       .then((items) => {
         if (!cancelled) {
           setSuggestions(items);
@@ -732,7 +498,6 @@ function FilterSelect({
 
 function FiltersForm({
   compact = false,
-  onCloseMobileSheet,
   onReset,
   onSubmit,
   pending,
@@ -743,17 +508,7 @@ function FiltersForm({
   const qInputId = useId();
   const locationInputId = useId();
 
-  const activeFiltersCount = useMemo(() => {
-    return (
-      (state.q.trim() ? 1 : 0) +
-      (state.listingType ? 1 : 0) +
-      (state.sex ? 1 : 0) +
-      (state.breed ? 1 : 0) +
-      (state.ageMinMonths !== null || state.ageMaxMonths !== null ? 1 : 0) +
-      (state.priceMin !== null || state.priceMax !== null ? 1 : 0) +
-      (hasStructuredLocation(state) || state.referenceLat !== null ? 1 : 0)
-    );
-  }, [state]);
+  const activeFiltersCount = useMemo(() => countActiveListingsFilters(state), [state]);
 
   const containerClassName = compact
     ? 'space-y-4'
@@ -769,15 +524,27 @@ function FiltersForm({
   const [compositePopoverPlacement, setCompositePopoverPlacement] = useState<'bottom' | 'top'>(
     'bottom',
   );
-  const [mobileStep, setMobileStep] = useState<MobileFilterStep>('root');
   const priceFieldRef = useRef<HTMLDivElement>(null);
   const ageFieldRef = useRef<HTMLDivElement>(null);
   const compositePopoverRef = useRef<HTMLDivElement>(null);
-  const listingTypeLabel = optionLabel(LISTING_TYPES, state.listingType);
-  const sexLabel = optionLabel(SEX_OPTIONS, state.sex);
-  const breedLabel = optionLabel(BREEDS, state.breed);
   const priceRangeLabel = buildPriceRangeLabel(state.priceMin, state.priceMax);
   const ageRangeLabel = buildAgeRangeLabel(state.ageMinMonths, state.ageMaxMonths);
+  const priceMinOptions = PRICE_FILTER_OPTIONS.map((option) => ({
+    ...option,
+    label: option.value ? `Da ${option.label}` : option.label,
+  }));
+  const priceMaxOptions = PRICE_FILTER_OPTIONS.map((option) => ({
+    ...option,
+    label: option.value ? `Fino a ${option.label}` : option.label,
+  }));
+  const ageMinOptions = AGE_FILTER_OPTIONS.map((option) => ({
+    ...option,
+    label: option.value ? `Da ${option.label}` : option.label,
+  }));
+  const ageMaxOptions = AGE_FILTER_OPTIONS.map((option) => ({
+    ...option,
+    label: option.value ? `Fino a ${option.label}` : option.label,
+  }));
 
   const getCompositePopoverPlacement = (popover: 'price' | 'age'): 'bottom' | 'top' => {
     const activeField = popover === 'price' ? priceFieldRef.current : ageFieldRef.current;
@@ -849,390 +616,264 @@ function FiltersForm({
     onSubmit();
   };
 
-  useEffect(() => {
-    if (!compact && mobileStep !== 'root') {
-      setMobileStep('root');
-    }
-  }, [compact, mobileStep]);
-
-  const applyMobileSelection = (
-    updater: (currentState: ListingsFilterValues) => ListingsFilterValues,
-  ) => {
-    setState(updater);
-    setMobileStep('root');
-  };
-
-  const renderMobileStepButton = (
-    step: Exclude<MobileFilterStep, 'root'>,
-    label: string,
-    value: string,
-  ) => (
-    <div className="space-y-1.5">
-      <span className={labelClassName}>{label}</span>
-      <button
-        className={cn(
-          mobileFieldClassName,
-          'flex items-center justify-between gap-3 text-left transition-colors hover:bg-[var(--color-surface-muted)]',
-        )}
-        onClick={() => setMobileStep(step)}
-        type="button"
-      >
-        <span className="min-w-0 truncate">{value}</span>
-        <ChevronRight
-          aria-hidden="true"
-          className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
-        />
-      </button>
-    </div>
-  );
-
-  const renderMobileOptionList = (
-    options: ReadonlyArray<FilterOption>,
-    value: string,
-    onSelect: (nextValue: string) => void,
-  ) => (
-    <div className="space-y-0.5">
-      {options.map((option) => (
-        <button
-          className={cn(
-            'w-full rounded-[18px] px-4 py-3 text-left text-[1rem] text-[var(--color-text)] transition-colors',
-            option.value === value
-              ? 'platform-select-option-active font-semibold'
-              : 'hover:bg-[var(--color-surface-muted)]',
-          )}
-          key={`${option.value || 'empty'}-${option.label}`}
-          onClick={() => onSelect(option.value)}
-          type="button"
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-
-  const mobileStepTitle =
-    mobileStep === 'listingType'
-      ? 'Tipologia'
-      : mobileStep === 'sex'
-        ? 'Sesso'
-        : mobileStep === 'breed'
-          ? 'Razza'
-          : mobileStep === 'price'
-            ? 'Prezzo'
-            : mobileStep === 'age'
-              ? 'Eta del gatto'
-              : 'Filtri';
-
   if (compact) {
     return (
       <form className={containerClassName} onSubmit={onFormSubmit}>
-        {mobileStep === 'root' ? (
-          <>
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-                  Affina la ricerca
+        <p className={labelClassName}>Ricerca e filtri</p>
+
+        {state.referenceLat !== null && state.referenceLon !== null ? (
+          <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--color-border)_78%,white_22%)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,transparent)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+                  <LocateFixed aria-hidden="true" className="h-4 w-4 text-[var(--color-primary)]" />
+                  Ordinati per distanza
                 </p>
-                {activeFiltersCount > 0 ? (
-                  <Badge className="shrink-0" variant="outline">
-                    {activeFiltersCount} filtri
-                  </Badge>
-                ) : null}
+                <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                  Stai vedendo gli annunci piu vicini alla tua posizione attuale.
+                </p>
               </div>
-              <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                Testo, localita, prezzo e caratteristiche principali.
-              </p>
-            </div>
-
-            {state.referenceLat !== null && state.referenceLon !== null ? (
-              <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--color-border)_78%,white_22%)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,transparent)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-                      <LocateFixed
-                        aria-hidden="true"
-                        className="h-4 w-4 text-[var(--color-primary)]"
-                      />
-                      Ordinati per distanza
-                    </p>
-                    <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                      Stai vedendo gli annunci piu vicini alla tua posizione attuale.
-                    </p>
-                  </div>
-                  <button
-                    className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-border)] px-3 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-                    onClick={() =>
-                      setState((currentState) => ({
-                        ...currentState,
-                        referenceLat: null,
-                        referenceLon: null,
-                      }))
-                    }
-                    type="button"
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="space-y-3">
-              <label className="space-y-2" htmlFor={qInputId}>
-                <span className={labelClassName}>Cerca</span>
-                <div className="relative">
-                  <Search
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
-                  />
-                  <input
-                    className={cn(textInputClassName, mobileFieldClassName, 'pl-10')}
-                    id={qInputId}
-                    onChange={(event) =>
-                      setState((currentState) => ({
-                        ...currentState,
-                        q: event.target.value,
-                      }))
-                    }
-                    placeholder="Es. micia giovane, stallo urgente, Milano"
-                    type="text"
-                    value={state.q}
-                  />
-                </div>
-              </label>
-
-              <LocationAutocomplete
-                compact
-                inputId={locationInputId}
-                inputValue={state.locationQuery}
-                label="Dove"
-                onChange={(value) =>
-                  setState((currentState) => {
-                    const shouldClearStructuredLocation =
-                      normalizeText(value) !== normalizeText(currentState.locationLabel);
-
-                    return {
-                      ...(shouldClearStructuredLocation
-                        ? clearStructuredLocation(currentState)
-                        : currentState),
-                      locationQuery: value,
-                      referenceLat: null,
-                      referenceLon: null,
-                    };
-                  })
-                }
-                onPickSuggestion={(suggestion) =>
-                  setState((currentState) => applyLocationSuggestion(currentState, suggestion))
-                }
-              />
-
-              <div className="space-y-2.5">
-                {renderMobileStepButton('listingType', 'Tipologia', listingTypeLabel)}
-                {renderMobileStepButton('sex', 'Sesso', sexLabel)}
-                {renderMobileStepButton('breed', 'Razza', breedLabel)}
-                {renderMobileStepButton('price', 'Prezzo', priceRangeLabel)}
-                {renderMobileStepButton('age', 'Eta del gatto', ageRangeLabel)}
-              </div>
-            </div>
-
-            {validationError ? (
-              <p className="rounded-2xl border border-[color:color-mix(in_srgb,var(--color-border-strong)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_72%,transparent)] px-4 py-3 text-sm text-[var(--color-text)]">
-                {validationError}
-              </p>
-            ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button className="gap-2 sm:flex-1" disabled={pending} type="submit">
-                <Search aria-hidden="true" className="h-4 w-4" />
-                {pending ? 'Aggiorno...' : 'Applica filtri'}
-              </Button>
-              <Button
-                className="gap-2 sm:flex-1"
-                onClick={onReset}
-                type="button"
-                variant="secondary"
-              >
-                <RotateCcw aria-hidden="true" className="h-4 w-4" />
-                Azzera
-              </Button>
-            </div>
-
-            {onCloseMobileSheet ? (
               <button
-                className="w-full rounded-full border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-                onClick={onCloseMobileSheet}
+                className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--color-border)] px-3 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+                onClick={() =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    referenceLat: null,
+                    referenceLon: null,
+                  }))
+                }
                 type="button"
               >
-                Chiudi pannello
+                Rimuovi
               </button>
-            ) : null}
-          </>
-        ) : (
-          <div className="space-y-3">
-            <button
-              className="inline-flex h-11 items-center gap-2 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-              onClick={() => setMobileStep('root')}
-              type="button"
-            >
-              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-              Torna ai filtri
-            </button>
-
-            <div className="space-y-0.5">
-              <p className={labelClassName}>Sezione</p>
-              <h3 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-                {mobileStepTitle}
-              </h3>
             </div>
+          </div>
+        ) : null}
 
-            {mobileStep === 'listingType' ? (
-              <div className="space-y-2">
-                <span className={labelClassName}>Tipologia</span>
-                {renderMobileOptionList(LISTING_TYPES, state.listingType, (value) => {
-                  applyMobileSelection((currentState) => ({
+        <div className="space-y-3.5">
+          <label className="space-y-2" htmlFor={qInputId}>
+            <span className={labelClassName}>Cerca</span>
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
+              />
+              <input
+                className={cn(textInputClassName, mobileFieldClassName, 'pl-10')}
+                id={qInputId}
+                onChange={(event) =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    q: event.target.value,
+                  }))
+                }
+                placeholder="Es. micia giovane, stallo urgente, Milano"
+                type="text"
+                value={state.q}
+              />
+            </div>
+          </label>
+
+          <LocationAutocomplete
+            compact
+            inputId={locationInputId}
+            inputValue={state.locationQuery}
+            label="Dove"
+            onChange={(value) =>
+              setState((currentState) => {
+                const shouldClearStructuredLocation = !areEquivalentSearchTexts(
+                  value,
+                  currentState.locationLabel,
+                );
+
+                return {
+                  ...(shouldClearStructuredLocation
+                    ? clearStructuredLocationFilter(currentState)
+                    : currentState),
+                  locationQuery: value,
+                  referenceLat: null,
+                  referenceLon: null,
+                };
+              })
+            }
+            onPickSuggestion={(suggestion) =>
+              setState((currentState) => applyLocationSuggestion(currentState, suggestion))
+            }
+          />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <span className={labelClassName}>Tipologia</span>
+              <FilterSelect
+                className="w-full min-h-12"
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
                     ...currentState,
                     listingType: value,
-                  }));
-                })}
-              </div>
-            ) : null}
+                  }))
+                }
+                options={LISTING_TYPES}
+                value={state.listingType}
+              />
+            </div>
 
-            {mobileStep === 'sex' ? (
-              <div className="space-y-2">
-                <span className={labelClassName}>Sesso</span>
-                {renderMobileOptionList(SEX_OPTIONS, state.sex, (value) => {
-                  applyMobileSelection((currentState) => ({
+            <div className="space-y-2">
+              <span className={labelClassName}>Sesso</span>
+              <FilterSelect
+                className="w-full min-h-12"
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
                     ...currentState,
                     sex: value,
-                  }));
-                })}
-              </div>
-            ) : null}
+                  }))
+                }
+                options={SEX_OPTIONS}
+                value={state.sex}
+              />
+            </div>
+          </div>
 
-            {mobileStep === 'breed' ? (
-              <div className="space-y-2">
-                <span className={labelClassName}>Razza</span>
-                {renderMobileOptionList(BREEDS, state.breed, (value) => {
-                  applyMobileSelection((currentState) => ({
+          <div className="space-y-2">
+            <span className={labelClassName}>Razza</span>
+            <FilterSelect
+              className="w-full min-h-12"
+              compact
+              onChange={(value) =>
+                setState((currentState) => ({
+                  ...currentState,
+                  breed: value,
+                }))
+              }
+              options={BREEDS}
+              value={state.breed}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className={labelClassName}>Intervallo prezzo</p>
+              {(state.priceMin !== null || state.priceMax !== null) && (
+                <button
+                  className="filter-reset-btn"
+                  onClick={() =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      priceMin: null,
+                      priceMax: null,
+                    }))
+                  }
+                  type="button"
+                >
+                  Azzera
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <FilterSelect
+                className={selectClassName}
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
                     ...currentState,
-                    breed: value,
-                  }));
-                })}
-              </div>
-            ) : null}
+                    priceMin: numberOrNull(value),
+                  }))
+                }
+                options={priceMinOptions}
+                value={state.priceMin !== null ? String(state.priceMin) : ''}
+              />
+              <FilterSelect
+                className={selectClassName}
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    priceMax: numberOrNull(value),
+                  }))
+                }
+                options={priceMaxOptions}
+                value={state.priceMax !== null ? String(state.priceMax) : ''}
+              />
+            </div>
+          </div>
 
-            {mobileStep === 'price' ? (
-              <div className="space-y-4">
-                <div className="filter-field-group">
-                  <span className="location-label">Prezzo minimo</span>
-                  {renderMobileOptionList(
-                    PRICE_FILTER_OPTIONS.map((option) => ({
-                      ...option,
-                      label: option.value ? `Da ${option.label}` : option.label,
-                    })),
-                    state.priceMin !== null ? String(state.priceMin) : '',
-                    (value) => {
-                      applyMobileSelection((currentState) => ({
-                        ...currentState,
-                        priceMin: numberOrNull(value),
-                      }));
-                    },
-                  )}
-                </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className={labelClassName}>Intervallo eta</p>
+              {(state.ageMinMonths !== null || state.ageMaxMonths !== null) && (
+                <button
+                  className="filter-reset-btn"
+                  onClick={() =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      ageMinMonths: null,
+                      ageMaxMonths: null,
+                    }))
+                  }
+                  type="button"
+                >
+                  Azzera
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <FilterSelect
+                className={selectClassName}
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    ageMinMonths: numberOrNull(value),
+                  }))
+                }
+                options={ageMinOptions}
+                value={state.ageMinMonths !== null ? String(state.ageMinMonths) : ''}
+              />
+              <FilterSelect
+                className={selectClassName}
+                compact
+                onChange={(value) =>
+                  setState((currentState) => ({
+                    ...currentState,
+                    ageMaxMonths: numberOrNull(value),
+                  }))
+                }
+                options={ageMaxOptions}
+                value={state.ageMaxMonths !== null ? String(state.ageMaxMonths) : ''}
+              />
+            </div>
+          </div>
+        </div>
 
-                <div className="filter-field-group">
-                  <span className="location-label">Prezzo massimo</span>
-                  {renderMobileOptionList(
-                    PRICE_FILTER_OPTIONS.map((option) => ({
-                      ...option,
-                      label: option.value ? `Fino a ${option.label}` : option.label,
-                    })),
-                    state.priceMax !== null ? String(state.priceMax) : '',
-                    (value) => {
-                      applyMobileSelection((currentState) => ({
-                        ...currentState,
-                        priceMax: numberOrNull(value),
-                      }));
-                    },
-                  )}
-                </div>
-                <p className="location-meta">
-                  Seleziona un intervallo rapido senza digitare importi.
-                </p>
-                <div className="filter-reset-row">
-                  <button
-                    className="filter-reset-btn"
-                    onClick={() =>
-                      setState((currentState) => ({
-                        ...currentState,
-                        priceMin: null,
-                        priceMax: null,
-                      }))
-                    }
-                    type="button"
-                  >
-                    Azzera
-                  </button>
-                </div>
-              </div>
-            ) : null}
+        {validationError ? (
+          <p className="rounded-2xl border border-[color:color-mix(in_srgb,var(--color-border-strong)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_72%,transparent)] px-4 py-3 text-sm text-[var(--color-text)]">
+            {validationError}
+          </p>
+        ) : null}
 
-            {mobileStep === 'age' ? (
-              <div className="space-y-4">
-                <div className="filter-field-group">
-                  <span className="location-label">Eta minima</span>
-                  {renderMobileOptionList(
-                    AGE_FILTER_OPTIONS.map((option) => ({
-                      ...option,
-                      label: option.value ? `Da ${option.label}` : option.label,
-                    })),
-                    state.ageMinMonths !== null ? String(state.ageMinMonths) : '',
-                    (value) => {
-                      applyMobileSelection((currentState) => ({
-                        ...currentState,
-                        ageMinMonths: numberOrNull(value),
-                      }));
-                    },
-                  )}
-                </div>
-
-                <div className="filter-field-group">
-                  <span className="location-label">Eta massima</span>
-                  {renderMobileOptionList(
-                    AGE_FILTER_OPTIONS.map((option) => ({
-                      ...option,
-                      label: option.value ? `Fino a ${option.label}` : option.label,
-                    })),
-                    state.ageMaxMonths !== null ? String(state.ageMaxMonths) : '',
-                    (value) => {
-                      applyMobileSelection((currentState) => ({
-                        ...currentState,
-                        ageMaxMonths: numberOrNull(value),
-                      }));
-                    },
-                  )}
-                </div>
-                <p className="location-meta">
-                  Seleziona una fascia di eta in modo rapido.
-                </p>
-                <div className="filter-reset-row">
-                  <button
-                    className="filter-reset-btn"
-                    onClick={() =>
-                      setState((currentState) => ({
-                        ...currentState,
-                        ageMinMonths: null,
-                        ageMaxMonths: null,
-                      }))
-                    }
-                    type="button"
-                  >
-                    Azzera
-                  </button>
-                </div>
-              </div>
+        <div className="sticky bottom-0 z-10 border-t border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_94%,white_6%)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-3 backdrop-blur">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-[var(--color-text-muted)]">
+              {activeFiltersCount === 0 ? 'Nessun filtro attivo' : `${activeFiltersCount} filtri attivi`}
+            </p>
+            {activeFiltersCount > 0 ? (
+              <Badge className="h-7 rounded-full px-2 text-xs" variant="outline">
+                {activeFiltersCount}
+              </Badge>
             ) : null}
           </div>
-        )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button className="h-11 gap-2" onClick={onReset} type="button" variant="secondary">
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />
+              Azzera
+            </Button>
+            <Button className="h-11 gap-2" disabled={pending} type="submit">
+              <Search aria-hidden="true" className="h-4 w-4" />
+              {pending ? 'Aggiorno...' : 'Applica'}
+            </Button>
+          </div>
+        </div>
       </form>
     );
   }
@@ -1314,12 +955,14 @@ function FiltersForm({
           label="Dove"
           onChange={(value) =>
             setState((currentState) => {
-              const shouldClearStructuredLocation =
-                normalizeText(value) !== normalizeText(currentState.locationLabel);
+              const shouldClearStructuredLocation = !areEquivalentSearchTexts(
+                value,
+                currentState.locationLabel,
+              );
 
               return {
                 ...(shouldClearStructuredLocation
-                  ? clearStructuredLocation(currentState)
+                  ? clearStructuredLocationFilter(currentState)
                   : currentState),
                 locationQuery: value,
                 referenceLat: null,
@@ -1468,8 +1111,6 @@ function FiltersForm({
               </div>
             </div>
 
-            <p className="location-meta">Seleziona un intervallo rapido senza digitare importi.</p>
-
             <div className="filter-reset-row">
               <button
                 className="filter-reset-btn"
@@ -1574,10 +1215,6 @@ function FiltersForm({
               </div>
             </div>
 
-            <p className="location-meta">
-              Seleziona una fascia di eta in modo rapido.
-            </p>
-
             <div className="filter-reset-row">
               <button
                 className="filter-reset-btn"
@@ -1613,16 +1250,6 @@ function FiltersForm({
           Azzera
         </Button>
       </div>
-
-      {onCloseMobileSheet ? (
-        <button
-          className="w-full rounded-full border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
-          onClick={onCloseMobileSheet}
-          type="button"
-        >
-          Chiudi pannello
-        </button>
-      ) : null}
     </form>
   );
 }
@@ -1632,6 +1259,11 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
   const [state, setState] = useState<ListingsFilterValues>(initialValues);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     setState(initialValues);
@@ -1644,26 +1276,26 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
   ): Promise<ListingsFilterValues | null> => {
     const normalizedQuery = currentState.locationQuery.trim();
     if (!normalizedQuery) {
-      return clearStructuredLocation({
+      return clearStructuredLocationFilter({
         ...currentState,
         locationQuery: '',
       });
     }
 
     if (
-      hasStructuredLocation(currentState) &&
-      normalizeText(normalizedQuery) === normalizeText(currentState.locationLabel)
+      hasStructuredLocationFilter(currentState) &&
+      areEquivalentSearchTexts(normalizedQuery, currentState.locationLabel)
     ) {
       return currentState;
     }
 
-    if (!apiBaseUrl) {
-      setValidationError('La ricerca per localita non e disponibile in questo momento.');
+    if (normalizedQuery.length < 2) {
+      setValidationError('Inserisci almeno 2 lettere per la localita oppure svuota il campo.');
       return null;
     }
 
     try {
-      const suggestions = await fetchLocationSuggestions(apiBaseUrl, normalizedQuery, 1);
+      const suggestions = await fetchLocationSuggestions(normalizedQuery, 1);
       const bestMatch = suggestions[0];
       if (!bestMatch) {
         setValidationError('Seleziona una localita valida dai suggerimenti.');
@@ -1684,36 +1316,30 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
     });
   };
 
-  const submit = async () => {
+  const submitState = async (nextState: ListingsFilterValues) => {
     setValidationError(null);
 
-    if (
-      state.priceMin !== null &&
-      state.priceMax !== null &&
-      Number(state.priceMin) > Number(state.priceMax)
-    ) {
-      setValidationError('Il prezzo minimo non puo essere superiore al prezzo massimo.');
+    const rangeValidationError = getListingsRangeValidationError(nextState);
+    if (rangeValidationError) {
+      setValidationError(rangeValidationError);
       return false;
     }
 
-    if (
-      state.ageMinMonths !== null &&
-      state.ageMaxMonths !== null &&
-      state.ageMinMonths > state.ageMaxMonths
-    ) {
-      setValidationError("L'eta minima non puo essere superiore all'eta massima.");
-      return false;
-    }
-
-    const resolvedState = await resolveLocationBeforeSubmit(state);
+    const resolvedState = await resolveLocationBeforeSubmit(nextState);
     if (!resolvedState) {
       return false;
     }
 
     setState(resolvedState);
-    pushHref(buildListingsHref(resolvedState, 1));
+    pushHref(buildListingsHref(resolvedState, { page: 1 }));
     return true;
   };
+
+  const submit = async () => submitState(stateRef.current);
+
+  const updateAndSubmit = async (
+    updater: (currentState: ListingsFilterValues) => ListingsFilterValues,
+  ) => submitState(updater(stateRef.current));
 
   const reset = () => {
     setValidationError(null);
@@ -1727,7 +1353,7 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
     };
     setState(nextState);
     setValidationError(null);
-    pushHref(buildListingsHref(nextState, 1));
+    pushHref(buildListingsHref(nextState, { page: 1 }));
   };
 
   return {
@@ -1737,6 +1363,7 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
     setState,
     state,
     submit,
+    updateAndSubmit,
     validationError,
   };
 }
@@ -1744,114 +1371,11 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
 export function ListingsFiltersSidebar({ initialValues }: ListingsFiltersSidebarProps) {
   const { pending, reset, setState, state, submit, validationError } =
     useListingsFilterState(initialValues);
-  const stickyShellRef = useRef<HTMLDivElement>(null);
-  const stickyPanelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const shell = stickyShellRef.current;
-    const panel = stickyPanelRef.current;
-    if (!shell || !panel) {
-      return;
-    }
-
-    let offset = 0;
-    let minOffset = 0;
-    let stickyTop = 0;
-    let stickyStartScrollY: number | null = null;
-    let previousScrollY = window.scrollY;
-    let resizeRaf = 0;
-    const stickyStartDelay = 96;
-
-    const applyOffset = (nextOffset: number) => {
-      if (nextOffset === offset) {
-        return;
-      }
-
-      offset = nextOffset;
-      panel.style.transform = offset === 0 ? '' : `translateY(${offset}px)`;
-    };
-
-    const clampOffset = (value: number) => Math.max(minOffset, Math.min(0, value));
-
-    const measure = () => {
-      stickyTop = Number.parseFloat(window.getComputedStyle(shell).top) || 0;
-      const availableHeight = window.innerHeight - stickyTop - 8;
-      const panelHeight = panel.getBoundingClientRect().height;
-      minOffset = Math.min(0, availableHeight - panelHeight);
-
-      if (minOffset === 0) {
-        applyOffset(0);
-        return;
-      }
-
-      applyOffset(clampOffset(offset));
-    };
-
-    const onScroll = () => {
-      const currentScrollY = window.scrollY;
-      const delta = currentScrollY - previousScrollY;
-      previousScrollY = currentScrollY;
-
-      const shellTop = shell.getBoundingClientRect().top;
-      const stickyEngaged = shellTop <= stickyTop + 1;
-
-      if (!stickyEngaged) {
-        stickyStartScrollY = null;
-        if (offset !== 0) {
-          applyOffset(0);
-        }
-        return;
-      }
-
-      if (stickyStartScrollY === null) {
-        stickyStartScrollY = currentScrollY;
-      }
-
-      if (currentScrollY - stickyStartScrollY < stickyStartDelay) {
-        if (offset !== 0) {
-          applyOffset(0);
-        }
-        return;
-      }
-
-      if (currentScrollY <= 0 || minOffset === 0 || delta === 0) {
-        if (currentScrollY <= 0 && offset !== 0) {
-          applyOffset(0);
-        }
-        return;
-      }
-
-      const nextOffset =
-        delta > 0 ? Math.max(minOffset, offset - delta) : Math.min(0, offset - delta);
-
-      applyOffset(nextOffset);
-    };
-
-    const onResize = () => {
-      cancelAnimationFrame(resizeRaf);
-      resizeRaf = window.requestAnimationFrame(measure);
-    };
-
-    const resizeObserver = new ResizeObserver(onResize);
-    resizeObserver.observe(panel);
-
-    measure();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize);
-
-    return () => {
-      cancelAnimationFrame(resizeRaf);
-      resizeObserver.disconnect();
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onResize);
-      panel.style.transform = '';
-    };
-  }, []);
 
   return (
-    <aside className="hidden lg:block">
-      <div className="sticky top-[calc(var(--shell-header-height)+0.75rem)]" ref={stickyShellRef}>
-        <div className="will-change-transform" ref={stickyPanelRef}>
+    <aside className="hidden lg:block lg:self-start">
+      <div className="sticky top-[calc(var(--shell-header-height)+0.5rem)] xl:top-[calc(var(--shell-header-height)+0.75rem)]">
+        <div className="max-h-[calc(100dvh-var(--shell-header-height)-1rem)] overflow-y-auto overscroll-contain pb-2 pr-1 xl:max-h-[calc(100dvh-var(--shell-header-height)-1.5rem)]">
           <FiltersForm
             onReset={reset}
             onSubmit={() => {
@@ -1878,39 +1402,48 @@ export function ListingsResultsToolbar({
   const { changeSort, pending, reset, setState, state, submit, validationError } =
     useListingsFilterState(initialValues);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileActiveFiltersCount = useMemo(() => countActiveListingsFilters(state), [state]);
+
+  const closeMobileFilters = () => {
+    setMobileFiltersOpen(false);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('button[data-mobile-filters-trigger="true"]')?.focus();
+    });
+  };
 
   return (
     <>
       <div className="flex flex-col gap-4 rounded-[28px] border border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_84%,white_16%)] px-4 py-4 shadow-[0_18px_48px_rgb(66_40_49_/_0.08)] sm:px-5 lg:px-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1.5">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-              Risultati
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-[1.35rem] font-semibold tracking-tight text-[var(--color-text)]">
+              {new Intl.NumberFormat('it-IT').format(totalCount)} annunci trovati
+            </h2>
+            <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+              Pagina {page}/{Math.max(totalPages, 1)} - Visibili{' '}
+              {new Intl.NumberFormat('it-IT').format(resultsCount)}
             </p>
-            <div className="space-y-1">
-              <h2 className="text-[1.35rem] font-semibold tracking-tight text-[var(--color-text)]">
-                {new Intl.NumberFormat('it-IT').format(totalCount)} annunci trovati
-              </h2>
-              <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                Pagina {page} di {Math.max(totalPages, 1)}. In questa vista ne stai vedendo{' '}
-                {new Intl.NumberFormat('it-IT').format(resultsCount)}.
-              </p>
-            </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 lg:hidden">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:w-auto lg:justify-end">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto lg:hidden">
               <Button
-                className="h-10 gap-2 rounded-full px-4"
+                className="h-11 flex-1 gap-2 rounded-full px-4 sm:flex-initial"
+                data-mobile-filters-trigger="true"
                 onClick={() => setMobileFiltersOpen(true)}
                 type="button"
                 variant="secondary"
               >
                 <Filter aria-hidden="true" className="h-4 w-4" />
                 Filtri
+                {mobileActiveFiltersCount > 0 ? (
+                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 text-xs font-semibold text-[var(--color-text)]">
+                    {mobileActiveFiltersCount}
+                  </span>
+                ) : null}
               </Button>
               <Button
-                className="h-10 rounded-full px-4"
+                className="h-11 flex-1 rounded-full px-4 sm:flex-initial"
                 onClick={reset}
                 type="button"
                 variant="outline"
@@ -1919,13 +1452,13 @@ export function ListingsResultsToolbar({
               </Button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="w-full space-y-1.5 sm:w-auto">
               <span className="inline-flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
                 <ArrowUpDown aria-hidden="true" className="h-3.5 w-3.5" />
                 Ordina per
               </span>
               <FilterSelect
-                className="min-w-[220px]"
+                className="w-full min-w-0 sm:min-w-[220px]"
                 onChange={(value) => changeSort(value as SearchSort)}
                 options={SORT_OPTIONS}
                 value={state.sort}
@@ -1933,17 +1466,21 @@ export function ListingsResultsToolbar({
             </div>
           </div>
         </div>
+
       </div>
 
-      <MobileFiltersSheet onClose={() => setMobileFiltersOpen(false)} open={mobileFiltersOpen}>
+      <MobileFiltersSheet
+        activeFiltersCount={mobileActiveFiltersCount}
+        onClose={closeMobileFilters}
+        open={mobileFiltersOpen}
+      >
         <FiltersForm
           compact
-          onCloseMobileSheet={() => setMobileFiltersOpen(false)}
           onReset={reset}
           onSubmit={() => {
             void submit().then((success) => {
               if (success) {
-                setMobileFiltersOpen(false);
+                closeMobileFilters();
               }
             });
           }}

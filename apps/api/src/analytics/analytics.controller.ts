@@ -6,6 +6,27 @@ import { AnalyticsService } from './analytics.service';
 import { publicAnalyticsEventTypeValues } from './models/analytics.model';
 
 const publicEventTypesSet = new Set<string>(publicAnalyticsEventTypeValues);
+const metadataTopLevelAllowedKeys = new Set<string>([
+  'channel',
+  'surface',
+  'placement',
+  'campaign',
+  'referrer',
+  'queryText',
+  'locationScope',
+  'listingType',
+  'sort',
+  'device',
+  'page',
+  'cta',
+  'sessionId',
+  'experiment',
+  'variant',
+]);
+const metadataMaxDepth = 3;
+const metadataMaxEntries = 24;
+const metadataMaxStringLength = 180;
+const metadataMaxSerializedBytes = 2_048;
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -13,6 +34,77 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   }
 
   return value as Record<string, unknown>;
+};
+
+const normalizeMetadataValue = (
+  value: unknown,
+  path: string,
+  depth: number,
+  context: { entries: number },
+): unknown => {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (normalized.length > metadataMaxStringLength) {
+      throw new BadRequestException(
+        `Field "${path}" exceeds maximum length (${metadataMaxStringLength}).`,
+      );
+    }
+
+    return normalized;
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`Field "${path}" must be a finite number.`);
+    }
+
+    return value;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    throw new BadRequestException(`Field "${path}" must not be an array.`);
+  }
+
+  if (typeof value !== 'object') {
+    throw new BadRequestException(
+      `Field "${path}" contains an unsupported value type (${typeof value}).`,
+    );
+  }
+
+  if (depth > metadataMaxDepth) {
+    throw new BadRequestException(`Field "${path}" exceeds maximum depth (${metadataMaxDepth}).`);
+  }
+
+  const source = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+
+  for (const [rawKey, childValue] of Object.entries(source)) {
+    const key = rawKey.trim();
+    if (!key || !/^[a-zA-Z0-9_]{1,40}$/.test(key)) {
+      throw new BadRequestException(
+        `Field "${path}.${rawKey}" has an invalid key name (allowed: [a-zA-Z0-9_], 1..40).`,
+      );
+    }
+
+    context.entries += 1;
+    if (context.entries > metadataMaxEntries) {
+      throw new BadRequestException(
+        `Field "metadata" exceeds maximum number of entries (${metadataMaxEntries}).`,
+      );
+    }
+
+    normalized[key] = normalizeMetadataValue(childValue, `${path}.${key}`, depth + 1, context);
+  }
+
+  return normalized;
 };
 
 const parseMetadata = (value: unknown): Record<string, unknown> | undefined => {
@@ -24,7 +116,38 @@ const parseMetadata = (value: unknown): Record<string, unknown> | undefined => {
     throw new BadRequestException('Field "metadata" must be an object.');
   }
 
-  return value as Record<string, unknown>;
+  const source = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  const context = { entries: 0 };
+
+  for (const [rawKey, childValue] of Object.entries(source)) {
+    const key = rawKey.trim();
+    if (!metadataTopLevelAllowedKeys.has(key)) {
+      throw new BadRequestException(
+        `Field "metadata.${rawKey}" is not allowed. Allowed keys: ${Array.from(
+          metadataTopLevelAllowedKeys,
+        ).join(', ')}.`,
+      );
+    }
+
+    context.entries += 1;
+    if (context.entries > metadataMaxEntries) {
+      throw new BadRequestException(
+        `Field "metadata" exceeds maximum number of entries (${metadataMaxEntries}).`,
+      );
+    }
+
+    normalized[key] = normalizeMetadataValue(childValue, `metadata.${key}`, 1, context);
+  }
+
+  const serializedSizeBytes = Buffer.byteLength(JSON.stringify(normalized), 'utf8');
+  if (serializedSizeBytes > metadataMaxSerializedBytes) {
+    throw new BadRequestException(
+      `Field "metadata" exceeds maximum size (${metadataMaxSerializedBytes} bytes).`,
+    );
+  }
+
+  return normalized;
 };
 
 const parsePublicEventPayload = (

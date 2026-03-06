@@ -94,7 +94,7 @@ export function ListingMediaPreview({
   return (
     <div
       aria-label={title}
-      className="relative h-full min-h-[190px] overflow-hidden rounded-t-[31px] bg-[var(--color-surface-muted)] [clip-path:inset(0_round_31px_31px_0_0)] md:rounded-l-[31px] md:rounded-t-none md:[clip-path:inset(0_round_31px_0_0_31px)]"
+      className="relative h-full min-h-[176px] overflow-hidden rounded-t-[29px] bg-[var(--color-surface-muted)] [clip-path:inset(0_round_29px_29px_0_0)] md:rounded-l-[29px] md:rounded-t-none md:[clip-path:inset(0_round_29px_0_0_29px)]"
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => {
         setIsHovered(false);
@@ -104,9 +104,9 @@ export function ListingMediaPreview({
     >
       {previewUrls.map((imageUrl, index) => (
         <div
-          className={`absolute inset-0 bg-cover bg-center transform-gpu transition-[opacity,transform,filter] duration-700 ease-out will-change-transform [backface-visibility:hidden] ${
+          className={`absolute inset-0 bg-cover bg-center transform-gpu transition-[opacity,transform,filter] duration-500 ease-out [backface-visibility:hidden] ${
             index === activeIndex ? 'opacity-100' : 'opacity-0'
-          } ${isHovered ? 'scale-[1.08]' : 'scale-100'}`}
+          } ${isHovered ? 'scale-[1.04]' : 'scale-100'}`}
           key={imageUrl}
           style={{
             backgroundImage: `linear-gradient(180deg, rgba(24,19,21,0.02) 0%, rgba(24,19,21,0.18) 100%), url("${imageUrl}")`,
@@ -114,7 +114,7 @@ export function ListingMediaPreview({
         />
       ))}
 
-      <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
 
       {mediaCount > 1 ? (
         <span className="absolute left-3 top-3 inline-flex items-center rounded-full border border-white/20 bg-black/28 px-2.5 py-1 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur-md">

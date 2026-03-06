@@ -1,36 +1,119 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '@adottaungatto/ui';
 import { LinkButton } from '../../components/link-button';
 import { PageShell } from '../../components/page-shell';
 
-export default function ForgotPasswordPage() {
+interface ForgotPasswordPageProps {
+  searchParams?: Promise<{
+    status?: string | string[];
+  }>;
+}
+
+const getFirstParamValue = (value: string | string[] | undefined) => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
+
+const mapStatusMessage = (status: string | undefined) => {
+  if (status === 'sent') {
+    return {
+      variant: 'success' as const,
+      text: 'Se l account esiste, invieremo le istruzioni di recupero all indirizzo associato.',
+    };
+  }
+
+  if (status === 'missing_identifier') {
+    return {
+      variant: 'danger' as const,
+      text: 'Inserisci email o username per continuare.',
+    };
+  }
+
+  return null;
+};
+
+export default async function ForgotPasswordPage({ searchParams }: ForgotPasswordPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const statusMessage = mapStatusMessage(getFirstParamValue(resolvedSearchParams?.status));
+
   return (
     <PageShell
       aside={
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">Recupero accesso</Badge>
-            <Badge variant="outline">Percorso essenziale</Badge>
+            <Badge variant="secondary">Recupero credenziali</Badge>
+            <Badge variant="outline">Risposta neutra</Badge>
           </div>
           <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-            Se non riesci a entrare, parti dal login o dai contatti: l obiettivo qui e evitare
-            passaggi confusi e darti un punto chiaro da cui ripartire.
+            Per sicurezza non confermiamo mai se un account esiste: vedrai sempre lo stesso
+            messaggio di esito.
           </p>
           <div className="flex flex-wrap gap-2">
             <LinkButton href="/login">Torna al login</LinkButton>
-            <LinkButton href="/contatti" variant="outline">
-              Supporto
+            <LinkButton href="/registrati" variant="outline">
+              Crea account
             </LinkButton>
           </div>
         </div>
       }
-      description="Una pagina breve per recuperare il contesto: cosa controllare prima e da quale percorso conviene ripartire se hai perso l'accesso."
+      description="Inserisci email o username e avvia il recupero password con un flusso sicuro e anti-enumeration."
       eyebrow="Password dimenticata"
       title="Recupera l'accesso al tuo account"
     >
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Prima di tutto</CardTitle>
+            <CardTitle>Invio istruzioni di recupero</CardTitle>
+            <CardDescription>
+              Usa email o username. Se l account esiste, riceverai un messaggio con i passaggi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form action="/api/auth/password-recovery" className="space-y-4" method="post">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="identifier">
+                  Email o username
+                </label>
+                <Input
+                  autoComplete="username email"
+                  id="identifier"
+                  name="identifier"
+                  placeholder="utente.demo oppure utente.demo@adottaungatto.local"
+                  required
+                />
+              </div>
+
+              {statusMessage ? (
+                <p
+                  className={
+                    statusMessage.variant === 'success'
+                      ? 'text-sm text-[var(--color-success-fg)]'
+                      : 'text-sm text-[var(--color-danger-fg)]'
+                  }
+                >
+                  {statusMessage.text}
+                </p>
+              ) : null}
+
+              <Button type="submit">Invia istruzioni</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Come funziona</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-[var(--color-text-muted)]">
             <ul className="space-y-3">
@@ -39,41 +122,23 @@ export default function ForgotPasswordPage() {
                   aria-hidden="true"
                   className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]"
                 />
-                <span>Verifica di stare usando username e password corretti dalla pagina login.</span>
+                <span>Compili il campo con email o username.</span>
               </li>
               <li className="flex gap-3">
                 <span
                   aria-hidden="true"
                   className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]"
                 />
-                <span>Se sei gia dentro da un altro dispositivo, controlla impostazioni e sicurezza prima di uscire.</span>
+                <span>Il sistema prova il recupero senza esporre informazioni sull esistenza account.</span>
               </li>
               <li className="flex gap-3">
                 <span
                   aria-hidden="true"
                   className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]"
                 />
-                <span>Usa i contatti se ti serve orientamento sul percorso corretto di recupero.</span>
+                <span>Se l account e valido, riceverai l email di reset.</span>
               </li>
             </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Percorsi utili</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>
-              Abbiamo mantenuto questa route corta e pulita proprio per evitare schermate tecniche o
-              istruzioni ridondanti.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <LinkButton href="/login">Apri il login</LinkButton>
-              <LinkButton href="/sicurezza" variant="outline">
-                Sicurezza del sito
-              </LinkButton>
-            </div>
           </CardContent>
         </Card>
       </div>

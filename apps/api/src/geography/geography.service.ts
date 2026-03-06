@@ -1,7 +1,7 @@
-import { loadApiEnv } from '@adottaungatto/config';
 import type { LocationIntent, LocationIntentScope } from '@adottaungatto/types';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
+import { API_DATABASE_POOL } from '../database/database.constants';
 
 export type GeographyRegion = {
   id: string;
@@ -56,15 +56,11 @@ type GeographySearchRow = {
 };
 
 @Injectable()
-export class GeographyService implements OnModuleDestroy {
-  private readonly env = loadApiEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
-
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
+export class GeographyService {
+  constructor(
+    @Inject(API_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   async findRegions(): Promise<GeographyRegion[]> {
     const result = await this.pool.query<GeographyRegion>(

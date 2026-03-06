@@ -7,6 +7,9 @@ import {
   type SearchIndexAdminClient,
   planSearchIndexCleanup,
 } from './search-index-admin';
+import { WorkerDistributedLockService } from './worker-distributed-lock.service';
+
+const searchIndexCleanupWorkerLockName = 'worker:search-index-cleanup';
 
 export type SearchIndexCleanupSummary = {
   activeIndices: string[];
@@ -32,6 +35,7 @@ export class SearchIndexCleanupWorkerService
   constructor(
     @Inject(SEARCH_INDEX_ADMIN_CLIENT)
     private readonly searchIndexAdminClient: SearchIndexAdminClient,
+    private readonly workerDistributedLockService: WorkerDistributedLockService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -60,52 +64,63 @@ export class SearchIndexCleanupWorkerService
     this.processing = true;
 
     try {
-      const readTargets = await this.searchIndexAdminClient.listAliasTargets(SEARCH_INDEX_READ_ALIAS);
-      const writeTargets = await this.searchIndexAdminClient.listAliasTargets(SEARCH_INDEX_WRITE_ALIAS);
-      this.searchIndexAdminClient.assertAliasTargetsAreConsistent(readTargets, writeTargets);
+      const execution = await this.workerDistributedLockService.runWithLock(
+        searchIndexCleanupWorkerLockName,
+        async () => {
+          const readTargets = await this.searchIndexAdminClient.listAliasTargets(SEARCH_INDEX_READ_ALIAS);
+          const writeTargets = await this.searchIndexAdminClient.listAliasTargets(SEARCH_INDEX_WRITE_ALIAS);
+          this.searchIndexAdminClient.assertAliasTargetsAreConsistent(readTargets, writeTargets);
 
-      if (
-        readTargets.length !== 1 ||
-        writeTargets.length !== 1 ||
-        readTargets[0] !== writeTargets[0]
-      ) {
-        this.logger.warn(
-          `Search alias cleanup skipped because aliases are not fully initialized (${SEARCH_INDEX_READ_ALIAS}=${readTargets.join(',') || 'none'}, ${SEARCH_INDEX_WRITE_ALIAS}=${writeTargets.join(',') || 'none'}).`,
-        );
+          if (
+            readTargets.length !== 1 ||
+            writeTargets.length !== 1 ||
+            readTargets[0] !== writeTargets[0]
+          ) {
+            this.logger.warn(
+              `Search alias cleanup skipped because aliases are not fully initialized (${SEARCH_INDEX_READ_ALIAS}=${readTargets.join(',') || 'none'}, ${SEARCH_INDEX_WRITE_ALIAS}=${writeTargets.join(',') || 'none'}).`,
+            );
+            return emptySummary();
+          }
+
+          const managedIndices = await this.searchIndexAdminClient.listManagedIndices();
+          const activeIndices = Array.from(new Set([...readTargets, ...writeTargets]));
+          const cleanupPlan = planSearchIndexCleanup({
+            managedIndices,
+            protectedIndices: activeIndices,
+            retainInactiveCount: this.env.SEARCH_INDEX_STALE_RETAIN_INACTIVE_COUNT,
+          });
+
+          const deletedIndices: string[] = [];
+          for (const indexInfo of cleanupPlan.indicesToDelete) {
+            const deleted = await this.searchIndexAdminClient.deleteIndexIfExists(indexInfo.index);
+            if (deleted) {
+              deletedIndices.push(indexInfo.index);
+            }
+          }
+
+          if (deletedIndices.length > 0) {
+            this.logger.log(
+              `Search stale index cleanup deleted=${deletedIndices.join(', ')} retained_inactive=${cleanupPlan.retainedInactiveIndices
+                .map((indexInfo) => indexInfo.index)
+                .join(', ') || 'none'} active=${activeIndices.join(', ')}.`,
+            );
+          }
+
+          return {
+            activeIndices,
+            retainedInactiveIndices: cleanupPlan.retainedInactiveIndices.map(
+              (indexInfo) => indexInfo.index,
+            ),
+            deletedIndices,
+          };
+        },
+      );
+
+      if (!execution.acquired) {
         return emptySummary();
       }
 
-      const managedIndices = await this.searchIndexAdminClient.listManagedIndices();
-      const activeIndices = Array.from(new Set([...readTargets, ...writeTargets]));
-      const cleanupPlan = planSearchIndexCleanup({
-        managedIndices,
-        protectedIndices: activeIndices,
-        retainInactiveCount: this.env.SEARCH_INDEX_STALE_RETAIN_INACTIVE_COUNT,
-      });
-
-      const deletedIndices: string[] = [];
-      for (const indexInfo of cleanupPlan.indicesToDelete) {
-        const deleted = await this.searchIndexAdminClient.deleteIndexIfExists(indexInfo.index);
-        if (deleted) {
-          deletedIndices.push(indexInfo.index);
-        }
-      }
-
-      if (deletedIndices.length > 0) {
-        this.logger.log(
-          `Search stale index cleanup deleted=${deletedIndices.join(', ')} retained_inactive=${cleanupPlan.retainedInactiveIndices
-            .map((indexInfo) => indexInfo.index)
-            .join(', ') || 'none'} active=${activeIndices.join(', ')}.`,
-        );
-      }
-
-      return {
-        activeIndices,
-        retainedInactiveIndices: cleanupPlan.retainedInactiveIndices.map(
-          (indexInfo) => indexInfo.index,
-        ),
-        deletedIndices,
-      };
+      return execution.result ?? emptySummary();
     } finally {
       this.processing = false;
     }

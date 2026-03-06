@@ -1,17 +1,14 @@
-import { loadApiEnv } from '@adottaungatto/config';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import { API_DATABASE_POOL } from '../database/database.constants';
 import type { ListingRecord, ListingStatus } from '../listings/models/listing.model';
+import { upsertAppUserByIdentity } from '../users/upsert-app-user-by-identity';
 import type {
   AdminAuditLogRecord,
   ModerationAction,
   ModerationQueueItem,
 } from './models/moderation.model';
-
-type OwnerRow = {
-  userId: string;
-};
 
 type ListingRow = {
   id: string;
@@ -71,11 +68,11 @@ type ApplyModerationActionInput = {
 };
 
 @Injectable()
-export class ModerationRepository implements OnModuleDestroy {
-  private readonly env = loadApiEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
+export class ModerationRepository {
+  constructor(
+    @Inject(API_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   private readonly listingSelectSql = `
     SELECT
@@ -104,31 +101,8 @@ export class ModerationRepository implements OnModuleDestroy {
     FROM listings l
   `;
 
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
-
   async upsertActorUser(user: RequestUser): Promise<string> {
-    const result = await this.pool.query<OwnerRow>(
-      `
-        INSERT INTO app_users (provider, provider_subject, email, roles)
-        VALUES ($1, $2, $3, $4::jsonb)
-        ON CONFLICT (provider, provider_subject)
-        DO UPDATE SET
-          email = EXCLUDED.email,
-          roles = EXCLUDED.roles,
-          updated_at = NOW()
-        RETURNING id::text AS "userId";
-      `,
-      [user.provider, user.providerSubject, user.email, JSON.stringify(user.roles)],
-    );
-
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error('Failed to upsert moderation actor.');
-    }
-
-    return row.userId;
+    return upsertAppUserByIdentity(this.pool, user);
   }
 
   async listPendingQueue(limit: number): Promise<ModerationQueueItem[]> {

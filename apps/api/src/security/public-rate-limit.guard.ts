@@ -18,11 +18,21 @@ type RateLimitedRequest = RequestWithClientIp & {
 };
 
 type RateLimitProfile = {
-  id: 'public_listings' | 'search' | 'analytics_events' | 'contact';
+  id:
+    | 'public_listings'
+    | 'search'
+    | 'geography'
+    | 'analytics_events'
+    | 'contact'
+    | 'auth_password_recovery'
+    | 'auth_email_verification_resend'
+    | 'auth_phone_verification_request'
+    | 'auth_phone_verification_confirm';
   method: 'GET' | 'POST';
   pathPattern: RegExp;
   windowMs: number;
   maxRequests: number;
+  requiresPublicRoute?: boolean;
 };
 
 const extractRequestPath = (url: string | undefined): string => {
@@ -55,6 +65,13 @@ const buildProfiles = (env: ReturnType<typeof loadApiEnv>): RateLimitProfile[] =
       maxRequests: env.RATE_LIMIT_SEARCH_MAX_REQUESTS,
     },
     {
+      id: 'geography',
+      method: 'GET',
+      pathPattern: /^\/v1\/geography\/(?:regions|provinces|comuni|search)\/?$/i,
+      windowMs: env.RATE_LIMIT_GEOGRAPHY_WINDOW_SECONDS * 1000,
+      maxRequests: env.RATE_LIMIT_GEOGRAPHY_MAX_REQUESTS,
+    },
+    {
       id: 'analytics_events',
       method: 'POST',
       pathPattern: /^\/v1\/analytics\/events\/?$/i,
@@ -67,6 +84,37 @@ const buildProfiles = (env: ReturnType<typeof loadApiEnv>): RateLimitProfile[] =
       pathPattern: /^\/v1\/listings\/[1-9]\d*\/contact\/?$/i,
       windowMs: env.RATE_LIMIT_CONTACT_WINDOW_SECONDS * 1000,
       maxRequests: env.RATE_LIMIT_CONTACT_MAX_REQUESTS,
+    },
+    {
+      id: 'auth_password_recovery',
+      method: 'POST',
+      pathPattern: /^\/v1\/auth\/password-recovery\/?$/i,
+      windowMs: env.RATE_LIMIT_AUTH_PASSWORD_RECOVERY_WINDOW_SECONDS * 1000,
+      maxRequests: env.RATE_LIMIT_AUTH_PASSWORD_RECOVERY_MAX_REQUESTS,
+    },
+    {
+      id: 'auth_email_verification_resend',
+      method: 'POST',
+      pathPattern: /^\/v1\/auth\/email-verification\/resend\/?$/i,
+      windowMs: env.RATE_LIMIT_AUTH_EMAIL_VERIFICATION_RESEND_WINDOW_SECONDS * 1000,
+      maxRequests: env.RATE_LIMIT_AUTH_EMAIL_VERIFICATION_RESEND_MAX_REQUESTS,
+      requiresPublicRoute: false,
+    },
+    {
+      id: 'auth_phone_verification_request',
+      method: 'POST',
+      pathPattern: /^\/v1\/auth\/phone-verification\/request\/?$/i,
+      windowMs: env.RATE_LIMIT_AUTH_PHONE_VERIFICATION_REQUEST_WINDOW_SECONDS * 1000,
+      maxRequests: env.RATE_LIMIT_AUTH_PHONE_VERIFICATION_REQUEST_MAX_REQUESTS,
+      requiresPublicRoute: false,
+    },
+    {
+      id: 'auth_phone_verification_confirm',
+      method: 'POST',
+      pathPattern: /^\/v1\/auth\/phone-verification\/confirm\/?$/i,
+      windowMs: env.RATE_LIMIT_AUTH_PHONE_VERIFICATION_CONFIRM_WINDOW_SECONDS * 1000,
+      maxRequests: env.RATE_LIMIT_AUTH_PHONE_VERIFICATION_CONFIRM_MAX_REQUESTS,
+      requiresPublicRoute: false,
     },
   ];
 };
@@ -92,14 +140,6 @@ export class PublicRateLimitGuard implements CanActivate {
       return true;
     }
 
-    const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_ROUTE_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (!isPublic) {
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<RateLimitedRequest>();
     const response = context.switchToHttp().getResponse<HeaderAwareResponse>();
     const method = (request.method ?? 'GET').toUpperCase();
@@ -110,6 +150,16 @@ export class PublicRateLimitGuard implements CanActivate {
     );
     if (!profile) {
       return true;
+    }
+
+    if (profile.requiresPublicRoute !== false) {
+      const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_ROUTE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (!isPublic) {
+        return true;
+      }
     }
 
     const clientIp = resolveClientIp(request, this.env.API_TRUST_PROXY_ENABLED) ?? 'unknown';

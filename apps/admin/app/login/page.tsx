@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@adottaungatto/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 
 interface LoginPageProps {
   searchParams?: Promise<{
@@ -16,12 +16,20 @@ const getFirstParamValue = (value: string | string[] | undefined) => {
 };
 
 const mapErrorMessage = (code: string | undefined) => {
-  if (code === 'invalid_credentials') {
-    return 'Credenziali non valide.';
+  if (code === 'auth_provider_unavailable') {
+    return 'Servizio di accesso temporaneamente non disponibile. Riprova tra poco.';
   }
 
-  if (code === 'missing_credentials') {
-    return 'Inserisci username e password.';
+  if (code === 'auth_cancelled') {
+    return 'Accesso annullato.';
+  }
+
+  if (code === 'invalid_callback_state') {
+    return 'Sessione di accesso non valida. Riprova.';
+  }
+
+  if (code === 'invalid_callback_nonce') {
+    return 'Verifica di sicurezza fallita. Riprova.';
   }
 
   return undefined;
@@ -48,29 +56,11 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
           <CardTitle>Accesso admin</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action="/api/auth/login" className="space-y-4" method="post">
+          <form action="/api/auth/login" className="space-y-4" method="get">
             <input name="next" type="hidden" value={nextPath} />
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="username">
-                Username
-              </label>
-              <Input id="username" name="username" placeholder="moderatore.demo" required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="password">
-                Password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                placeholder="demo1234"
-                required
-                type="password"
-              />
-            </div>
             {errorMessage ? <p className="text-sm text-rose-700">{errorMessage}</p> : null}
             <Button className="w-full" type="submit">
-              Entra nel pannello
+              Continua con account admin
             </Button>
           </form>
         </CardContent>

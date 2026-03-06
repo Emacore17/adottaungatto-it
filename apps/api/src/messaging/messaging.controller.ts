@@ -13,6 +13,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequireVerifiedEmail } from '../auth/decorators/require-verified-email.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import { UsersService } from '../users/users.service';
 import { MessagingEventsService } from './messaging-events.service';
@@ -106,6 +107,7 @@ const parseOptionalQueryInteger = (
 };
 
 @Controller('v1/messages')
+@RequireVerifiedEmail()
 export class MessagingController {
   constructor(
     @Inject(MessagingService)

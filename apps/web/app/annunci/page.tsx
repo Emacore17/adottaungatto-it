@@ -6,12 +6,12 @@ import Script from 'next/script';
 import { LinkButton } from '../../components/link-button';
 import { ListingsPagination } from '../../components/listings-pagination';
 import {
-  type ListingsFilterValues,
   ListingsFiltersSidebar,
   ListingsResultsToolbar,
 } from '../../components/listings-search-controls';
 import { SectionReveal } from '../../components/motion/section-reveal';
 import { PublicListingsList } from '../../components/public-listings-list';
+import { type ListingsFilterValues, buildListingsHref } from '../../features/search/listings-query';
 import {
   type PublicListingsSearchOptions,
   searchPublicListingsWithMetadata,
@@ -275,40 +275,6 @@ const buildActiveFilterLabels = (filters: ListingsFilterValues) => {
   return labels;
 };
 
-const buildListingsHref = (filters: ListingsFilterValues, page = 1) => {
-  const params = new URLSearchParams();
-
-  if (filters.q.trim()) params.set('q', filters.q.trim());
-  if (filters.listingType) params.set('listingType', filters.listingType);
-  if (filters.sex) params.set('sex', filters.sex);
-  if (filters.breed) params.set('breed', filters.breed);
-  if (filters.ageMinMonths !== null) params.set('ageMinMonths', String(filters.ageMinMonths));
-  if (filters.ageMaxMonths !== null) params.set('ageMaxMonths', String(filters.ageMaxMonths));
-  if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
-  if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
-  if (filters.locationScope) params.set('locationScope', filters.locationScope);
-  if (filters.regionId) params.set('regionId', filters.regionId);
-  if (filters.provinceId) params.set('provinceId', filters.provinceId);
-  if (filters.comuneId) params.set('comuneId', filters.comuneId);
-  if (filters.locationLabel) params.set('locationLabel', filters.locationLabel);
-  if (filters.locationSecondaryLabel)
-    params.set('locationSecondaryLabel', filters.locationSecondaryLabel);
-  if (filters.referenceLat !== null && filters.referenceLon !== null) {
-    params.set('referenceLat', String(filters.referenceLat));
-    params.set('referenceLon', String(filters.referenceLon));
-  }
-  if (
-    filters.sort !== 'newest' ||
-    (filters.referenceLat !== null && filters.referenceLon !== null)
-  ) {
-    params.set('sort', filters.sort);
-  }
-  if (page > 1) params.set('page', String(page));
-
-  const queryString = params.toString();
-  return queryString ? `/annunci?${queryString}` : '/annunci';
-};
-
 const buildPageTitle = (filters: ListingsFilterValues) => {
   if (filters.referenceLat !== null && filters.referenceLon !== null) {
     return 'Annunci di gatti vicino a te';
@@ -389,7 +355,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
     '@type': 'CollectionPage',
     name: pageTitle,
     description: pageDescription,
-    url: new URL(buildListingsHref(filters, page), env.NEXT_PUBLIC_WEB_URL).toString(),
+    url: new URL(buildListingsHref(filters, { page }), env.NEXT_PUBLIC_WEB_URL).toString(),
     mainEntity: {
       '@type': 'ItemList',
       numberOfItems: searchResult.items.length,
@@ -515,7 +481,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
           <SectionReveal delay={0.12}>
             <ListingsPagination
-              buildPageHref={(targetPage) => buildListingsHref(filters, targetPage)}
+              buildPageHref={(targetPage) => buildListingsHref(filters, { page: targetPage })}
               currentPage={page}
               totalPages={totalPages}
             />

@@ -127,6 +127,54 @@ describe('Analytics endpoints', () => {
     expect(trackPublicEvent).not.toHaveBeenCalled();
   });
 
+  it('rejects analytics metadata with non-whitelisted keys', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/analytics/events')
+      .send({
+        eventType: 'contact_clicked',
+        listingId: '101',
+        source: 'web_public',
+        metadata: {
+          unknownKey: 'value',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(trackPublicEvent).not.toHaveBeenCalled();
+  });
+
+  it('rejects analytics metadata with excessive string length', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/analytics/events')
+      .send({
+        eventType: 'contact_clicked',
+        listingId: '101',
+        source: 'web_public',
+        metadata: {
+          queryText: 'x'.repeat(181),
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(trackPublicEvent).not.toHaveBeenCalled();
+  });
+
+  it('rejects analytics metadata arrays', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/analytics/events')
+      .send({
+        eventType: 'contact_sent',
+        listingId: '101',
+        source: 'web_public',
+        metadata: {
+          campaign: ['spring-sale'],
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(trackPublicEvent).not.toHaveBeenCalled();
+  });
+
   it('denies admin KPI endpoint to user role', async () => {
     const response = await request(app.getHttpServer())
       .get('/v1/admin/analytics/kpis')

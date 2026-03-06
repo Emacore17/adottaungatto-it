@@ -108,7 +108,14 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
       <SectionReveal delay={0.04}>
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_430px]">
-          <Card className="order-1 bg-[var(--color-surface-overlay-strong)] lg:col-start-2">
+          <div className="order-1 space-y-4 lg:col-start-1 lg:row-start-1" data-test-listing-gallery>
+            <ListingGallery listingId={listing.id} media={listing.media} title={listing.title} />
+          </div>
+
+          <Card
+            className="order-2 bg-[var(--color-surface-overlay-strong)] lg:col-start-2 lg:row-start-1"
+            data-test-listing-summary
+          >
             <CardContent className="space-y-5 pt-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={listingTypeBadgeVariant}>{listingTypeLabel || 'Annuncio'}</Badge>
@@ -118,7 +125,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-text)] sm:text-4xl">
+                  <h1 className="text-[2rem] font-semibold leading-tight tracking-tight text-[var(--color-text)] sm:text-4xl">
                     {listing.title}
                   </h1>
                   <p className="flex items-center gap-2 text-sm leading-6 text-[var(--color-text-muted)]">
@@ -156,20 +163,16 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             </CardContent>
           </Card>
 
-          <div className="order-2 space-y-4 lg:row-span-2 lg:row-start-1">
-            <ListingGallery listingId={listing.id} media={listing.media} title={listing.title} />
+          <Card className="order-3 lg:col-start-1 lg:row-start-2">
+            <CardHeader>
+              <CardTitle>Descrizione</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm leading-6 text-[var(--color-text-muted)]">
+              <p>{listing.description || 'Descrizione non disponibile.'}</p>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Descrizione</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm leading-6 text-[var(--color-text-muted)]">
-                <p>{listing.description || 'Descrizione non disponibile.'}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="order-3 lg:col-start-2">
+          <Card className="order-4 lg:col-start-2 lg:row-start-2">
             <CardHeader className="space-y-3">
               <CardTitle>Contatta l'inserzionista</CardTitle>
               <p className="text-sm leading-6 text-[var(--color-text-muted)]">

@@ -8,11 +8,20 @@ describe('SearchIndexCleanupWorkerService', () => {
     listManagedIndices: vi.fn(),
     deleteIndexIfExists: vi.fn(),
   };
+  const workerDistributedLockServiceMock = {
+    runWithLock: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.SEARCH_INDEX_STALE_CLEANUP_ENABLED = 'true';
     process.env.SEARCH_INDEX_STALE_RETAIN_INACTIVE_COUNT = '1';
+    workerDistributedLockServiceMock.runWithLock.mockImplementation(
+      async (_lockName: string, task: () => Promise<unknown>) => ({
+        acquired: true,
+        result: await task(),
+      }),
+    );
   });
 
   it('deletes stale versioned indices beyond the retained rollback window', async () => {
@@ -44,7 +53,10 @@ describe('SearchIndexCleanupWorkerService', () => {
     ]);
     adminClientMock.deleteIndexIfExists.mockResolvedValueOnce(true);
 
-    const service = new SearchIndexCleanupWorkerService(adminClientMock as never);
+    const service = new SearchIndexCleanupWorkerService(
+      adminClientMock as never,
+      workerDistributedLockServiceMock as never,
+    );
     const summary = await service.runCleanupCycle();
 
     expect(adminClientMock.assertAliasTargetsAreConsistent).toHaveBeenCalledWith(
@@ -62,7 +74,10 @@ describe('SearchIndexCleanupWorkerService', () => {
   it('skips deletion when aliases are not fully initialized', async () => {
     adminClientMock.listAliasTargets.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
-    const service = new SearchIndexCleanupWorkerService(adminClientMock as never);
+    const service = new SearchIndexCleanupWorkerService(
+      adminClientMock as never,
+      workerDistributedLockServiceMock as never,
+    );
     const summary = await service.runCleanupCycle();
 
     expect(adminClientMock.listManagedIndices).not.toHaveBeenCalled();
@@ -72,10 +87,32 @@ describe('SearchIndexCleanupWorkerService', () => {
   it('skips cleanup entirely when disabled', async () => {
     process.env.SEARCH_INDEX_STALE_CLEANUP_ENABLED = 'false';
 
-    const service = new SearchIndexCleanupWorkerService(adminClientMock as never);
+    const service = new SearchIndexCleanupWorkerService(
+      adminClientMock as never,
+      workerDistributedLockServiceMock as never,
+    );
     const summary = await service.runCleanupCycle();
 
     expect(adminClientMock.listAliasTargets).not.toHaveBeenCalled();
     expect(summary.deletedIndices).toEqual([]);
+  });
+
+  it('skips cleanup when distributed lock is not acquired', async () => {
+    workerDistributedLockServiceMock.runWithLock.mockResolvedValueOnce({
+      acquired: false,
+    });
+
+    const service = new SearchIndexCleanupWorkerService(
+      adminClientMock as never,
+      workerDistributedLockServiceMock as never,
+    );
+    const summary = await service.runCleanupCycle();
+
+    expect(adminClientMock.listAliasTargets).not.toHaveBeenCalled();
+    expect(summary).toEqual({
+      activeIndices: [],
+      retainedInactiveIndices: [],
+      deletedIndices: [],
+    });
   });
 });

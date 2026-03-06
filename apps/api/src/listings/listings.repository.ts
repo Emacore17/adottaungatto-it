@@ -1,8 +1,9 @@
-import { loadApiEnv } from '@adottaungatto/config';
 import { type LocationIntent, NO_BREED_FILTER } from '@adottaungatto/types';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import { API_DATABASE_POOL } from '../database/database.constants';
+import { upsertAppUserByIdentity } from '../users/upsert-app-user-by-identity';
 import type { SearchListingsQueryDto } from './dto/search-listings-query.dto';
 import type { CatBreedRecord } from './models/cat-breed.model';
 import type { CreateListingMediaInput, ListingMediaRecord } from './models/listing-media.model';
@@ -52,10 +53,6 @@ export interface PublishedListingContactRecord {
   contactPhone: string | null;
   contactEmail: string | null;
 }
-
-type OwnerRow = {
-  ownerUserId: string;
-};
 
 type ListingRow = {
   id: string;
@@ -289,7 +286,7 @@ export interface LocationCentroid {
 }
 
 @Injectable()
-export class ListingsRepository implements OnModuleDestroy {
+export class ListingsRepository {
   private readonly sponsoredPromotionCap = 1.2;
 
   private readonly activePromotionJoinSql = `
@@ -310,10 +307,10 @@ export class ListingsRepository implements OnModuleDestroy {
     ) active_promotion ON TRUE
   `;
 
-  private readonly env = loadApiEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
+  constructor(
+    @Inject(API_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   private readonly listingSelectSql = `
     SELECT
@@ -359,10 +356,6 @@ export class ListingsRepository implements OnModuleDestroy {
     FROM listing_media
   `;
 
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
-
   async listCatBreeds(): Promise<CatBreedRecord[]> {
     const result = await this.pool.query<CatBreedRow>(
       `
@@ -385,26 +378,7 @@ export class ListingsRepository implements OnModuleDestroy {
   }
 
   async upsertOwnerUser(user: RequestUser): Promise<string> {
-    const result = await this.pool.query<OwnerRow>(
-      `
-        INSERT INTO app_users (provider, provider_subject, email, roles)
-        VALUES ($1, $2, $3, $4::jsonb)
-        ON CONFLICT (provider, provider_subject)
-        DO UPDATE SET
-          email = EXCLUDED.email,
-          roles = EXCLUDED.roles,
-          updated_at = NOW()
-        RETURNING id::text AS "ownerUserId";
-      `,
-      [user.provider, user.providerSubject, user.email, JSON.stringify(user.roles)],
-    );
-
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error('Failed to upsert listing owner user.');
-    }
-
-    return row.ownerUserId;
+    return upsertAppUserByIdentity(this.pool, user);
   }
 
   async createListing(ownerUserId: string, input: CreateListingInput): Promise<ListingRecord> {
@@ -900,13 +874,31 @@ export class ListingsRepository implements OnModuleDestroy {
       values.push(value);
       return `$${values.length}`;
     };
+    const fullTextVectorSql = `to_tsvector('simple', COALESCE(l.title, '') || ' ' || COALESCE(l.description, ''))`;
     const referencePoint =
       query.referencePoint ?? (await this.resolveLocationCentroid(query.locationIntent));
+    let relevanceQueryPlaceholder: string | null = null;
+    let relevanceNormalizedPlaceholder: string | null = null;
+    let relevancePatternPlaceholder: string | null = null;
+    let relevanceTsRankSql: string | null = null;
+    let relevanceSimilaritySql: string | null = null;
 
     if (query.queryText) {
-      const patternPlaceholder = addValue(`%${query.queryText}%`);
+      relevanceQueryPlaceholder = addValue(query.queryText);
+      relevanceNormalizedPlaceholder = addValue(query.queryText.toLowerCase());
+      relevancePatternPlaceholder = addValue(`%${query.queryText}%`);
+      const fullTextQuerySql = `websearch_to_tsquery('simple', ${relevanceQueryPlaceholder})`;
+      relevanceTsRankSql = `ts_rank_cd(${fullTextVectorSql}, ${fullTextQuerySql})`;
+      relevanceSimilaritySql = `GREATEST(
+        similarity(l.title, ${relevanceQueryPlaceholder}),
+        similarity(l.description, ${relevanceQueryPlaceholder}) * 0.8
+      )`;
       whereClauses.push(
-        `(l.title ILIKE ${patternPlaceholder} OR l.description ILIKE ${patternPlaceholder})`,
+        `(
+          ${fullTextVectorSql} @@ ${fullTextQuerySql}
+          OR l.title ILIKE ${relevancePatternPlaceholder}
+          OR l.description ILIKE ${relevancePatternPlaceholder}
+        )`,
       );
     }
 
@@ -1007,15 +999,21 @@ export class ListingsRepository implements OnModuleDestroy {
         COALESCE(l.published_at, l.created_at) DESC,
         l.id DESC
       `;
-    } else if (query.sort === 'relevance' && query.queryText) {
-      const normalizedQueryPlaceholder = addValue(query.queryText.toLowerCase());
+    } else if (
+      query.sort === 'relevance' &&
+      query.queryText &&
+      relevanceNormalizedPlaceholder &&
+      relevanceTsRankSql &&
+      relevanceSimilaritySql
+    ) {
       orderBySql = `
         CASE
-          WHEN LOWER(l.title) = ${normalizedQueryPlaceholder} THEN 0
-          WHEN LOWER(l.title) LIKE ${normalizedQueryPlaceholder} || '%' THEN 1
-          WHEN LOWER(l.description) LIKE '%' || ${normalizedQueryPlaceholder} || '%' THEN 2
-          ELSE 3
+          WHEN LOWER(l.title) = ${relevanceNormalizedPlaceholder} THEN 0
+          WHEN LOWER(l.title) LIKE ${relevanceNormalizedPlaceholder} || '%' THEN 1
+          ELSE 2
         END ASC,
+        ${relevanceTsRankSql} DESC,
+        ${relevanceSimilaritySql} DESC,
         ${sponsoredPriorityOrderSql} DESC,
         ${sponsoredScoreOrderSql} DESC,
         ${distanceOrderSql ? `${distanceOrderSql} ASC NULLS LAST,` : ''}
@@ -1411,7 +1409,7 @@ export class ListingsRepository implements OnModuleDestroy {
 
   async listPublishedSearchIndexDocuments(
     limit: number,
-    offset: number,
+    lastListingId: string | null,
   ): Promise<SearchIndexDocumentRecord[]> {
     const result = await this.pool.query<SearchIndexDocumentRow>(
       `
@@ -1450,11 +1448,12 @@ export class ListingsRepository implements OnModuleDestroy {
         ${this.activePromotionJoinSql}
         WHERE l.status = 'published'
           AND l.deleted_at IS NULL
-        ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
+          AND ($2::bigint IS NULL OR l.id > $2::bigint)
+        ORDER BY l.id ASC
         LIMIT $1::integer
-        OFFSET $2::integer;
+        ;
       `,
-      [limit, offset],
+      [limit, lastListingId],
     );
 
     return result.rows.map((row) => this.mapSearchIndexDocumentRow(row));

@@ -62,7 +62,7 @@ describe('MessagingService', () => {
       ownerProviderSubject: 'owner-subject-1',
       ownerEmail: 'owner@example.test',
     })),
-    findThreadIdByListingAndUsers: vi.fn(async () => null),
+    findThreadIdByListingAndUsers: vi.fn<() => Promise<string | null>>(async () => null),
     countRecentThreadsByRequester: vi.fn(async () => 0),
     getOrCreateThread: vi.fn(async () => '9001'),
     countRecentMessagesBySender: vi.fn(async () => 0),
@@ -79,6 +79,7 @@ describe('MessagingService', () => {
     })),
     markThreadRead: vi.fn(async () => undefined),
     archiveThreadForUser: vi.fn(async () => true),
+    restoreThreadForUser: vi.fn(async () => true),
     deleteThreadForEveryone: vi.fn(async () => true),
     listThreadParticipantUserIds: vi.fn(async () => ['501', '601']),
     listThreadsForUser: vi.fn(async () => ({
@@ -183,6 +184,24 @@ describe('MessagingService', () => {
     });
   });
 
+  it('restores visibility when reopening an archived thread from a listing', async () => {
+    messagingRepositoryMock.findThreadIdByListingAndUsers.mockResolvedValueOnce('9001');
+    messagingRepositoryMock.findThreadForUser
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(buildThreadSummary());
+
+    const result = await service.openListingThreadForUser(
+      baseUser,
+      '101',
+      'Ciao, torno a scriverti per questo annuncio.',
+      'web_listing',
+    );
+
+    expect(result.createdThread).toBe(false);
+    expect(result.thread.id).toBe('9001');
+    expect(messagingRepositoryMock.restoreThreadForUser).toHaveBeenCalledWith('9001', '501');
+  });
+
   it('blocks duplicate messages in the anti-spam window', async () => {
     messagingRepositoryMock.findThreadForUser.mockResolvedValueOnce(buildThreadSummary());
     messagingRepositoryMock.countRecentDuplicateMessages.mockResolvedValueOnce(1);
@@ -197,6 +216,18 @@ describe('MessagingService', () => {
 
     const result = await service.sendMessageForUser(baseUser, '9999', 'Ciao');
     expect(result).toBeNull();
+  });
+
+  it('restores visibility when thread detail lookup misses after send', async () => {
+    messagingRepositoryMock.findThreadForUser
+      .mockResolvedValueOnce(buildThreadSummary())
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(buildThreadSummary());
+
+    const result = await service.sendMessageForUser(baseUser, '9001', 'Ti aggiorno sul contatto');
+
+    expect(result?.thread.id).toBe('9001');
+    expect(messagingRepositoryMock.restoreThreadForUser).toHaveBeenCalledWith('9001', '501');
   });
 
   it('marks a thread as read for the authenticated participant', async () => {
@@ -229,15 +260,11 @@ describe('MessagingService', () => {
     });
   });
 
-  it('soft deletes a thread for both participants', async () => {
+  it('hard deletes a thread for both participants', async () => {
     const result = await service.deleteThreadForEveryone(baseUser, '9001');
 
     expect(result?.deletedAt).toBeTruthy();
-    expect(messagingRepositoryMock.deleteThreadForEveryone).toHaveBeenCalledWith(
-      '9001',
-      '501',
-      expect.any(String),
-    );
+    expect(messagingRepositoryMock.deleteThreadForEveryone).toHaveBeenCalledWith('9001', '501');
     expect(messagingEventsServiceMock.publishThreadUpdated).toHaveBeenCalledWith(['501', '601'], {
       threadId: '9001',
       reason: 'thread_deleted',

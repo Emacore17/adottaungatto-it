@@ -11,6 +11,9 @@ import type {
   MessageEmailNotificationJob,
   MessagingNotificationOutboxRepository,
 } from './messaging-notification-outbox.repository';
+import { WorkerDistributedLockService } from './worker-distributed-lock.service';
+
+const messageNotificationWorkerLockName = 'worker:messaging-notification';
 
 @Injectable()
 export class MessagingNotificationWorkerService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -22,6 +25,7 @@ export class MessagingNotificationWorkerService implements OnApplicationBootstra
   constructor(
     private readonly outboxRepository: MessagingNotificationOutboxRepository,
     private readonly emailDeliveryService: MessagingEmailDeliveryService,
+    private readonly workerDistributedLockService: WorkerDistributedLockService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -56,16 +60,27 @@ export class MessagingNotificationWorkerService implements OnApplicationBootstra
     this.processing = true;
 
     try {
-      const jobs = await this.outboxRepository.claimDueMessageEmailJobs(
-        this.env.MESSAGE_NOTIFICATION_WORKER_BATCH_SIZE,
-        this.env.MESSAGE_NOTIFICATION_WORKER_PROCESSING_TIMEOUT_SECONDS,
+      const execution = await this.workerDistributedLockService.runWithLock(
+        messageNotificationWorkerLockName,
+        async () => {
+          const jobs = await this.outboxRepository.claimDueMessageEmailJobs(
+            this.env.MESSAGE_NOTIFICATION_WORKER_BATCH_SIZE,
+            this.env.MESSAGE_NOTIFICATION_WORKER_PROCESSING_TIMEOUT_SECONDS,
+          );
+
+          for (const job of jobs) {
+            await this.processJob(job);
+          }
+
+          return jobs.length;
+        },
       );
 
-      for (const job of jobs) {
-        await this.processJob(job);
+      if (!execution.acquired) {
+        return 0;
       }
 
-      return jobs.length;
+      return execution.result ?? 0;
     } finally {
       this.processing = false;
     }

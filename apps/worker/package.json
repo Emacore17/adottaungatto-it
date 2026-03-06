@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:smoke:minio": "tsx src/smoke-minio.ts",
     "cleanup:retention": "tsx src/retention-cleanup-run-once.ts",
+    "promotions:lifecycle": "tsx src/promotions-lifecycle-run-once.ts",
     "search:cleanup": "tsx src/search-cleanup.ts",
     "search:reindex": "tsx src/search-reindex.ts",
     "search:verify": "tsx src/search-verify.ts"

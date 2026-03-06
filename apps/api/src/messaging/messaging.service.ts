@@ -98,7 +98,32 @@ export class MessagingService {
       null,
     );
     if (!threadDetail) {
-      throw new NotFoundException('Message thread not found.');
+      await this.messagingRepository.restoreThreadForUser(threadId, actorUserId);
+      const recoveredThreadDetail = await this.getThreadDetailByActorUserId(
+        actorUserId,
+        threadId,
+        defaultMessagePageLimit,
+        null,
+      );
+      if (!recoveredThreadDetail) {
+        throw new NotFoundException('Message thread not found.');
+      }
+
+      await this.messagingEventsService.publishThreadUpdated([actorUserId, listing.ownerUserId], {
+        threadId,
+        reason: 'message_created',
+      });
+      await this.messagingEventsService.publishTypingChanged([listing.ownerUserId], {
+        threadId,
+        userId: actorUserId,
+        isTyping: false,
+      });
+
+      return {
+        createdThread: existingThreadId === null,
+        message,
+        thread: recoveredThreadDetail.thread,
+      };
     }
 
     await this.messagingEventsService.publishThreadUpdated([actorUserId, listing.ownerUserId], {
@@ -179,12 +204,21 @@ export class MessagingService {
       messageHash: this.createMessageHash(normalizedBody),
     });
 
-    const updatedThread = await this.getThreadDetailByActorUserId(
+    let updatedThread = await this.getThreadDetailByActorUserId(
       actorUserId,
       threadId,
       defaultMessagePageLimit,
       null,
     );
+    if (!updatedThread) {
+      await this.messagingRepository.restoreThreadForUser(threadId, actorUserId);
+      updatedThread = await this.getThreadDetailByActorUserId(
+        actorUserId,
+        threadId,
+        defaultMessagePageLimit,
+        null,
+      );
+    }
     if (!updatedThread) {
       throw new NotFoundException('Message thread not found.');
     }
@@ -269,11 +303,7 @@ export class MessagingService {
 
     const participantUserIds = await this.messagingRepository.listThreadParticipantUserIds(threadId);
     const deletedAt = new Date().toISOString();
-    const deleted = await this.messagingRepository.deleteThreadForEveryone(
-      threadId,
-      actorUserId,
-      deletedAt,
-    );
+    const deleted = await this.messagingRepository.deleteThreadForEveryone(threadId, actorUserId);
     if (!deleted) {
       return null;
     }

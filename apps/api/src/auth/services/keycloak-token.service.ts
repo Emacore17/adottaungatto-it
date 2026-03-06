@@ -10,6 +10,7 @@ interface KeycloakAccessBlock {
 interface KeycloakTokenPayload extends JWTPayload {
   azp?: string;
   email?: string;
+  email_verified?: boolean;
   preferred_username?: string;
   realm_access?: KeycloakAccessBlock;
 }
@@ -17,6 +18,7 @@ interface KeycloakTokenPayload extends JWTPayload {
 export interface VerifiedKeycloakToken {
   subject: string;
   email: string;
+  emailVerified?: boolean;
   roles: UserRole[];
 }
 
@@ -63,6 +65,7 @@ export class KeycloakTokenService {
     return {
       subject: payload.sub,
       email,
+      emailVerified: payload.email_verified,
       roles,
     };
   }

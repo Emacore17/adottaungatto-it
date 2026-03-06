@@ -7,9 +7,8 @@ import {
   type SearchListingsMetadata,
   type SearchSort,
 } from '@adottaungatto/types';
-import { cookies } from 'next/headers';
 import { findMockListingBySlug, mockListings } from '../mocks/listings';
-import { webSessionCookieName } from './auth';
+import { getWebAccessTokenFromSessionCookie } from './auth';
 import { isMockModeEnabled, shouldFallbackToMock } from './mock-mode';
 
 const env = loadWebEnv();
@@ -928,8 +927,7 @@ const searchPublicListingsFromPublicEndpoint = async (
 };
 
 export const fetchMyListings = async (): Promise<MyListing[]> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(webSessionCookieName)?.value;
+  const token = await getWebAccessTokenFromSessionCookie();
   if (!token) {
     return [];
   }
@@ -958,8 +956,7 @@ export const fetchMyListingById = async (listingId: string): Promise<MyListing |
 };
 
 export const fetchMyListingMedia = async (listingId: string): Promise<MyListingMedia[]> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(webSessionCookieName)?.value;
+  const token = await getWebAccessTokenFromSessionCookie();
   if (!token) {
     return [];
   }

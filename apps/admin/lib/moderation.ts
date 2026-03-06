@@ -1,8 +1,7 @@
 import 'server-only';
 
 import { loadAdminEnv } from '@adottaungatto/config';
-import { cookies } from 'next/headers';
-import { adminSessionCookieName } from './auth';
+import { getAdminAccessTokenFromSessionCookie } from './auth';
 import {
   type ListingStatus,
   type ModerationQueueItem,
@@ -71,8 +70,7 @@ const parseModerationQueueItem = (value: unknown): ModerationQueueItem | null =>
 };
 
 export const fetchModerationQueue = async (limit: number): Promise<ModerationQueueResponse> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(adminSessionCookieName)?.value;
+  const token = await getAdminAccessTokenFromSessionCookie();
   if (!token) {
     throw new Error('Missing admin session token.');
   }

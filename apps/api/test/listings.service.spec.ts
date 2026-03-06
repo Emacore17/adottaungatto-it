@@ -413,21 +413,27 @@ describe('ListingsService', () => {
     expect(result.items[0]?.title).toBe('Fallback SQL');
   });
 
-  it('updates listing and auto-fills archivedAt when status is archived', async () => {
+  it('rejects owner status transitions on update', async () => {
+    await expect(
+      service.updateForUser(baseUser, '1', {
+        status: 'archived',
+      }),
+    ).rejects.toThrow('Field "status" cannot be updated by listing owner.');
+
+    expect(listingsRepositoryMock.updateMine).not.toHaveBeenCalled();
+  });
+
+  it('updates listing fields without changing status', async () => {
     const listing = await service.updateForUser(baseUser, '1', {
-      status: 'archived',
+      title: 'Titolo aggiornato',
+      description: 'Descrizione aggiornata',
     });
 
-    expect(listingsRepositoryMock.updateMine).toHaveBeenCalledWith(
-      '10',
-      '1',
-      expect.objectContaining({
-        status: 'archived',
-        archivedAt: expect.any(String),
-      }),
-    );
-    expect(searchIndexServiceMock.removeListingById).toHaveBeenCalledWith('1');
-    expect(listing?.status).toBe('archived');
+    expect(listingsRepositoryMock.updateMine).toHaveBeenCalledWith('10', '1', {
+      title: 'Titolo aggiornato',
+      description: 'Descrizione aggiornata',
+    });
+    expect(listing?.status).toBe('pending_review');
   });
 
   it('archives listing via soft delete', async () => {

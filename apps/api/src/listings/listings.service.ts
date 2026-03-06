@@ -261,44 +261,32 @@ export class ListingsService {
     listingId: string,
     input: UpdateListingInput,
   ): Promise<ListingRecord | null> {
+    if (
+      input.status !== undefined ||
+      input.publishedAt !== undefined ||
+      input.archivedAt !== undefined
+    ) {
+      throw new BadRequestException(
+        'Field "status" cannot be updated by listing owner. Use moderation or archive endpoint.',
+      );
+    }
+
     const ownerUserId = await this.listingsRepository.upsertOwnerUser(user);
     const previousListing = await this.listingsRepository.findMineById(ownerUserId, listingId);
     if (!previousListing) {
       return null;
     }
 
-    const normalizedInput = { ...input };
-
-    if (normalizedInput.status === 'published' && normalizedInput.publishedAt === undefined) {
-      normalizedInput.publishedAt = new Date().toISOString();
-    }
-
-    if (normalizedInput.status === 'archived' && normalizedInput.archivedAt === undefined) {
-      normalizedInput.archivedAt = new Date().toISOString();
-    }
-
     const updatedListing = await this.listingsRepository.updateMine(
       ownerUserId,
       listingId,
-      normalizedInput,
+      input,
     );
     if (!updatedListing) {
       return null;
     }
 
     await this.syncListingSearchIndex(updatedListing);
-    if (updatedListing.status === 'published' && previousListing.status !== 'published') {
-      await this.trackAnalyticsEvent({
-        eventType: 'listing_published',
-        actor: user,
-        listingId: updatedListing.id,
-        source: 'api_listings_update',
-        metadata: {
-          fromStatus: previousListing.status,
-          toStatus: updatedListing.status,
-        },
-      });
-    }
 
     return updatedListing;
   }

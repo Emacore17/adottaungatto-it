@@ -1,6 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
-import type { AppUser, IdentityClaims } from './models/app-user.model';
+import type {
+  AppUser,
+  IdentityClaims,
+  UserProfile,
+  UserProfileUpdateInput,
+} from './models/app-user.model';
 import { UsersRepository } from './users.repository';
 
 @Injectable()
@@ -21,6 +26,7 @@ export class UsersService {
       const updatedUser: AppUser = {
         ...existing,
         email: claims.email,
+        emailVerified: claims.emailVerified ?? existing.emailVerified,
         roles: claims.roles,
         preferences: existing.preferences,
         updatedAt: now,
@@ -35,6 +41,7 @@ export class UsersService {
       provider: claims.provider,
       providerSubject: claims.providerSubject,
       email: claims.email,
+      emailVerified: claims.emailVerified,
       roles: claims.roles,
       preferences: {
         messageEmailNotificationsEnabled: true,
@@ -52,11 +59,17 @@ export class UsersService {
       provider: user.provider,
       providerSubject: user.providerSubject,
       email: user.email,
+      emailVerified: user.emailVerified,
       roles: user.roles,
     });
 
-    this.usersByIdentityKey.set(`${user.provider}:${user.providerSubject}`, persistedUser);
-    return persistedUser;
+    const userWithClaims: AppUser = {
+      ...persistedUser,
+      emailVerified: user.emailVerified ?? persistedUser.emailVerified,
+    };
+
+    this.usersByIdentityKey.set(`${user.provider}:${user.providerSubject}`, userWithClaims);
+    return userWithClaims;
   }
 
   async updateCurrentUserMessagingPreferences(
@@ -70,12 +83,73 @@ export class UsersService {
         provider: user.provider,
         providerSubject: user.providerSubject,
         email: user.email,
+        emailVerified: user.emailVerified,
         roles: user.roles,
       },
       input,
     );
 
-    this.usersByIdentityKey.set(`${user.provider}:${user.providerSubject}`, persistedUser);
-    return persistedUser;
+    const userWithClaims: AppUser = {
+      ...persistedUser,
+      emailVerified: user.emailVerified ?? persistedUser.emailVerified,
+    };
+
+    this.usersByIdentityKey.set(`${user.provider}:${user.providerSubject}`, userWithClaims);
+    return userWithClaims;
+  }
+
+  async getCurrentUserProfile(user: RequestUser): Promise<UserProfile> {
+    return this.usersRepository.getProfileByIdentityClaims({
+      provider: user.provider,
+      providerSubject: user.providerSubject,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      roles: user.roles,
+    });
+  }
+
+  async updateCurrentUserProfile(
+    user: RequestUser,
+    input: UserProfileUpdateInput,
+  ): Promise<UserProfile> {
+    return this.usersRepository.updateProfile(
+      {
+        provider: user.provider,
+        providerSubject: user.providerSubject,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        roles: user.roles,
+      },
+      input,
+    );
+  }
+
+  async setCurrentUserAvatarStorageKey(
+    user: RequestUser,
+    avatarStorageKey: string | null,
+  ): Promise<UserProfile> {
+    return this.usersRepository.setAvatarStorageKey(
+      {
+        provider: user.provider,
+        providerSubject: user.providerSubject,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        roles: user.roles,
+      },
+      avatarStorageKey,
+    );
+  }
+
+  async markCurrentUserPhoneVerified(user: RequestUser, phoneE164: string): Promise<UserProfile> {
+    return this.usersRepository.markPhoneVerified(
+      {
+        provider: user.provider,
+        providerSubject: user.providerSubject,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        roles: user.roles,
+      },
+      phoneE164,
+    );
   }
 }

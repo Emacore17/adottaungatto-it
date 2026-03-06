@@ -1,7 +1,6 @@
 import { loadWebEnv } from '@adottaungatto/config';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { webSessionCookieName } from './auth';
+import { getWebAccessTokenFromSessionCookie } from './auth';
 
 const env = loadWebEnv();
 
@@ -20,8 +19,7 @@ const parseApiResponsePayload = (rawText: string): unknown => {
 };
 
 export const getSessionTokenFromCookie = async (): Promise<string | null> => {
-  const cookieStore = await cookies();
-  return cookieStore.get(webSessionCookieName)?.value ?? null;
+  return getWebAccessTokenFromSessionCookie();
 };
 
 export const unauthorizedResponse = () =>

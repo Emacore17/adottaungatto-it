@@ -11,6 +11,7 @@ import { UsersService } from '../../users/users.service';
 import {
   AUTHORIZATION_HEADER,
   AUTH_USER_EMAIL_HEADER,
+  AUTH_USER_EMAIL_VERIFIED_HEADER,
   AUTH_USER_ID_HEADER,
   AUTH_USER_ROLES_HEADER,
   AUTH_USER_SUBJECT_HEADER,
@@ -55,6 +56,7 @@ export class HeaderAuthGuard implements CanActivate {
         provider: 'keycloak',
         providerSubject: tokenUser.subject,
         email: tokenUser.email,
+        emailVerified: tokenUser.emailVerified,
         roles: tokenUser.roles,
       });
       return true;
@@ -71,12 +73,18 @@ export class HeaderAuthGuard implements CanActivate {
 
     const subject = this.readHeader(request, AUTH_USER_SUBJECT_HEADER) ?? userId;
     const email = this.readHeader(request, AUTH_USER_EMAIL_HEADER) ?? `${userId}@local.invalid`;
+    const emailVerified = this.parseOptionalBooleanHeader(
+      this.readHeader(request, AUTH_USER_EMAIL_VERIFIED_HEADER),
+      AUTH_USER_EMAIL_VERIFIED_HEADER,
+      true,
+    );
     const roles = this.parseRoles(this.readHeader(request, AUTH_USER_ROLES_HEADER));
 
     request.requestUser = this.usersService.upsertFromIdentity({
       provider: 'dev-header',
       providerSubject: subject,
       email,
+      emailVerified,
       roles,
     });
     return true;
@@ -111,6 +119,27 @@ export class HeaderAuthGuard implements CanActivate {
     }
 
     return Array.from(new Set(parsed)) as UserRole[];
+  }
+
+  private parseOptionalBooleanHeader(
+    rawValue: string | undefined,
+    headerName: string,
+    defaultValue: boolean,
+  ): boolean {
+    if (rawValue === undefined) {
+      return defaultValue;
+    }
+
+    const normalized = rawValue.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') {
+      return true;
+    }
+
+    if (normalized === 'false' || normalized === '0') {
+      return false;
+    }
+
+    throw new UnauthorizedException(`Invalid boolean header ${headerName}.`);
   }
 
   private extractBearerToken(authorizationHeader: string | undefined): string | undefined {

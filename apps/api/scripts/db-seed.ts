@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { loadApiEnv } from '@adottaungatto/config';
 import { CAT_BREEDS } from '@adottaungatto/types';
 import { config as loadDotEnv } from 'dotenv';
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 import { UserRole } from '../src/auth/roles.enum';
 import { parseListingAgeTextToMonths } from '../src/listings/listing-age';
 import { ListingsRepository } from '../src/listings/listings.repository';
@@ -294,16 +295,142 @@ const preferredComuniByProvinceSigla: Partial<
   AN: ['jesi', 'senigallia'],
 };
 
-const onePixelPngBase64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AApMBgX4+7a8AAAAASUVORK5CYII=';
+const minimumDemoMediaAssets = 8;
+const recommendedDemoMediaAssets = 16;
 
-const fallbackDemoMediaAsset: DemoMediaAsset = {
-  fileName: 'fallback-demo-media.png',
-  mimeType: 'image/png',
-  payload: Buffer.from(onePixelPngBase64, 'base64'),
-  fileSize: Buffer.from(onePixelPngBase64, 'base64').length,
-  hash: createHash('sha256').update(Buffer.from(onePixelPngBase64, 'base64')).digest('hex'),
+const embeddedFallbackPalettes = [
+  { primary: '#f59e0b', secondary: '#ef4444' },
+  { primary: '#ec4899', secondary: '#a855f7' },
+  { primary: '#8b5cf6', secondary: '#3b82f6' },
+  { primary: '#0ea5e9', secondary: '#14b8a6' },
+  { primary: '#22c55e', secondary: '#16a34a' },
+  { primary: '#84cc16', secondary: '#65a30d' },
+  { primary: '#eab308', secondary: '#f97316' },
+  { primary: '#f43f5e', secondary: '#be123c' },
+  { primary: '#64748b', secondary: '#0f172a' },
+  { primary: '#0ea5e9', secondary: '#1d4ed8' },
+  { primary: '#a855f7', secondary: '#4338ca' },
+  { primary: '#fb7185', secondary: '#f97316' },
+  { primary: '#f97316', secondary: '#ea580c' },
+  { primary: '#2dd4bf', secondary: '#0f766e' },
+  { primary: '#93c5fd', secondary: '#2563eb' },
+  { primary: '#bef264', secondary: '#4d7c0f' },
+] as const;
+
+const parseHexRgb = (value: string): [number, number, number] => {
+  const normalized = value.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    throw new Error(`Invalid hex color "${value}".`);
+  }
+
+  return [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  ];
 };
+
+const buildCrc32Table = (): Uint32Array => {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+
+  return table;
+};
+
+const crc32Table = buildCrc32Table();
+
+const crc32 = (payload: Buffer): number => {
+  let value = 0xffffffff;
+
+  for (const entry of payload) {
+    const tableIndex = (value ^ entry) & 0xff;
+    value = (value >>> 8) ^ crc32Table[tableIndex]!;
+  }
+
+  return (value ^ 0xffffffff) >>> 0;
+};
+
+const buildPngChunk = (type: string, data: Buffer): Buffer => {
+  const typeBuffer = Buffer.from(type, 'ascii');
+  const lengthBuffer = Buffer.alloc(4);
+  lengthBuffer.writeUInt32BE(data.length, 0);
+
+  const crcBuffer = Buffer.alloc(4);
+  crcBuffer.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0);
+
+  return Buffer.concat([lengthBuffer, typeBuffer, data, crcBuffer]);
+};
+
+const buildPngBytes = (
+  width: number,
+  height: number,
+  primaryHex: string,
+  secondaryHex: string,
+): Buffer => {
+  const [primaryRed, primaryGreen, primaryBlue] = parseHexRgb(primaryHex);
+  const [secondaryRed, secondaryGreen, secondaryBlue] = parseHexRgb(secondaryHex);
+  const stride = width * 3 + 1;
+  const raw = Buffer.alloc(stride * height);
+
+  for (let y = 0; y < height; y += 1) {
+    const rowOffset = y * stride;
+    raw[rowOffset] = 0;
+
+    for (let x = 0; x < width; x += 1) {
+      const blend = (x + y) / (width + height);
+      const red = Math.round(primaryRed * (1 - blend) + secondaryRed * blend);
+      const green = Math.round(primaryGreen * (1 - blend) + secondaryGreen * blend);
+      const blue = Math.round(primaryBlue * (1 - blend) + secondaryBlue * blend);
+      const pixelOffset = rowOffset + 1 + x * 3;
+      raw[pixelOffset] = red;
+      raw[pixelOffset + 1] = green;
+      raw[pixelOffset + 2] = blue;
+    }
+  }
+
+  const header = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(width, 0);
+  ihdrData.writeUInt32BE(height, 4);
+  ihdrData[8] = 8;
+  ihdrData[9] = 2;
+  ihdrData[10] = 0;
+  ihdrData[11] = 0;
+  ihdrData[12] = 0;
+
+  const idatData = deflateSync(raw);
+
+  return Buffer.concat([
+    header,
+    buildPngChunk('IHDR', ihdrData),
+    buildPngChunk('IDAT', idatData),
+    buildPngChunk('IEND', Buffer.alloc(0)),
+  ]);
+};
+
+const buildEmbeddedFallbackMediaAssets = (): DemoMediaAsset[] => {
+  return embeddedFallbackPalettes.map((palette, index) => {
+    const labelIndex = String(index + 1).padStart(2, '0');
+    const payload = buildPngBytes(640, 480, palette.primary, palette.secondary);
+
+    return {
+      fileName: `fallback-demo-media-${labelIndex}.png`,
+      mimeType: 'image/png',
+      payload,
+      fileSize: payload.length,
+      hash: createHash('sha256').update(payload).digest('hex'),
+    };
+  });
+};
+
+const fallbackDemoMediaAssets = buildEmbeddedFallbackMediaAssets();
 
 const demoMediaMimeTypeByExtension: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -341,13 +468,17 @@ const loadDemoMediaAssets = async (): Promise<{
   assets: DemoMediaAsset[];
   sourceDirectory: string | null;
   usingFallback: boolean;
+  localAssetCount: number;
+  fallbackAssetCount: number;
 }> => {
   const sourceDirectory = resolveDemoMediaDirectory();
   if (!sourceDirectory) {
     return {
-      assets: [fallbackDemoMediaAsset],
+      assets: fallbackDemoMediaAssets,
       sourceDirectory: null,
       usingFallback: true,
+      localAssetCount: 0,
+      fallbackAssetCount: fallbackDemoMediaAssets.length,
     };
   }
 
@@ -380,16 +511,26 @@ const loadDemoMediaAssets = async (): Promise<{
 
   if (assets.length === 0) {
     return {
-      assets: [fallbackDemoMediaAsset],
+      assets: fallbackDemoMediaAssets,
       sourceDirectory,
       usingFallback: true,
+      localAssetCount: 0,
+      fallbackAssetCount: fallbackDemoMediaAssets.length,
     };
   }
 
+  const missingRecommendedAssets = Math.max(0, recommendedDemoMediaAssets - assets.length);
+  const fallbackTopUpAssets =
+    missingRecommendedAssets > 0
+      ? fallbackDemoMediaAssets.slice(0, missingRecommendedAssets)
+      : [];
+
   return {
-    assets,
+    assets: [...assets, ...fallbackTopUpAssets],
     sourceDirectory,
-    usingFallback: false,
+    usingFallback: fallbackTopUpAssets.length > 0,
+    localAssetCount: assets.length,
+    fallbackAssetCount: fallbackTopUpAssets.length,
   };
 };
 
@@ -1245,12 +1386,43 @@ const buildDemoAccountPublishedListings = (
   return listings;
 };
 
+const greatestCommonDivisor = (left: number, right: number): number => {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b !== 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+
+  return a === 0 ? 1 : a;
+};
+
+const resolveCoprimeStep = (size: number, preferredStep: number): number => {
+  if (size <= 1) {
+    return 1;
+  }
+
+  for (let step = Math.min(preferredStep, size - 1); step >= 2; step -= 1) {
+    if (greatestCommonDivisor(step, size) === 1) {
+      return step;
+    }
+  }
+
+  return 1;
+};
+
 const seedDemoListingsAndMedia = async (
   repository: ListingsRepository,
   storageService: MinioStorageService,
   demoListings: DemoListingSeed[],
   demoMediaAssets: DemoMediaAsset[],
+  listingCursorOffset = 0,
 ): Promise<DemoSeedStats> => {
+  if (demoMediaAssets.length === 0) {
+    throw new Error('No demo media asset available for listing seed.');
+  }
+
   const statusCounts: Record<DemoListingStatus, number> = {
     published: 0,
     pending_review: 0,
@@ -1258,6 +1430,8 @@ const seedDemoListingsAndMedia = async (
     suspended: 0,
   };
   let mediaSeeded = 0;
+  const listingStep = resolveCoprimeStep(demoMediaAssets.length, 7);
+  const mediaStep = resolveCoprimeStep(demoMediaAssets.length, 5);
 
   const regions = new Set<string>();
   const provinces = new Set<string>();
@@ -1290,7 +1464,10 @@ const seedDemoListingsAndMedia = async (
     comuni.add(`${listing.comuneName} (${listing.provinceSigla})`);
 
     for (let mediaIndex = 0; mediaIndex < listing.mediaCount; mediaIndex += 1) {
-      const demoMediaAsset = demoMediaAssets[(listingIndex + mediaIndex) % demoMediaAssets.length];
+      const listingCursor = listingCursorOffset + listingIndex;
+      const mediaAssetIndex =
+        (listingCursor * listingStep + mediaIndex * mediaStep) % demoMediaAssets.length;
+      const demoMediaAsset = demoMediaAssets[mediaAssetIndex];
       if (!demoMediaAsset) {
         throw new Error('No demo media asset available for listing seed.');
       }
@@ -1552,6 +1729,11 @@ const run = async () => {
 
   const { snapshot, snapshotPath } = await loadGeographySnapshot();
   const demoMedia = await loadDemoMediaAssets();
+  if (demoMedia.assets.length < minimumDemoMediaAssets) {
+    throw new Error(
+      `[db:seed] Demo media assets insufficient (${demoMedia.assets.length}/${minimumDemoMediaAssets}). Add more images in "${demoMedia.sourceDirectory ?? 'embedded fallback'}".`,
+    );
+  }
 
   console.log(`[db:seed] Connected target: ${env.DATABASE_URL}`);
   console.log(`[db:seed] Snapshot path: ${snapshotPath}`);
@@ -1575,13 +1757,26 @@ const run = async () => {
     `[db:seed] Snapshot centroids coverage: regions=${regionCentroids}, provinces=${provinceCentroids}, comuni=${comuniCentroids}.`,
   );
   console.log(
-    `[db:seed] Demo media source: ${demoMedia.sourceDirectory ?? 'embedded fallback'} (assets=${demoMedia.assets.length}, fallback=${demoMedia.usingFallback ? 'yes' : 'no'}).`,
+    `[db:seed] Demo media source: ${demoMedia.sourceDirectory ?? 'embedded fallback'} (assets=${demoMedia.assets.length}, local=${demoMedia.localAssetCount}, fallback=${demoMedia.fallbackAssetCount}).`,
   );
+  if (demoMedia.localAssetCount > 0 && demoMedia.fallbackAssetCount > 0) {
+    console.log(
+      `[db:seed] Demo media pool topped up with embedded fallback assets (${demoMedia.fallbackAssetCount}) to improve visual variety.`,
+    );
+  }
+  if (demoMedia.assets.length < recommendedDemoMediaAssets) {
+    console.warn(
+      `[db:seed] Demo media assets are below recommended threshold (${demoMedia.assets.length}/${recommendedDemoMediaAssets}). Seed remains valid, but visual variety can be improved by adding more files.`,
+    );
+  }
 
   const client = new Client({
     connectionString: env.DATABASE_URL,
   });
-  const repository = new ListingsRepository();
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+  });
+  const repository = new ListingsRepository(pool);
   const storageService = new MinioStorageService();
 
   await client.connect();
@@ -1660,6 +1855,7 @@ const run = async () => {
       storageService,
       demoListings,
       demoMedia.assets,
+      0,
     );
     const demoAccountListings = buildDemoAccountPublishedListings(locations, demoAccountUsers);
     const demoAccountSeedStats =
@@ -1669,6 +1865,7 @@ const run = async () => {
             storageService,
             demoAccountListings,
             demoMedia.assets,
+            demoListings.length,
           )
         : {
             listingsSeeded: 0,
@@ -1722,7 +1919,7 @@ const run = async () => {
       '[db:seed] M2.11 demo listings/media + M5.1 plans/promotions completed successfully.',
     );
   } finally {
-    await repository.onModuleDestroy();
+    await pool.end();
     await client.end();
   }
 };

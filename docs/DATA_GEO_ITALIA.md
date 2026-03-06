@@ -1,32 +1,38 @@
 # DATA_GEO_ITALIA.md
 
-Documento operativo per il dataset geografico italiano usato dall'API e dai seed locali.
+Riferimento operativo per dataset geografico italiano usato da API, seed e ricerca.
+
+## Snapshot canonica nel repo
+
+File:
+
+- `apps/api/data/geography/istat-current.json`
+
+Metadata correnti della snapshot (da file):
+
+- dataset comuni: `CODICI al 21_02_2026`
+- reference date: `2026-02-21`
+- synced at: `2026-03-04T10:51:46.359Z`
+- boundary year centroidi: `2026`
 
 ## Fonte dati
 
 Anagrafica amministrativa:
 
 - ISTAT `Elenco-comuni-italiani.xlsx`
-- URL: `https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx`
-- snapshot attuale nel repo: riferimento `2026-01-31`
+- `https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx`
 
-Geometrie e centroidi:
+Confini/centroidi:
 
-- confini amministrativi generalizzati ISTAT
-- URL base: `https://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati`
-- boundary snapshot usato attualmente: fallback `2025` perche il boundary `2026` non era disponibile al momento dell'ultimo sync
+- `https://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati/2026/Limiti01012026_g.zip`
 
-## Snapshot versionata nel repo
+## Copertura snapshot corrente
 
-File:
-
-- `apps/api/data/geography/istat-current.json`
-
-Scopo:
-
-- rendere il setup locale ripetibile
-- evitare dipendenze runtime da download esterni durante `db:seed`
-- mantenere storicita minima di metadata e conteggi
+- regioni: `20`
+- province/unita sovracomunali: `110`
+- comuni: `7894`
+- centroidi presenti: `regions=20`, `provinces=110`, `comuni=7893`
+- comuni senza centroide: `1`
 
 ## Aggiornamento snapshot
 
@@ -36,20 +42,11 @@ Comando:
 pnpm geo:sync
 ```
 
-Lo script:
+Effetto:
 
-- scarica il file ISTAT ufficiale
-- normalizza regioni, province e comuni
-- arricchisce i comuni con centroidi
-- deriva centroidi di province e regioni
+- scarica e normalizza dataset ISTAT
+- arricchisce centroidi da boundary disponibile
 - rigenera `istat-current.json`
-
-## Copertura attesa
-
-- regioni: `20`
-- province/unita sovracomunali: `110`
-- comuni: `7895`
-- centroidi completi: `regions=20`, `provinces=110`, `comuni=7895`
 
 ## Seed database
 
@@ -59,15 +56,14 @@ Comando:
 pnpm db:seed
 ```
 
-Effetti:
+Effetti principali:
 
 - upsert idempotente di `regions`, `provinces`, `comuni`
-- valorizzazione di `centroid_lat` e `centroid_lng`
-- popolamento `geom` sui comuni quando il centroide e disponibile
-- riallineamento controllato di codici obsoleti
-- generazione demo listings multi-area
+- valorizzazione `centroid_lat`/`centroid_lng`
+- popolamento `geom` comuni quando il centroide esiste
+- generazione listing demo multi-area
 
-## Mapping essenziale
+## Mapping essenziale colonne -> DB
 
 - `Codice Regione` -> `regions.istat_code`
 - `Denominazione Regione` -> `regions.name`
@@ -81,23 +77,23 @@ Effetti:
 
 ## Verifica rapida post-seed
 
-SQL utile:
-
 ```sql
 SELECT
-  (SELECT COUNT(*) FROM regions WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS regions_with_centroids,
-  (SELECT COUNT(*) FROM provinces WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS provinces_with_centroids,
-  (SELECT COUNT(*) FROM comuni WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS comuni_with_centroids;
+  (SELECT COUNT(*) FROM regions) AS regions_total,
+  (SELECT COUNT(*) FROM provinces) AS provinces_total,
+  (SELECT COUNT(*) FROM comuni) AS comuni_total,
+  (SELECT COUNT(*) FROM comuni WHERE centroid_lat IS NOT NULL AND centroid_lng IS NOT NULL) AS comuni_with_centroid;
 ```
 
-Output atteso:
+Output atteso con snapshot corrente:
 
-- `regions_with_centroids = 20`
-- `provinces_with_centroids = 110`
-- `comuni_with_centroids = 7895`
+- `regions_total = 20`
+- `provinces_total = 110`
+- `comuni_total = 7894`
+- `comuni_with_centroid = 7893`
 
-## Note importanti
+## Note operative
 
-- il dataset geografico e un prerequisito della ricerca distance-aware
-- se il boundary ISTAT dell'anno corrente non esiste ancora, il sync usa il miglior fallback disponibile
-- ogni aggiornamento significativo di `istat-current.json` richiede attenzione su test di search e seed demo
+- questo dataset e prerequisito per search distance-aware
+- se cambiano conteggi ISTAT, aggiornare test e doc nello stesso change
+- non hardcodare numeri storici: usare sempre i valori presenti in `istat-current.json`

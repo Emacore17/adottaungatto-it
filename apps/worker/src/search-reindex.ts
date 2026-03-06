@@ -137,7 +137,7 @@ const toSearchDocument = (row: SearchIndexDocumentRow): SearchIndexDocumentRecor
 const listPublishedDocuments = async (
   pool: Pool,
   limit: number,
-  offset: number,
+  lastListingId: string | null,
 ): Promise<SearchIndexDocumentRecord[]> => {
   const result = await pool.query<SearchIndexDocumentRow>(
     `
@@ -176,11 +176,12 @@ const listPublishedDocuments = async (
       ${activePromotionJoinSql}
       WHERE l.status = 'published'
         AND l.deleted_at IS NULL
-      ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
+        AND ($2::bigint IS NULL OR l.id > $2::bigint)
+      ORDER BY l.id ASC
       LIMIT $1::integer
-      OFFSET $2::integer;
+      ;
     `,
-    [limit, offset],
+    [limit, lastListingId],
   );
 
   return result.rows.map((row) => toSearchDocument(row));
@@ -207,19 +208,19 @@ const run = async () => {
     console.log(`[search:reindex] activeIndex=${currentIndexName} nextIndex=${nextIndexName}`);
 
     const batchSize = 200;
-    let offset = 0;
+    let lastListingId: string | null = null;
     let indexed = 0;
 
     try {
       while (true) {
-        const documents = await listPublishedDocuments(pool, batchSize, offset);
+        const documents = await listPublishedDocuments(pool, batchSize, lastListingId);
         if (documents.length === 0) {
           break;
         }
 
         await adminClient.bulkIndexDocuments(nextIndexName, documents);
         indexed += documents.length;
-        offset += documents.length;
+        lastListingId = documents[documents.length - 1]?.id ?? lastListingId;
       }
 
       await adminClient.refreshIndex(nextIndexName);

@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { RequireVerifiedEmail } from '../auth/decorators/require-verified-email.decorator';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
 import { pickFirstHeaderValue, resolveClientIp } from '../security/request-client-ip';
 import { CatBreedsService } from './cat-breeds.service';
@@ -26,9 +27,7 @@ import { ListingsService } from './listings.service';
 import type { UploadListingMediaInput } from './models/listing-media.model';
 import {
   type ContactListingInput,
-  type ListingStatus,
   type UpdateListingInput,
-  listingStatusValues,
 } from './models/listing.model';
 
 type RequestWithClientInfo = {
@@ -36,7 +35,6 @@ type RequestWithClientInfo = {
   ip?: string;
 };
 
-const listingStatusSet = new Set<string>(listingStatusValues);
 const uniqueViolationCode = '23505';
 
 const asRecord = (value: unknown): Record<string, unknown> => {
@@ -169,21 +167,6 @@ const parseListingType = (value: unknown): string => {
   }
 
   return normalized;
-};
-
-const parseListingStatus = (value: unknown, fieldName: string): ListingStatus => {
-  if (typeof value !== 'string') {
-    throw new BadRequestException(`Field "${fieldName}" must be a string.`);
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (!listingStatusSet.has(normalized)) {
-    throw new BadRequestException(
-      `Field "${fieldName}" must be one of: ${listingStatusValues.join(', ')}.`,
-    );
-  }
-
-  return normalized as ListingStatus;
 };
 
 const parseCurrency = (value: unknown, required: boolean): string | undefined => {
@@ -375,6 +358,7 @@ export class ListingsController {
   }
 
   @Post()
+  @RequireVerifiedEmail()
   async create(@CurrentUser() user: RequestUser, @Body() body: unknown) {
     const validation = validateCreateListingDto(body);
     if ('issues' in validation) {
@@ -468,6 +452,7 @@ export class ListingsController {
   }
 
   @Patch(':id')
+  @RequireVerifiedEmail()
   async update(
     @Param('id') rawListingId: string,
     @CurrentUser() user: RequestUser,
@@ -485,6 +470,7 @@ export class ListingsController {
   }
 
   @Delete(':id')
+  @RequireVerifiedEmail()
   async archive(@Param('id') rawListingId: string, @CurrentUser() user: RequestUser) {
     const listingId = parsePositiveIntegerString(rawListingId, 'id');
     const listing = await this.listingsService.archiveForUser(user, listingId);
@@ -497,6 +483,7 @@ export class ListingsController {
   }
 
   @Post(':id/media')
+  @RequireVerifiedEmail()
   async uploadMedia(
     @Param('id') rawListingId: string,
     @CurrentUser() user: RequestUser,
@@ -536,6 +523,7 @@ export class ListingsController {
   }
 
   @Patch(':id/media/:mediaId/cover')
+  @RequireVerifiedEmail()
   async setCoverMedia(
     @Param('id') rawListingId: string,
     @Param('mediaId') rawMediaId: string,
@@ -552,6 +540,7 @@ export class ListingsController {
   }
 
   @Delete(':id/media/:mediaId')
+  @RequireVerifiedEmail()
   async deleteMedia(
     @Param('id') rawListingId: string,
     @Param('mediaId') rawMediaId: string,
@@ -568,6 +557,7 @@ export class ListingsController {
   }
 
   @Patch(':id/media/order')
+  @RequireVerifiedEmail()
   async reorderMedia(
     @Param('id') rawListingId: string,
     @CurrentUser() user: RequestUser,
@@ -586,6 +576,12 @@ export class ListingsController {
   private parseUpdatePayload(body: unknown): UpdateListingInput {
     const source = asRecord(body);
     const payload: UpdateListingInput = {};
+
+    if ('status' in source) {
+      throw new BadRequestException(
+        'Field "status" cannot be updated by listing owner. Use moderation or archive endpoint.',
+      );
+    }
 
     if ('title' in source) {
       payload.title = parseOptionalString(source, 'title', 160) ?? '';
@@ -654,10 +650,6 @@ export class ListingsController {
       }
 
       payload.breed = canonicalBreed ?? null;
-    }
-
-    if ('status' in source) {
-      payload.status = parseListingStatus(source.status, 'status');
     }
 
     const hasRegion = 'regionId' in source;

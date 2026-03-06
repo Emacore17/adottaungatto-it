@@ -26,7 +26,7 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "standardFlowEnabled": true,
       "redirectUris": ["http://localhost:3000/*"],
       "webOrigins": ["http://localhost:3000"]
@@ -37,7 +37,7 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "standardFlowEnabled": true,
       "redirectUris": ["http://localhost:3001/*"],
       "webOrigins": ["http://localhost:3001"]
@@ -48,7 +48,7 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "standardFlowEnabled": true,
       "redirectUris": ["*"],
       "webOrigins": ["*"]

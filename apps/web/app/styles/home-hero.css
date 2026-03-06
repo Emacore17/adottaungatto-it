@@ -1,0 +1,338 @@
+.home-hero {
+  isolation: isolate;
+}
+
+.home-hero::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: -16% calc(50% - 50vw - 4rem) -4%;
+  z-index: -2;
+  background: radial-gradient(
+      circle at 50% 16%,
+      color-mix(in srgb, var(--color-accent) 24%, transparent) 0%,
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 14% 38%,
+      color-mix(in srgb, var(--color-primary) 14%, transparent) 0%,
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 86% 66%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent) 0%,
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-surface-elevated) 24%, transparent) 0%,
+      transparent 78%
+    );
+  opacity: 0.98;
+}
+
+.home-hero::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 2% calc(50% - 50vw - 6rem) -12%;
+  background: radial-gradient(
+      ellipse at 50% 24%,
+      color-mix(in srgb, var(--color-surface-elevated) 44%, transparent) 0%,
+      color-mix(in srgb, white 18%, transparent) 26%,
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 24% 56%,
+      color-mix(in srgb, var(--color-accent) 14%, transparent) 0%,
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 76% 42%,
+      color-mix(in srgb, var(--color-primary) 14%, transparent) 0%,
+      transparent 24%
+    );
+  filter: blur(40px);
+  z-index: -1;
+  opacity: 0.9;
+}
+
+.home-hero-eyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-primary) 76%, var(--color-text) 24%);
+}
+
+.home-hero-title-accent {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 88%, white 12%) 0%,
+    color-mix(in srgb, var(--color-accent) 80%, var(--color-primary) 20%) 100%
+  );
+  background-clip: text;
+  color: transparent;
+  -webkit-background-clip: text;
+  text-shadow: 0 12px 32px rgb(140 91 111 / 0.12);
+}
+
+.home-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.85rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-hero-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.62rem;
+  color: var(--color-text-muted);
+  font-size: 0.97rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.home-hero-meta-item svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--color-primary) 76%, var(--color-accent) 24%);
+  filter: drop-shadow(0 8px 18px rgb(140 91 111 / 0.14));
+}
+
+.home-hero-decoration {
+  position: absolute;
+  color: color-mix(in srgb, var(--color-primary) 72%, var(--color-accent) 28%);
+  opacity: 0.26;
+}
+
+.home-hero-decoration-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 40px rgb(140 91 111 / 0.14));
+}
+
+.home-hero-decoration-cat-right {
+  top: 11%;
+  right: 4%;
+  width: 7.4rem;
+  height: 7.4rem;
+  transform: rotate(10deg);
+  opacity: 0.24;
+}
+
+.home-hero-decoration-cat-left {
+  bottom: 12%;
+  left: 5%;
+  width: 5.3rem;
+  height: 5.3rem;
+  transform: rotate(-10deg);
+  opacity: 0.19;
+}
+
+.home-hero-decoration-paw-left-top {
+  top: 16%;
+  left: 9%;
+  width: 2.9rem;
+  height: 2.9rem;
+}
+
+.home-hero-decoration-paw-left-mid {
+  top: 40%;
+  left: 1%;
+  width: 2.35rem;
+  height: 2.35rem;
+  opacity: 0.18;
+}
+
+.home-hero-decoration-paw-right-high {
+  top: 28%;
+  right: 18%;
+  width: 2.55rem;
+  height: 2.55rem;
+  opacity: 0.2;
+}
+
+.home-hero-decoration-paw-right-low {
+  right: 8%;
+  bottom: 18%;
+  width: 2.8rem;
+  height: 2.8rem;
+  opacity: 0.21;
+}
+
+.home-hero-decoration-paw-bottom-center {
+  bottom: 6%;
+  left: 52%;
+  width: 2.1rem;
+  height: 2.1rem;
+  opacity: 0.18;
+}
+
+@keyframes heroFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) scale(1.06);
+  }
+}
+
+@keyframes heroFloatReverse {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6px, 10px, 0) scale(0.97);
+  }
+}
+
+.home-hero-float-slow {
+  animation: heroFloat 9.6s ease-in-out infinite;
+}
+
+.home-hero-float-medium {
+  animation: heroFloat 7.4s ease-in-out infinite;
+}
+
+.home-hero-float-fast {
+  animation: heroFloat 5.9s ease-in-out infinite;
+}
+
+.home-hero-float-reverse {
+  animation: heroFloatReverse 8.7s ease-in-out infinite;
+}
+
+.home-hero .ricerca-container {
+  max-width: 1080px;
+}
+
+.home-hero .search-row {
+  margin-bottom: 0;
+}
+
+.home-hero .search-bar-wrapper {
+  background: color-mix(in srgb, var(--color-surface-overlay-strong) 86%, white 14%);
+  border-color: color-mix(in srgb, var(--color-border) 68%, white 32%);
+  box-shadow: 0 30px 84px rgb(68 42 51 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.34);
+  backdrop-filter: blur(26px) saturate(1.08);
+}
+
+.home-hero .search-bar-wrapper:hover {
+  border-color: color-mix(in srgb, var(--color-border-strong) 76%, white 24%);
+  box-shadow: 0 34px 96px rgb(68 42 51 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.38);
+}
+
+@media (max-width: 900px) {
+  .home-hero-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+  }
+
+  .home-hero-meta {
+    gap: 0.75rem 1.1rem;
+  }
+
+  .home-hero-meta-item {
+    font-size: 0.9rem;
+  }
+
+  .home-hero-decoration-cat-right {
+    top: 10%;
+    right: 1%;
+    width: 5.9rem;
+    height: 5.9rem;
+  }
+
+  .home-hero-decoration-cat-left {
+    left: 1%;
+    bottom: 12%;
+    width: 4.6rem;
+    height: 4.6rem;
+  }
+
+  .home-hero-decoration-paw-left-top {
+    left: 3%;
+  }
+
+  .home-hero-decoration-paw-left-mid {
+    left: -0.4rem;
+  }
+
+  .home-hero-decoration-paw-right-high {
+    right: 12%;
+  }
+
+  .home-hero-decoration-paw-right-low {
+    right: 4%;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-hero::before {
+    inset: -12% calc(50% - 50vw - 2rem) -8%;
+  }
+
+  .home-hero::after {
+    inset: 6% calc(50% - 50vw - 2rem) -16%;
+    filter: blur(24px);
+  }
+
+  .home-hero-eyebrow {
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+  }
+
+  .home-hero-meta {
+    max-width: 21rem;
+    gap: 0.55rem 0.9rem;
+  }
+
+  .home-hero-meta-item {
+    gap: 0.5rem;
+    font-size: 0.84rem;
+  }
+
+  .home-hero-decoration-cat-right {
+    top: 9%;
+    right: -0.5rem;
+    width: 4.9rem;
+    height: 4.9rem;
+  }
+
+  .home-hero-decoration-cat-left {
+    left: -0.4rem;
+    bottom: 11%;
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .home-hero-decoration-paw-left-top {
+    top: 17%;
+    left: 0.2rem;
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+
+  .home-hero-decoration-paw-right-low {
+    right: 0.2rem;
+    bottom: 18%;
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .home-hero-decoration-paw-left-mid,
+  .home-hero-decoration-paw-right-high,
+  .home-hero-decoration-paw-bottom-center {
+    display: none;
+  }
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { motionPresets } from '@adottaungatto/ui';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 interface PageTransitionProps {
@@ -9,12 +9,13 @@ interface PageTransitionProps {
 }
 
 export function PageTransition({ children }: PageTransitionProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <motion.div
       animate={motionPresets.page.animate}
-      className="will-change-transform"
-      initial={motionPresets.page.initial}
-      transition={motionPresets.page.transition}
+      initial={prefersReducedMotion ? false : motionPresets.page.initial}
+      transition={prefersReducedMotion ? { duration: 0 } : motionPresets.page.transition}
     >
       {children}
     </motion.div>

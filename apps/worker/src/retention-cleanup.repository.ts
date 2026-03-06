@@ -1,21 +1,17 @@
-import { loadWorkerEnv } from '@adottaungatto/config';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
+import { WORKER_DATABASE_POOL } from './database/database.constants';
 
 type DeletedRow = {
   id: string;
 };
 
 @Injectable()
-export class RetentionCleanupRepository implements OnModuleDestroy {
-  private readonly env = loadWorkerEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
-
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
+export class RetentionCleanupRepository {
+  constructor(
+    @Inject(WORKER_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   async purgeAnalyticsEvents(retentionDays: number, batchSize: number): Promise<number> {
     return this.deleteRowsWithCutoff(
@@ -110,6 +106,76 @@ export class RetentionCleanupRepository implements OnModuleDestroy {
           WHERE thread.deleted_at IS NOT NULL
             AND thread.deleted_at < NOW() - ($1::integer * INTERVAL '1 day')
           ORDER BY thread.deleted_at ASC, thread.id ASC
+          LIMIT $2::integer
+        )
+        DELETE FROM message_threads thread
+        USING doomed
+        WHERE thread.id = doomed.id
+        RETURNING thread.id::text AS "id";
+      `,
+      retentionDays,
+      batchSize,
+    );
+  }
+
+  async purgeListingContactRequests(retentionDays: number, batchSize: number): Promise<number> {
+    return this.deleteRowsWithCutoff(
+      `
+        WITH doomed AS (
+          SELECT request.id
+          FROM listing_contact_requests request
+          WHERE request.created_at < NOW() - ($1::integer * INTERVAL '1 day')
+          ORDER BY request.created_at ASC, request.id ASC
+          LIMIT $2::integer
+        )
+        DELETE FROM listing_contact_requests request
+        USING doomed
+        WHERE request.id = doomed.id
+        RETURNING request.id::text AS "id";
+      `,
+      retentionDays,
+      batchSize,
+    );
+  }
+
+  async purgePromotionEvents(retentionDays: number, batchSize: number): Promise<number> {
+    return this.deleteRowsWithCutoff(
+      `
+        WITH doomed AS (
+          SELECT event.id
+          FROM promotion_events event
+          WHERE event.created_at < NOW() - ($1::integer * INTERVAL '1 day')
+          ORDER BY event.created_at ASC, event.id ASC
+          LIMIT $2::integer
+        )
+        DELETE FROM promotion_events event
+        USING doomed
+        WHERE event.id = doomed.id
+        RETURNING event.id::text AS "id";
+      `,
+      retentionDays,
+      batchSize,
+    );
+  }
+
+  async purgeInactiveArchivedMessageThreads(
+    retentionDays: number,
+    batchSize: number,
+  ): Promise<number> {
+    return this.deleteRowsWithCutoff(
+      `
+        WITH doomed AS (
+          SELECT thread.id
+          FROM message_threads thread
+          WHERE thread.deleted_at IS NULL
+            AND thread.latest_message_at < NOW() - ($1::integer * INTERVAL '1 day')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM message_thread_participants participant
+              WHERE participant.thread_id = thread.id
+                AND participant.archived_at IS NULL
+            )
+          ORDER BY thread.latest_message_at ASC, thread.id ASC
           LIMIT $2::integer
         )
         DELETE FROM message_threads thread

@@ -72,6 +72,21 @@ describe('Listings create endpoint', () => {
     expect(response.status).toBe(401);
   });
 
+  it('denies create when email is not verified', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/listings')
+      .set({
+        ...userHeaders,
+        'x-auth-email-verified': 'false',
+      })
+      .send({
+        title: 'Annuncio test',
+      });
+
+    expect(response.status).toBe(403);
+    expect(createForUser).toHaveBeenCalledTimes(0);
+  });
+
   it('validates required create payload fields', async () => {
     const response = await request(app.getHttpServer()).post('/v1/listings').set(userHeaders).send({
       title: 'Annuncio test',

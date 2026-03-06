@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import {
   access,
   cp,
@@ -63,6 +63,13 @@ type VerifyBackupResult = {
   restoredBuckets: string[];
 };
 
+type RestoreLocalBackupResult = {
+  backupDir: string;
+  restoredDatabaseName: string;
+  restoredBuckets: string[];
+  searchReindexed: boolean;
+};
+
 type DockerCommandOptions = {
   stdoutFilePath?: string;
 };
@@ -75,15 +82,18 @@ const backupTables = [
   'provinces',
   'comuni',
   'app_users',
+  'user_security_events',
   'listings',
   'listing_media',
   'listing_contact_requests',
   'cat_breeds',
   'plans',
   'listing_promotions',
+  'promotion_events',
   'analytics_events',
   'admin_audit_logs',
   'message_threads',
+  'message_thread_participants',
   'message_messages',
   'notification_outbox',
 ] as const;
@@ -224,6 +234,39 @@ const runDockerCommand = async (
   });
 };
 
+const resolveWorkspaceRoot = (): string => {
+  const candidates = [process.cwd(), resolve(process.cwd(), '..'), resolve(process.cwd(), '..', '..')];
+  for (const candidate of candidates) {
+    if (existsSync(resolve(candidate, 'pnpm-workspace.yaml'))) {
+      return candidate;
+    }
+  }
+
+  return process.cwd();
+};
+
+const runLocalCommand = async (command: string): Promise<void> => {
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const child = spawn(command, {
+      cwd: resolveWorkspaceRoot(),
+      stdio: 'inherit',
+      shell: true,
+    });
+
+    child.on('error', rejectPromise);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+
+      rejectPromise(
+        new Error(`Command failed (${command}) with exit code ${code ?? 'unknown'}.`),
+      );
+    });
+  });
+};
+
 const listBucketObjects = async (
   s3: S3Client,
   bucketName: string,
@@ -276,6 +319,119 @@ const queryRowCounts = async (databaseUrl: string): Promise<Record<string, numbe
     }
 
     return rowCounts;
+  } finally {
+    await client.end();
+  }
+};
+
+const queryReferentialIntegrityViolations = async (
+  databaseUrl: string,
+): Promise<Record<string, number>> => {
+  const checks = [
+    {
+      key: 'listings_owner_user',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM listings listing
+        LEFT JOIN app_users owner ON owner.id = listing.owner_user_id
+        WHERE owner.id IS NULL;
+      `,
+    },
+    {
+      key: 'listing_media_listing',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM listing_media media
+        LEFT JOIN listings listing ON listing.id = media.listing_id
+        WHERE listing.id IS NULL;
+      `,
+    },
+    {
+      key: 'message_threads_listing',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM message_threads thread
+        LEFT JOIN listings listing ON listing.id = thread.listing_id
+        WHERE listing.id IS NULL;
+      `,
+    },
+    {
+      key: 'message_thread_participants_thread',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM message_thread_participants participant
+        LEFT JOIN message_threads thread ON thread.id = participant.thread_id
+        WHERE thread.id IS NULL;
+      `,
+    },
+    {
+      key: 'message_thread_participants_user',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM message_thread_participants participant
+        LEFT JOIN app_users app_user ON app_user.id = participant.user_id
+        WHERE app_user.id IS NULL;
+      `,
+    },
+    {
+      key: 'message_messages_thread',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM message_messages message
+        LEFT JOIN message_threads thread ON thread.id = message.thread_id
+        WHERE thread.id IS NULL;
+      `,
+    },
+    {
+      key: 'message_messages_sender_user',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM message_messages message
+        LEFT JOIN app_users app_user ON app_user.id = message.sender_user_id
+        WHERE app_user.id IS NULL;
+      `,
+    },
+    {
+      key: 'listing_promotions_listing',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM listing_promotions promotion
+        LEFT JOIN listings listing ON listing.id = promotion.listing_id
+        WHERE listing.id IS NULL;
+      `,
+    },
+    {
+      key: 'listing_promotions_plan',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM listing_promotions promotion
+        LEFT JOIN plans plan ON plan.id = promotion.plan_id
+        WHERE plan.id IS NULL;
+      `,
+    },
+    {
+      key: 'promotion_events_listing_promotion',
+      sql: `
+        SELECT COUNT(*)::text AS "count"
+        FROM promotion_events event
+        LEFT JOIN listing_promotions promotion ON promotion.id = event.listing_promotion_id
+        WHERE promotion.id IS NULL;
+      `,
+    },
+  ] as const;
+
+  const client = new Client({
+    connectionString: databaseUrl,
+  });
+
+  await client.connect();
+  try {
+    const violations: Record<string, number> = {};
+    for (const check of checks) {
+      const result = await client.query<{ count: string }>(check.sql);
+      violations[check.key] = Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+    }
+    return violations;
   } finally {
     await client.end();
   }
@@ -561,6 +717,38 @@ const deleteBucketRecursively = async (s3: S3Client, bucketName: string): Promis
   }
 };
 
+const purgeBucketObjects = async (s3: S3Client, bucketName: string): Promise<void> => {
+  while (true) {
+    const response = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+      }),
+    );
+
+    const objects = (response.Contents ?? [])
+      .map((item) => item.Key)
+      .filter((key): key is string => typeof key === 'string' && key.length > 0);
+
+    if (objects.length === 0) {
+      break;
+    }
+
+    await s3.send(
+      new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: {
+          Objects: objects.map((key) => ({ Key: key })),
+          Quiet: true,
+        },
+      }),
+    );
+
+    if (!response.IsTruncated) {
+      break;
+    }
+  }
+};
+
 const verifyMinioFiles = async (backupDir: string, manifest: BackupManifest): Promise<void> => {
   for (const object of manifest.minio.objects) {
     const absoluteFilePath = resolve(backupDir, object.file);
@@ -633,6 +821,137 @@ const restoreMinioBackupIntoTemporaryBuckets = async (
   }
 };
 
+const restoreMinioBackupIntoSourceBuckets = async (
+  s3: S3Client,
+  backupDir: string,
+  manifest: BackupManifest,
+): Promise<string[]> => {
+  const targetBuckets = Array.from(new Set(manifest.source.buckets));
+
+  for (const bucketName of targetBuckets) {
+    await ensureBucketExists(s3, bucketName);
+    await purgeBucketObjects(s3, bucketName);
+  }
+
+  for (const object of manifest.minio.objects) {
+    if (!targetBuckets.includes(object.bucket)) {
+      throw new Error(`Bucket "${object.bucket}" is not declared in backup manifest source buckets.`);
+    }
+
+    const filePath = resolve(backupDir, object.file);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: object.bucket,
+        Key: object.key,
+        Body: createReadStream(filePath),
+      }),
+    );
+  }
+
+  for (const bucketName of targetBuckets) {
+    const expectedObjects = manifest.minio.objects.filter((item) => item.bucket === bucketName);
+    const restoredObjects = await listBucketObjects(s3, bucketName);
+
+    if (restoredObjects.length !== expectedObjects.length) {
+      throw new Error(
+        `Unexpected restored object count for ${bucketName}. Expected ${expectedObjects.length}, received ${restoredObjects.length}.`,
+      );
+    }
+
+    const restoredByKey = new Map(restoredObjects.map((item) => [item.key, item.size]));
+    for (const expectedObject of expectedObjects) {
+      const restoredSize = restoredByKey.get(expectedObject.key);
+      if (restoredSize === undefined) {
+        throw new Error(
+          `Missing restored object for bucket "${bucketName}" key "${expectedObject.key}".`,
+        );
+      }
+
+      if (restoredSize !== expectedObject.size) {
+        throw new Error(
+          `Unexpected restored size for bucket "${bucketName}" key "${expectedObject.key}". Expected ${expectedObject.size}, received ${restoredSize}.`,
+        );
+      }
+    }
+  }
+
+  return targetBuckets;
+};
+
+const runSearchRestoreCommand = async (manifest: BackupManifest): Promise<void> => {
+  if (manifest.source.searchRestoreStrategy !== 'rebuild_from_database') {
+    throw new Error(
+      `Unsupported search restore strategy "${manifest.source.searchRestoreStrategy}".`,
+    );
+  }
+
+  await runLocalCommand(manifest.source.searchRestoreCommand);
+};
+
+export const restoreLocalBackup = async (
+  requestedDirectory?: string,
+): Promise<RestoreLocalBackupResult> => {
+  const env = loadEnv();
+  const {
+    databaseName: currentDatabaseName,
+    databaseUser: currentDatabaseUser,
+  } = getDatabaseConnectionInfo(env.DATABASE_URL);
+  const backupDir = requestedDirectory
+    ? resolve(process.cwd(), requestedDirectory)
+    : await resolveLatestBackupDirectory();
+  const manifest = await loadBackupManifest(backupDir);
+  const postgresDumpPath = resolve(backupDir, manifest.postgres.dumpFile);
+  const remoteDumpPath = `/tmp/${manifest.backupId}.dump`;
+
+  if (!(await fileExists(postgresDumpPath))) {
+    throw new Error(`Missing Postgres dump file: ${manifest.postgres.dumpFile}`);
+  }
+
+  await verifyMinioFiles(backupDir, manifest);
+
+  try {
+    await copyBackupDumpIntoContainer(postgresDumpPath, remoteDumpPath);
+    await restorePostgresDump(remoteDumpPath, currentDatabaseUser, currentDatabaseName);
+
+    const restoredCounts = await queryRowCounts(env.DATABASE_URL);
+    for (const [tableName, expectedCount] of Object.entries(manifest.postgres.rowCounts)) {
+      const restoredCount = restoredCounts[tableName] ?? 0;
+      if (restoredCount !== expectedCount) {
+        throw new Error(
+          `Unexpected row count for ${tableName} after restore. Expected ${expectedCount}, received ${restoredCount}.`,
+        );
+      }
+    }
+
+    const integrityViolations = await queryReferentialIntegrityViolations(env.DATABASE_URL);
+    const violatedChecks = Object.entries(integrityViolations).filter(([, count]) => count > 0);
+    if (violatedChecks.length > 0) {
+      throw new Error(
+        `Referential integrity violations detected after restore: ${violatedChecks
+          .map(([checkName, count]) => `${checkName}=${count.toString()}`)
+          .join(', ')}.`,
+      );
+    }
+
+    const s3 = createS3Client(env);
+    try {
+      const restoredBuckets = await restoreMinioBackupIntoSourceBuckets(s3, backupDir, manifest);
+      await runSearchRestoreCommand(manifest);
+
+      return {
+        backupDir,
+        restoredDatabaseName: currentDatabaseName,
+        restoredBuckets,
+        searchReindexed: true,
+      };
+    } finally {
+      s3.destroy();
+    }
+  } finally {
+    await cleanupContainerDump(remoteDumpPath);
+  }
+};
+
 export const verifyLocalBackup = async (requestedDirectory?: string): Promise<VerifyBackupResult> => {
   const env = loadEnv();
   const backupDir = requestedDirectory
@@ -668,6 +987,20 @@ export const verifyLocalBackup = async (requestedDirectory?: string): Promise<Ve
           `Unexpected row count for ${tableName} in restored database. Expected ${expectedCount}, received ${restoredCount}.`,
         );
       }
+    }
+
+    const restoredDatabaseUrl = cloneDatabaseUrlWithDatabaseName(
+      env.DATABASE_URL,
+      targetDatabaseName,
+    );
+    const integrityViolations = await queryReferentialIntegrityViolations(restoredDatabaseUrl);
+    const violatedChecks = Object.entries(integrityViolations).filter(([, count]) => count > 0);
+    if (violatedChecks.length > 0) {
+      throw new Error(
+        `Referential integrity violations detected after restore: ${violatedChecks
+          .map(([checkName, count]) => `${checkName}=${count.toString()}`)
+          .join(', ')}.`,
+      );
     }
 
     const s3 = createS3Client(env);

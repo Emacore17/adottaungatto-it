@@ -38,6 +38,36 @@ const parseOriginList = (value: string, fieldName: string, ctx: z.RefinementCtx)
   return Array.from(new Set(normalizedOrigins));
 };
 
+const parseProviderAliasList = (
+  value: string,
+  fieldName: string,
+  ctx: z.RefinementCtx,
+): string[] => {
+  const aliases = value
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+
+  if (aliases.length === 0) {
+    return [];
+  }
+
+  const normalizedAliases: string[] = [];
+  for (const alias of aliases) {
+    if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(alias)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${fieldName} contains an invalid provider alias: ${alias}`,
+      });
+      return z.NEVER;
+    }
+
+    normalizedAliases.push(alias);
+  }
+
+  return Array.from(new Set(normalizedAliases));
+};
+
 const webSchema = baseSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().min(1, 'NEXT_PUBLIC_APP_NAME is required'),
   NEXT_PUBLIC_WEB_URL: z.string().url('NEXT_PUBLIC_WEB_URL must be a valid URL'),
@@ -55,6 +85,13 @@ const webSchema = baseSchema.extend({
     .min(1, 'KEYCLOAK_CLIENT_ID_WEB is required')
     .optional()
     .default('adottaungatto-web'),
+  KEYCLOAK_SOCIAL_PROVIDERS: z
+    .string()
+    .optional()
+    .default('')
+    .transform((value, ctx) =>
+      parseProviderAliasList(value, 'KEYCLOAK_SOCIAL_PROVIDERS', ctx),
+    ),
   WEB_SESSION_COOKIE_NAME: z
     .string()
     .min(1, 'WEB_SESSION_COOKIE_NAME is required')
@@ -88,6 +125,13 @@ const adminSchema = baseSchema.extend({
 const apiSchema = baseSchema.extend({
   API_HOST: z.string().min(1, 'API_HOST is required'),
   API_PORT: z.coerce.number().int().min(1).max(65535),
+  API_BODY_LIMIT_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_048_576)
+    .max(104_857_600)
+    .optional()
+    .default(16_777_216),
   API_CORS_ALLOWED_ORIGINS: z
     .string()
     .optional()
@@ -142,6 +186,27 @@ const apiSchema = baseSchema.extend({
     .min(1, 'KEYCLOAK_CLIENT_ID_MOBILE is required')
     .optional()
     .default('adottaungatto-mobile'),
+  KEYCLOAK_ADMIN_REALM: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_REALM is required')
+    .optional()
+    .default('master'),
+  KEYCLOAK_ADMIN_CLIENT_ID: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_CLIENT_ID is required')
+    .optional()
+    .default('admin-cli'),
+  KEYCLOAK_ADMIN: z.string().min(1, 'KEYCLOAK_ADMIN is required').optional().default('admin'),
+  KEYCLOAK_ADMIN_PASSWORD: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_PASSWORD is required')
+    .optional()
+    .default('admin'),
+  WEB_APP_URL: z
+    .string()
+    .url('WEB_APP_URL must be a valid URL')
+    .optional()
+    .default('http://localhost:3000'),
   API_TRUST_PROXY_ENABLED: z
     .enum(['true', 'false'])
     .optional()
@@ -150,8 +215,66 @@ const apiSchema = baseSchema.extend({
   AUTH_DEV_HEADERS_ENABLED: z
     .enum(['true', 'false'])
     .optional()
-    .default('true')
+    .default('false')
     .transform((value) => value === 'true'),
+  PHONE_VERIFICATION_CODE_LENGTH: z.coerce
+    .number()
+    .int()
+    .min(4)
+    .max(8)
+    .optional()
+    .default(6),
+  PHONE_VERIFICATION_CODE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(3_600)
+    .optional()
+    .default(600),
+  PHONE_VERIFICATION_MAX_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .default(5),
+  PHONE_VERIFICATION_CODE_PEPPER: z
+    .string()
+    .min(8, 'PHONE_VERIFICATION_CODE_PEPPER must be at least 8 characters')
+    .optional()
+    .default('dev-phone-verification-pepper'),
+  PHONE_VERIFICATION_DELIVERY_PROVIDER: z
+    .enum(['console', 'webhook', 'twilio'])
+    .optional()
+    .default('console'),
+  PHONE_VERIFICATION_DELIVERY_WEBHOOK_URL: z
+    .string()
+    .url('PHONE_VERIFICATION_DELIVERY_WEBHOOK_URL must be a valid URL')
+    .optional()
+    .or(z.literal(''))
+    .default(''),
+  PHONE_VERIFICATION_DELIVERY_WEBHOOK_AUTH_TOKEN: z
+    .string()
+    .optional()
+    .default(''),
+  PHONE_VERIFICATION_TWILIO_ACCOUNT_SID: z.string().optional().default(''),
+  PHONE_VERIFICATION_TWILIO_AUTH_TOKEN: z.string().optional().default(''),
+  PHONE_VERIFICATION_TWILIO_FROM_NUMBER: z.string().optional().default(''),
+  PHONE_VERIFICATION_TWILIO_MESSAGING_SERVICE_SID: z.string().optional().default(''),
+  PHONE_VERIFICATION_SMS_TEMPLATE: z
+    .string()
+    .min(1, 'PHONE_VERIFICATION_SMS_TEMPLATE is required')
+    .optional()
+    .default(
+      'Il tuo codice di verifica AdottaUnGatto e {{code}}. Scade tra {{ttl_minutes}} minuti.',
+    ),
+  PHONE_VERIFICATION_DELIVERY_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(30_000)
+    .optional()
+    .default(5_000),
   RATE_LIMIT_KEY_PREFIX: z
     .string()
     .min(1, 'RATE_LIMIT_KEY_PREFIX is required')
@@ -185,6 +308,20 @@ const apiSchema = baseSchema.extend({
     .max(10_000)
     .optional()
     .default(80),
+  RATE_LIMIT_GEOGRAPHY_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(60),
+  RATE_LIMIT_GEOGRAPHY_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(100),
   RATE_LIMIT_ANALYTICS_WINDOW_SECONDS: z.coerce
     .number()
     .int()
@@ -213,6 +350,62 @@ const apiSchema = baseSchema.extend({
     .max(10_000)
     .optional()
     .default(30),
+  RATE_LIMIT_AUTH_PASSWORD_RECOVERY_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(300),
+  RATE_LIMIT_AUTH_PASSWORD_RECOVERY_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(8),
+  RATE_LIMIT_AUTH_EMAIL_VERIFICATION_RESEND_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(300),
+  RATE_LIMIT_AUTH_EMAIL_VERIFICATION_RESEND_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(12),
+  RATE_LIMIT_AUTH_PHONE_VERIFICATION_REQUEST_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(300),
+  RATE_LIMIT_AUTH_PHONE_VERIFICATION_REQUEST_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(6),
+  RATE_LIMIT_AUTH_PHONE_VERIFICATION_CONFIRM_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional()
+    .default(300),
+  RATE_LIMIT_AUTH_PHONE_VERIFICATION_CONFIRM_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(12),
   SEARCH_FALLBACK_MAX_STEPS: z.coerce.number().int().min(1).max(5).optional().default(5),
   MESSAGE_THREAD_CREATE_WINDOW_SECONDS: z.coerce
     .number()
@@ -371,6 +564,32 @@ const workerSchema = baseSchema.extend({
     .max(20)
     .optional()
     .default(1),
+  PROMOTIONS_LIFECYCLE_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  PROMOTIONS_LIFECYCLE_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .optional()
+    .default(60_000),
+  PROMOTIONS_LIFECYCLE_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .default(500),
+  PROMOTIONS_LIFECYCLE_MAX_BATCHES_PER_CYCLE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .default(10),
   RETENTION_CLEANUP_ENABLED: z
     .enum(['true', 'false'])
     .optional()
@@ -425,6 +644,27 @@ const workerSchema = baseSchema.extend({
     .max(3_650)
     .optional()
     .default(30),
+  RETENTION_LISTING_CONTACT_REQUESTS_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(180),
+  RETENTION_PROMOTION_EVENTS_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(365),
+  RETENTION_MESSAGE_THREADS_INACTIVE_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3_650)
+    .optional()
+    .default(120),
   WEB_APP_URL: z
     .string()
     .url('WEB_APP_URL must be a valid URL')

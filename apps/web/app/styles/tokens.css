@@ -1,0 +1,131 @@
+:root {
+  color-scheme: light;
+  --color-bg-canvas: #fbf7f4;
+  --color-bg-spot-1: rgb(160 114 129 / 0.16);
+  --color-bg-spot-2: rgb(224 198 153 / 0.18);
+  --color-bg-spot-3: rgb(181 154 139 / 0.12);
+  --color-surface: rgb(255 250 247 / 0.82);
+  --color-surface-muted: #f5ece7;
+  --color-surface-muted-strong: #ecdfd7;
+  --color-surface-overlay: rgb(255 249 245 / 0.76);
+  --color-surface-overlay-strong: rgb(255 251 248 / 0.92);
+  --color-surface-elevated: rgb(255 251 249 / 0.98);
+  --color-header-overlay: rgb(251 247 244 / 0.78);
+  --color-border: #ddd0c8;
+  --color-border-strong: #ccb9b0;
+  --color-text: #292325;
+  --color-text-muted: #71676a;
+  --color-primary: #8c5b6f;
+  --color-primary-hover: #744859;
+  --color-primary-foreground: #fff8fa;
+  --color-accent: #dcc092;
+  --color-accent-muted: #f4e5c8;
+  --color-ring: #bc8d9e;
+  --color-field-hover: #f2e7e1;
+  --color-field-active: #ebddd6;
+  --color-chip: #f4e8e3;
+  --color-chip-border: #e2cfc7;
+  --color-selection: rgb(140 91 111 / 0.16);
+  --color-scrim: rgb(39 28 31 / 0.44);
+  --color-media-overlay-start: rgb(140 91 111 / 0.16);
+  --color-media-overlay-end: rgb(220 192 146 / 0.08);
+  --color-image-fallback-start: #e7d1cc;
+  --color-image-fallback-mid: #f8efea;
+  --color-image-fallback-end: #decabf;
+  --shell-header-height: 4.75rem;
+  --shell-main-padding: 1.5rem;
+
+  --color-success-bg: #eaf7ef;
+  --color-success-border: #b7dcc4;
+  --color-success-fg: #1c5c38;
+  --color-success-solid: #1b7046;
+  --color-success-solid-hover: #155a38;
+
+  --color-warning-bg: #fff5e4;
+  --color-warning-border: #efcf95;
+  --color-warning-fg: #8a5a13;
+
+  --color-danger-bg: #fff0f2;
+  --color-danger-border: #efc0ca;
+  --color-danger-fg: #9b2d46;
+  --color-danger-solid: #be3453;
+  --color-danger-solid-hover: #9f2946;
+
+  --color-info-bg: #edf6f4;
+  --color-info-border: #bdd9d2;
+  --color-info-fg: #2d5f55;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.5rem;
+
+  --shadow-sm: 0 20px 56px rgb(82 52 61 / 0.12);
+  --shadow-lg: 0 36px 92px rgb(66 40 49 / 0.18);
+}
+
+.dark {
+  color-scheme: dark;
+  --color-bg-canvas: #171215;
+  --color-bg-spot-1: rgb(214 166 181 / 0.22);
+  --color-bg-spot-2: rgb(214 183 131 / 0.16);
+  --color-bg-spot-3: rgb(149 118 131 / 0.14);
+  --color-surface: rgb(35 27 31 / 0.84);
+  --color-surface-muted: #261d21;
+  --color-surface-muted-strong: #34292f;
+  --color-surface-overlay: rgb(28 21 24 / 0.74);
+  --color-surface-overlay-strong: rgb(39 29 34 / 0.9);
+  --color-surface-elevated: rgb(45 35 40 / 0.96);
+  --color-header-overlay: rgb(23 18 20 / 0.82);
+  --color-border: #57464d;
+  --color-border-strong: #735f68;
+  --color-text: #f4e9ec;
+  --color-text-muted: #ccb9c0;
+  --color-primary: #d7a6b6;
+  --color-primary-hover: #e4bcc8;
+  --color-primary-foreground: #291a20;
+  --color-accent: #d7b27c;
+  --color-accent-muted: #3b3023;
+  --color-ring: #efc6d1;
+  --color-field-hover: #3a2d34;
+  --color-field-active: #4a3941;
+  --color-chip: #31252b;
+  --color-chip-border: #5d4750;
+  --color-selection: rgb(215 166 182 / 0.28);
+  --color-scrim: rgb(7 5 6 / 0.58);
+  --color-media-overlay-start: rgb(215 166 182 / 0.2);
+  --color-media-overlay-end: rgb(215 178 124 / 0.08);
+  --color-image-fallback-start: #6d5661;
+  --color-image-fallback-mid: #483840;
+  --color-image-fallback-end: #2d2227;
+
+  --color-success-bg: #13271c;
+  --color-success-border: #2a523a;
+  --color-success-fg: #9dcfb0;
+  --color-success-solid: #2e8a5d;
+  --color-success-solid-hover: #256d49;
+
+  --color-warning-bg: #352713;
+  --color-warning-border: #6d5224;
+  --color-warning-fg: #edcf9a;
+
+  --color-danger-bg: #381821;
+  --color-danger-border: #6f3447;
+  --color-danger-fg: #f0bac7;
+  --color-danger-solid: #ca5474;
+  --color-danger-solid-hover: #b44766;
+
+  --color-info-bg: #162724;
+  --color-info-border: #2f584f;
+  --color-info-fg: #add7cd;
+
+  --shadow-sm: 0 20px 56px rgb(0 0 0 / 0.36);
+  --shadow-lg: 0 36px 92px rgb(0 0 0 / 0.48);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --shell-header-height: 5.1rem;
+    --shell-main-padding: 2.25rem;
+  }
+}

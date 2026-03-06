@@ -143,7 +143,6 @@ const parseArray = <TItem>(payload: JsonRecord, key: string): TItem[] => {
 };
 
 export const fetchLocationSuggestions = async (
-  apiBaseUrl: string,
   query: string,
   limit = 8,
 ): Promise<GeographySuggestion[]> => {
@@ -157,12 +156,12 @@ export const fetchLocationSuggestions = async (
   const upstreamLimit = Math.min(Math.max(limit * 5, 20), 50);
   const encodedQuery = encodeURIComponent(trimmedQuery);
   const response = await fetch(
-    `${apiBaseUrl}/v1/geography/search?q=${encodedQuery}&limit=${upstreamLimit.toString()}`,
+    `/api/geography/search?q=${encodedQuery}&limit=${upstreamLimit.toString()}`,
     {
       cache: 'no-store',
     },
   );
-  ensureOk(response, '/v1/geography/search');
+  ensureOk(response, '/api/geography/search');
   const payload = (await response.json()) as JsonRecord;
   const suggestions = parseArray<GeographySuggestion>(payload, 'items');
   return filterAndRankSuggestions(suggestions, normalizedQuery, limit);

@@ -29,10 +29,19 @@ describe('MessagingNotificationWorkerService', () => {
     verifyConnection: vi.fn(),
     sendMessageNotification: vi.fn(),
   };
+  const workerDistributedLockServiceMock = {
+    runWithLock: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.MESSAGE_EMAIL_NOTIFICATIONS_ENABLED = 'true';
+    workerDistributedLockServiceMock.runWithLock.mockImplementation(
+      async (_lockName: string, task: () => Promise<unknown>) => ({
+        acquired: true,
+        result: await task(),
+      }),
+    );
   });
 
   it('sends queued email notifications and marks jobs as sent', async () => {
@@ -49,6 +58,7 @@ describe('MessagingNotificationWorkerService', () => {
     const service = new MessagingNotificationWorkerService(
       repositoryMock as never,
       emailDeliveryServiceMock as never,
+      workerDistributedLockServiceMock as never,
     );
 
     const processed = await service.processDueJobs();
@@ -77,6 +87,7 @@ describe('MessagingNotificationWorkerService', () => {
     const service = new MessagingNotificationWorkerService(
       repositoryMock as never,
       emailDeliveryServiceMock as never,
+      workerDistributedLockServiceMock as never,
     );
 
     const processed = await service.processDueJobs();
@@ -99,6 +110,7 @@ describe('MessagingNotificationWorkerService', () => {
     const service = new MessagingNotificationWorkerService(
       repositoryMock as never,
       emailDeliveryServiceMock as never,
+      workerDistributedLockServiceMock as never,
     );
 
     const processed = await service.processDueJobs();
@@ -117,6 +129,24 @@ describe('MessagingNotificationWorkerService', () => {
     const service = new MessagingNotificationWorkerService(
       repositoryMock as never,
       emailDeliveryServiceMock as never,
+      workerDistributedLockServiceMock as never,
+    );
+
+    const processed = await service.processDueJobs();
+
+    expect(processed).toBe(0);
+    expect(repositoryMock.claimDueMessageEmailJobs).not.toHaveBeenCalled();
+  });
+
+  it('skips processing when distributed lock is not acquired', async () => {
+    workerDistributedLockServiceMock.runWithLock.mockResolvedValueOnce({
+      acquired: false,
+    });
+
+    const service = new MessagingNotificationWorkerService(
+      repositoryMock as never,
+      emailDeliveryServiceMock as never,
+      workerDistributedLockServiceMock as never,
     );
 
     const processed = await service.processDueJobs();

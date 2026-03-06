@@ -29,6 +29,7 @@ const bootstrap = async () => {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
+      bodyLimit: env.API_BODY_LIMIT_BYTES,
       trustProxy: env.API_TRUST_PROXY_ENABLED,
     }),
     {

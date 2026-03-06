@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev --webpack -p 3000",
+    "dev:turbopack": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests for @adottaungatto/web\"",
+    "test": "vitest run --config vitest.config.ts",
+    "test:unit": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "test:smoke:auth-pages": "node scripts/smoke-auth-pages.mjs"
   },
   "dependencies": {
     "@adottaungatto/config": "workspace:*",
@@ -35,6 +38,7 @@
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "3.0.8"
   }
 }

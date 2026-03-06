@@ -1,7 +1,9 @@
 import { loadApiEnv } from '@adottaungatto/config';
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { RequestUser } from '../auth/interfaces/request-user.interface';
+import { API_DATABASE_POOL } from '../database/database.constants';
+import { upsertAppUserByIdentity } from '../users/upsert-app-user-by-identity';
 import type {
   CreateMessageThreadInput,
   CreateThreadMessageInput,
@@ -11,10 +13,6 @@ import type {
   MessageThreadSummary,
   MessageThreadsPage,
 } from './models/message-thread.model';
-
-type OwnerRow = {
-  userId: string;
-};
 
 type ListingMessagingRow = {
   listingId: string;
@@ -67,37 +65,16 @@ type MessageRow = {
 };
 
 @Injectable()
-export class MessagingRepository implements OnModuleDestroy {
+export class MessagingRepository {
   private readonly env = loadApiEnv();
-  private readonly pool = new Pool({
-    connectionString: this.env.DATABASE_URL,
-  });
 
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-  }
+  constructor(
+    @Inject(API_DATABASE_POOL)
+    private readonly pool: Pool,
+  ) {}
 
   async upsertActorUser(user: RequestUser): Promise<string> {
-    const result = await this.pool.query<OwnerRow>(
-      `
-        INSERT INTO app_users (provider, provider_subject, email, roles)
-        VALUES ($1, $2, $3, $4::jsonb)
-        ON CONFLICT (provider, provider_subject)
-        DO UPDATE SET
-          email = EXCLUDED.email,
-          roles = EXCLUDED.roles,
-          updated_at = NOW()
-        RETURNING id::text AS "userId";
-      `,
-      [user.provider, user.providerSubject, user.email, JSON.stringify(user.roles)],
-    );
-
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error('Failed to upsert messaging actor.');
-    }
-
-    return row.userId;
+    return upsertAppUserByIdentity(this.pool, user);
   }
 
   async findPublishedListingForMessaging(listingId: string): Promise<ListingMessagingRow | null> {
@@ -199,7 +176,9 @@ export class MessagingRepository implements OnModuleDestroy {
             ($1::bigint, $2::bigint, 'owner'::message_participant_role),
             ($1::bigint, $3::bigint, 'requester'::message_participant_role)
           ON CONFLICT (thread_id, user_id)
-          DO NOTHING;
+          DO UPDATE SET
+            archived_at = NULL,
+            updated_at = NOW();
         `,
         [threadId, input.ownerUserId, input.requesterUserId],
       );
@@ -691,10 +670,26 @@ export class MessagingRepository implements OnModuleDestroy {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async restoreThreadForUser(threadId: string, userId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+        UPDATE message_thread_participants participant
+        SET archived_at = NULL
+        FROM message_threads thread
+        WHERE participant.thread_id = $1::bigint
+          AND participant.user_id = $2::bigint
+          AND thread.id = participant.thread_id
+          AND thread.deleted_at IS NULL;
+      `,
+      [threadId, userId],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async deleteThreadForEveryone(
     threadId: string,
     actorUserId: string,
-    deletedAt: string,
   ): Promise<boolean> {
     const client = await this.pool.connect();
 
@@ -703,37 +698,23 @@ export class MessagingRepository implements OnModuleDestroy {
 
       const deleteResult = await client.query(
         `
-          UPDATE message_threads thread
-          SET
-            deleted_at = $3::timestamptz,
-            deleted_by_user_id = $2::bigint
+          DELETE FROM message_threads thread
           WHERE thread.id = $1::bigint
-            AND thread.deleted_at IS NULL
             AND EXISTS (
               SELECT 1
               FROM message_thread_participants participant
               WHERE participant.thread_id = thread.id
                 AND participant.user_id = $2::bigint
-            );
+            )
+          RETURNING thread.id::text AS "threadId";
         `,
-        [threadId, actorUserId, deletedAt],
+        [threadId, actorUserId],
       );
 
       if ((deleteResult.rowCount ?? 0) === 0) {
         await client.query('ROLLBACK');
         return false;
       }
-
-      await client.query(
-        `
-          UPDATE message_thread_participants
-          SET
-            archived_at = COALESCE(archived_at, $2::timestamptz),
-            unread_count = 0
-          WHERE thread_id = $1::bigint;
-        `,
-        [threadId, deletedAt],
-      );
 
       await client.query('COMMIT');
       return true;

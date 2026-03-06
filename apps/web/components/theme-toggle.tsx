@@ -14,7 +14,12 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <Button aria-label="Caricamento tema" className="h-9 w-9 p-0" size="sm" variant="outline">
+      <Button
+        aria-label="Caricamento tema"
+        className="h-11 w-11 p-0 lg:h-9 lg:w-9"
+        size="sm"
+        variant="outline"
+      >
         <svg
           aria-hidden="true"
           fill="none"
@@ -41,7 +46,7 @@ export function ThemeToggle() {
     <Button
       aria-label={isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
       aria-pressed={isDark}
-      className="h-9 w-9 p-0"
+      className="h-11 w-11 p-0 lg:h-9 lg:w-9"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       size="sm"
       title={isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro'}

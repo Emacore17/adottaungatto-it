@@ -83,9 +83,10 @@ Tabelle principali:
 - non si puo aprire un thread sul proprio annuncio
 - il listing deve essere `published`
 - esiste un solo thread logico per `listing + owner + requester`
+- se un thread era archiviato per uno o entrambi i partecipanti, la riapertura da annuncio ripristina la visibilita (`archived_at = NULL`) e non deve produrre 404 post-send
 - i messaggi sono limitati a `2000` caratteri
 - sono attivi rate limit, slow mode, limite link e deduplica
-- il delete globale e soft delete del thread, non delete fisico dei messaggi
+- il delete globale (`DELETE /threads/:id/everyone`) elimina in modo definitivo thread, partecipanti e messaggi
 
 ## Realtime
 
@@ -124,6 +125,7 @@ Env rilevanti:
 - `RETENTION_CLEANUP_*`
 - `RETENTION_NOTIFICATION_OUTBOX_*`
 - `RETENTION_MESSAGE_THREADS_DELETED_DAYS`
+- `RETENTION_MESSAGE_THREADS_INACTIVE_DAYS`
 - `SMTP_*`
 
 ## Smoke locale utile
@@ -143,12 +145,12 @@ Verifiche:
 - avviare un thread da un annuncio
 - inviare un messaggio
 - controllare Mailpit su `http://localhost:8025`
-- eseguire `pnpm cleanup:retention` per forzare un ciclo locale di purge su outbox concluso e thread gia soft-deleted
+- eseguire `pnpm cleanup:retention` per forzare un ciclo locale di purge su outbox concluso e altri dati retention-managed
 
 ## Limiti noti
 
 - niente allegati ai messaggi
-- la retention attuale elimina solo thread gia soft-deleted e outbox concluso; non esiste ancora autocancellazione di thread attivi o solo archiviati
+- la retention gestisce outbox concluso, analytics, audit log, contact requests, promotion events, thread deleted e thread inattivi con tutti i partecipanti archiviati oltre soglia
 - niente moderazione dedicata del contenuto chat
 - niente report abuso, spam score o quarantena contenuti
 - nessuna DLQ applicativa oltre alle righe `failed` nell'outbox

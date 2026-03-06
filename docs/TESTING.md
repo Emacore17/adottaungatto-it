@@ -1,10 +1,12 @@
 # TESTING.md
 
-Guida compatta ai test reali presenti nel repo e alle verifiche locali consigliate.
+Guida compatta ai test realmente presenti nel repo.
 
-## Comandi automatici
+Ultima verifica documentata: 2026-03-06.
 
-### Workspace root
+## Comandi principali
+
+Da root workspace:
 
 ```bash
 pnpm lint
@@ -12,97 +14,37 @@ pnpm typecheck
 pnpm test
 pnpm test:e2e
 pnpm test:e2e:web
+pnpm test:smoke:auth
+pnpm test:smoke:web:auth-pages
 ```
 
-## Stato backend verificato
-
-- `pnpm --filter @adottaungatto/api typecheck`: passa
-- `pnpm --filter @adottaungatto/api test`: passa e copre solo `*.spec.ts`
-- `pnpm --filter @adottaungatto/api test:e2e`: passa con stack locale attivo
-- `pnpm --filter @adottaungatto/api backup:smoke`: passa e verifica dump/restore Postgres + export/restore MinIO su risorse temporanee
-- `pnpm --filter @adottaungatto/worker test`: passa
-- `pnpm search:reindex`: passa e fa swap atomico di `listings_read` e `listings_write` su un indice versionato
-- `pnpm search:cleanup`: passa e rimuove gli indici `listings_v*` inattivi oltre la finestra di rollback configurata
-- `pnpm search:verify`: passa e confronta conteggi e ID tra DB e `listings_read`
-- `pnpm cleanup:retention`: passa e rimuove localmente righe scadute da analytics, audit log, outbox concluso e thread chat gia soft-deleted
-- `pnpm test:smoke:listings`, `pnpm test:smoke:media-upload`, `pnpm test:smoke:worker-minio`: passano con stack locale attivo
-- `pnpm db:migrate`: va eseguito quando `compose` e healthy, altrimenti puo fallire e va rilanciato
-
-Per l'audit backend completo usare `docs/BACKEND_GUIDE.md`.
-
-### Smoke script utili
+Comandi operativi utili:
 
 ```bash
 pnpm test:smoke
 pnpm test:smoke:listings
 pnpm test:smoke:listings-media
-pnpm minio:bootstrap
 pnpm test:smoke:media-upload
-pnpm test:smoke:seed-listings
 pnpm test:smoke:worker-minio
-pnpm backup:create
-pnpm backup:verify
 pnpm backup:smoke
+pnpm backup:restore -- --yes
 pnpm search:reindex
 pnpm search:cleanup
 pnpm search:verify
 pnpm cleanup:retention
+pnpm promotions:lifecycle
 ```
 
-## Suite reali presenti oggi
+Note:
 
-### API
+- `backup:restore -- --yes` e distruttivo sul dataset locale corrente
+- `test:smoke:auth` richiede web (`localhost:3000`), api (`localhost:3002`) e Keycloak attivi
+- `test:smoke:web:auth-pages` richiede web attivo su `localhost:3000` (override con `AUTH_PAGES_BASE_URL`)
+- `test:smoke:auth` usa flow OIDC reale (no password grant legacy) e fallisce in preflight se `/health` API non e raggiungibile
+- le suite E2E API (`apps/api/test/**/*.e2e-spec.ts`) girano in modo sequenziale (`fileParallelism: false`, `maxWorkers: 1`) per evitare flakiness da stato condiviso (`process.env`, Redis, DB)
+- le spec `auth-phone-verification*.e2e-spec.ts` usano un `RATE_LIMIT_KEY_PREFIX` univoco per run per evitare collisioni Redis tra esecuzioni ravvicinate
 
-Test file principali in `apps/api/test`:
-
-- `health.e2e-spec.ts`
-- `auth-rbac.e2e-spec.ts`
-- `geography.e2e-spec.ts`
-- `users.e2e-spec.ts`
-- `listings-create.e2e-spec.ts`
-- `listings-public.e2e-spec.ts`
-- `listings-search.e2e-spec.ts`
-- `listings-media-upload.e2e-spec.ts`
-- `listings-contact.e2e-spec.ts`
-- `listings-breeds.e2e-spec.ts`
-- `moderation.e2e-spec.ts`
-- `messaging.e2e-spec.ts`
-- `analytics.e2e-spec.ts`
-- `promotions.e2e-spec.ts`
-- `public-rate-limit.e2e-spec.ts`
-- `api-runtime-safety.spec.ts`
-- `request-client-ip.spec.ts`
-- `listings.service.spec.ts`
-- `search-index.service.spec.ts`
-- `search-fallback.service.spec.ts`
-- `messaging.service.spec.ts`
-- `moderation.service.spec.ts`
-- `analytics.service.spec.ts`
-- `promotions.service.spec.ts`
-
-### Web
-
-Playwright attuale in `apps/web/tests/e2e`:
-
-- `scaffold-smoke.spec.ts`
-
-Copertura reale Playwright oggi:
-
-- home smoke
-- login smoke
-- catalogo smoke
-- toggle light/dark theme
-
-Nota:
-
-- la copertura E2E del web e ancora troppo leggera rispetto alla complessita attuale del prodotto
-- la copertura backend ora separa unit ed E2E, include uno smoke reale di backup/restore minimo, verifica locale del reindex search alias-safe, cleanup degli indici inattivi, controllo drift DB -> OpenSearch e un ciclo retention run-once; mancano ancora snapshot/restore search e prod-hardening avanzato
-- il rate limit pubblico ha ora test E2E dedicato e helper unit testato per la risoluzione IP con trusted proxy
-- CORS allowlist e safety check runtime hanno ora test unitari dedicati
-
-## Verifica locale consigliata
-
-1. avvio stack:
+## Prerequisiti locali consigliati
 
 ```bash
 pnpm infra:up
@@ -111,80 +53,146 @@ pnpm db:seed
 pnpm auth:seed
 pnpm minio:bootstrap
 pnpm dev
+pnpm dev:worker
 ```
 
-2. smoke backend:
+## Copertura attuale
+
+### API (`apps/api/test`)
+
+Presente copertura su:
+
+- health e runtime safety
+- auth RBAC/recovery/identity-linking
+- users e profile/avatar key
+- listings create/update/public/search/media/contact + integrazione reale iniziale
+- messaging
+- moderation
+- analytics
+- promotions
+- geography
+- rate limiting pubblico
+- rate limiting auth dedicato (password recovery + email verification resend + phone verification)
+- delivery provider OTP (`console`, `webhook`, `twilio`) con unit test dedicato
+
+Spec di riferimento:
+
+- `auth-rbac.e2e-spec.ts`
+- `auth-recovery.e2e-spec.ts`
+- `auth-phone-verification.e2e-spec.ts`
+- `auth-phone-verification-integration.e2e-spec.ts`
+- `auth-phone-verification-delivery.service.spec.ts`
+- `auth-identity-linking.e2e-spec.ts`
+- `listings-integration.e2e-spec.ts`
+- `messaging.e2e-spec.ts`
+- `moderation.e2e-spec.ts`
+- `public-rate-limit.e2e-spec.ts`
+
+Batch utile per regressioni auth telefono + rate-limit:
 
 ```bash
-pnpm test:smoke
-pnpm test:smoke:listings
-pnpm test:smoke:listings-media
-pnpm test:smoke:media-upload
-pnpm test:smoke:worker-minio
+pnpm --filter @adottaungatto/api exec vitest run --config vitest.e2e.config.ts test/auth-phone-verification.e2e-spec.ts test/auth-phone-verification-integration.e2e-spec.ts test/public-rate-limit.e2e-spec.ts
 ```
 
-3. API E2E:
+### Web unit (`apps/web/app/**/*.unit.spec.ts`)
 
-```bash
-pnpm test:e2e
-```
+Spec presenti:
 
-4. web smoke:
+- `app/api/auth/phone-verification/request/route.unit.spec.ts`
+- `app/api/auth/phone-verification/confirm/route.unit.spec.ts`
 
-```bash
-pnpm test:e2e:web
-```
+Copertura attuale:
 
-## Manual check rapido per feature core
+- mapping redirect/status route BFF OTP (`request`/`confirm`)
+- propagazione `retryAfterSeconds` da `Retry-After` header/body JSON
+- mapping errori UX (`delivery_unavailable`, `invalid_phone`, `missing_phone`, `missing_code`, `invalid_code`, `request_required`, `expired`, fallback `request_failed`/`confirm_failed`)
 
-### Web pubblico
+Comando:
+
+- `pnpm --filter @adottaungatto/web test`
+
+### Web E2E (`apps/web/tests/e2e`)
+
+Spec presenti:
+
+- `scaffold-smoke.spec.ts`
+- `auth-smoke.spec.ts` (condizionale con `E2E_WEB_AUTH_SMOKE=1`)
+
+Copertura attuale:
+
+- smoke home/catalogo/dettaglio annuncio
+- navbar mobile (open/close, focus trap, Esc, focus restore)
+- filtri mobile `/annunci` e mapping query
+- ricerca home mobile con controlli principali
+- ordine blocchi mobile su `/annunci/[listingId]` (gallery prima del titolo)
+- smoke auth: redirect anonimo, login demo, invalidazione sessione logout via `POST /api/auth/logout` in modalita SPA
+
+## Check manuale rapido
+
+Web:
 
 - `/`
 - `/annunci`
 - `/annunci/[listingId]`
-- `/cerca`
-
-Controllare:
-
-- ricerca con localita
-- dettaglio annuncio
-- fallback di ricerca se l'area e troppo stretta
-- CTA contatto
-
-### Workspace utente
-
 - `/login`
+- `/registrati`
+- `/password-dimenticata`
 - `/account`
-- `/account/annunci`
-- `/pubblica`
 - `/messaggi`
-- `/preferiti`
 
-Controllare:
+Admin:
 
-- login con `utente.demo`
+- `http://localhost:3001/login`
+- `http://localhost:3001/admin/moderazione`
+
+Verifiche essenziali:
+
+- login demo `utente.demo` e logout
 - creazione/modifica annuncio
-- upload media
-- inbox e thread
-- persistenza locale dei preferiti
+- invio messaggio da thread
+- approve/reject/suspend/restore in moderazione admin
+- `GET /api/auth/logout` deve rispondere `405`
 
-### Admin
+## Checklist auth/registrazione (manuale)
 
-- `/login` sull'app admin (`localhost:3001`)
-- `/admin`
-- `/admin/moderazione`
-- `/admin/moderazione/[listingId]`
+Precondizioni minime:
 
-Controllare:
+- `pnpm infra:up`
+- `pnpm db:migrate`
+- `pnpm db:seed`
+- `pnpm auth:seed`
+- `pnpm dev`
 
-- login con `moderatore.demo` o `admin.demo`
-- queue moderazione
-- approve/reject/suspend/restore
-- KPI dashboard
+Passi:
 
-## Gap di test da tenere presenti
+1. aprire `/registrati` e cliccare `Continua con registrazione`
+2. verificare redirect a Keycloak (flow signup)
+3. completare registrazione e tornare al web
+4. se email non verificata: aspettarsi redirect/landing su `/verifica-account`
+5. da `/verifica-account` usare resend e verificare esito neutro
+6. aprire `/password-dimenticata`, inviare identificatore e verificare esito neutro (`status=sent`)
+7. aprire `/login`, completare login demo e verificare accesso a `/account`
+8. eseguire logout via UI/API (`POST /api/auth/logout`) e verificare redirect successivo a `/login`
+9. aprire `/account/sicurezza`, richiedere OTP telefono e confermare codice (flow BFF `/api/auth/phone-verification/*`, in locale usare `devCode` mostrato in pagina)
+10. verificare rendering pagine auth pubbliche (`/login`, `/registrati`, `/password-dimenticata`, `/verifica-account`) con `pnpm dev` root
 
-- Playwright non copre ancora discovery completa, workspace, messaging e moderazione UI
-- le pagine mock-backed admin non hanno una strategia test forte
-- registrazione e recupero password non hanno test di flusso reale perche i flussi reali non esistono ancora
-- il backend non ha ancora smoke dedicati per scheduler retention continuo o failover Redis cross-instance
+Esiti attesi:
+
+- nessun errore 500 nel flow auth pubblico
+- callback con mismatch `state/nonce` deve tornare a `/login?error=...`
+- `GET /api/auth/logout` resta bloccato con `405`
+- endpoint mutativi auth BFF senza origin/referer trusted devono rispondere `403` (CSRF)
+- endpoint auth telefono devono rispettare lockout tentativi e rate-limit dedicato (`429` con `Retry-After`)
+- su lockout/rate-limit telefono, il redirect BFF deve includere anche `retryAfterSeconds` quando disponibile
+- con provider `webhook` o `twilio`, un errore delivery deve produrre `delivery_unavailable` lato BFF (`/account/sicurezza?phoneVerification=delivery_unavailable`)
+- con JS attivo, form OTP in `/account/sicurezza` deve mostrare validazione inline (telefono E.164, codice OTP numerico 4-8 cifre) senza invio richiesta invalida
+
+## Gap test aperti
+
+- Playwright non copre ancora in profondita workspace, messaging e moderazione UI
+- manca E2E web completo registrazione -> verifica email -> login con Mailpit stabile
+- le integration E2E API reali senza override provider vanno estese a messaging/moderation/search
+- `auth-phone-verification.e2e-spec.ts` resta controller-focused con override, ma il percorso reale e ora coperto da `auth-phone-verification-integration.e2e-spec.ts`
+- mancano test multi-process reali per contesa lock worker cross-instance
+
+Per priorita di chiusura gap usare `docs/DEVELOPMENT_ROADMAP.md`.

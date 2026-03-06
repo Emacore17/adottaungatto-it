@@ -1,16 +1,13 @@
 import { loadWebEnv } from '@adottaungatto/config';
-import { Button } from '@adottaungatto/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
 import { LinkButton } from './link-button';
+import { LogoutButton } from './logout-button';
 import { MobileNavMenu } from './mobile-nav-menu';
-import {
-  type ShellNavMatchMode,
-  ShellNavLink,
-} from './shell-nav-link';
-import { ShellRouteVisibility } from './shell-route-visibility';
 import { ScrollAwareHeader } from './scroll-aware-header';
+import { ShellNavLink, type ShellNavMatchMode } from './shell-nav-link';
+import { ShellRouteVisibility } from './shell-route-visibility';
 import { ThemeToggle } from './theme-toggle';
 
 interface NavigationItem {
@@ -93,36 +90,38 @@ export async function AppShell({ children }: AppShellProps) {
           </nav>
 
           <div className="flex items-center gap-2 lg:col-start-3 lg:justify-self-end">
-            <MobileNavMenu items={primaryNavigation} />
+            <MobileNavMenu
+              appName={env.NEXT_PUBLIC_APP_NAME}
+              isAuthenticated={Boolean(session)}
+              items={primaryNavigation}
+            />
 
-            <ThemeToggle />
-            {session ? (
-              <form action="/api/auth/logout" method="post">
-                <Button size="sm" type="submit" variant="secondary">
-                  Logout
-                </Button>
-              </form>
-            ) : (
-              <LinkButton className="h-9 gap-2 px-3" href="/login">
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.8"
-                  />
-                </svg>
-                Login
-              </LinkButton>
-            )}
+            <div className="hidden items-center gap-2 lg:flex">
+              <ThemeToggle />
+              {session ? (
+                <LogoutButton />
+              ) : (
+                <LinkButton className="h-9 gap-2 px-3" href="/login">
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                  Login
+                </LinkButton>
+              )}
+            </div>
           </div>
         </div>
       </ScrollAwareHeader>

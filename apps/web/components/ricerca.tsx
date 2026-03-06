@@ -1,16 +1,37 @@
 'use client';
 
+import type { LocationIntent, SearchSort } from '@adottaungatto/types';
 import {
-  CAT_BREEDS,
-  type LocationIntent,
-  NO_BREED_FILTER,
-  type SearchSort,
-} from '@adottaungatto/types';
-import { Badge, cn } from '@adottaungatto/ui';
+  Badge,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  cn,
+} from '@adottaungatto/ui';
 import { ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  AGE_FILTER_OPTIONS,
+  BREEDS,
+  type FilterOption,
+  LISTING_TYPES,
+  PRICE_FILTER_OPTIONS,
+  SEX_OPTIONS,
+  SORT_OPTIONS,
+  buildPriceRangeLabel,
+  optionLabel,
+} from '../features/search/filter-options';
+import {
+  areEquivalentSearchTexts,
+  buildListingsFilters,
+  buildListingsHref,
+  countActiveListingsFilters,
+  getListingsRangeValidationError,
+} from '../features/search/listings-query';
 import type { GeographySuggestion } from '../lib/geography';
 import { fetchLocationSuggestions } from '../lib/geography';
 
@@ -54,72 +75,6 @@ interface MobileSheetProps {
   title: string;
 }
 
-interface FilterOption {
-  label: string;
-  value: string;
-}
-
-const BREEDS = [
-  { value: '', label: 'Indifferente' },
-  { value: NO_BREED_FILTER, label: 'Non di razza' },
-  ...CAT_BREEDS.map((breed) => ({
-    value: breed.label,
-    label: breed.label,
-  })),
-] as const;
-
-const LISTING_TYPES = [
-  { value: '', label: 'Tutti i tipi' },
-  { value: 'adozione', label: 'Adozione' },
-  { value: 'stallo', label: 'Stallo' },
-  { value: 'segnalazione', label: 'Segnalazione' },
-] as const;
-
-const SEX_OPTIONS = [
-  { value: '', label: 'Qualsiasi' },
-  { value: 'maschio', label: 'Maschio' },
-  { value: 'femmina', label: 'Femmina' },
-] as const;
-
-const SORT_OPTIONS: ReadonlyArray<{ value: SearchSort; label: string }> = [
-  { value: 'relevance', label: 'Piu pertinenti' },
-  { value: 'newest', label: 'Piu recenti' },
-  { value: 'price_asc', label: 'Prezzo crescente' },
-  { value: 'price_desc', label: 'Prezzo decrescente' },
-];
-
-const PRICE_FILTER_OPTIONS = [
-  { value: '', label: 'Nessun limite' },
-  { value: '0', label: '0 EUR' },
-  { value: '25', label: '25 EUR' },
-  { value: '50', label: '50 EUR' },
-  { value: '100', label: '100 EUR' },
-  { value: '150', label: '150 EUR' },
-  { value: '200', label: '200 EUR' },
-  { value: '300', label: '300 EUR' },
-  { value: '500', label: '500 EUR' },
-  { value: '800', label: '800 EUR' },
-  { value: '1000', label: '1000 EUR' },
-] as const;
-
-const AGE_FILTER_OPTIONS = [
-  { value: '', label: 'Nessun limite' },
-  { value: '1', label: '1 mese' },
-  { value: '2', label: '2 mesi' },
-  { value: '3', label: '3 mesi' },
-  { value: '6', label: '6 mesi' },
-  { value: '9', label: '9 mesi' },
-  { value: '12', label: '1 anno' },
-  { value: '18', label: '18 mesi' },
-  { value: '24', label: '2 anni' },
-  { value: '36', label: '3 anni' },
-  { value: '60', label: '5 anni' },
-  { value: '84', label: '7 anni' },
-  { value: '120', label: '10 anni' },
-] as const;
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-
 const initialState: SearchState = {
   q: '',
   breed: '',
@@ -133,28 +88,6 @@ const initialState: SearchState = {
   priceMin: null,
   priceMax: null,
   sort: 'relevance',
-};
-
-const normalizeLooseText = (value: string) =>
-  value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-
-const optionLabel = (options: ReadonlyArray<{ value: string; label: string }>, value: string) =>
-  options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
-
-const buildPriceLabel = (priceMin: number | null, priceMax: number | null) => {
-  if (priceMin === null && priceMax === null) {
-    return 'Qualsiasi prezzo';
-  }
-
-  if (priceMin !== null && priceMax !== null) {
-    return `${priceMin} - ${priceMax} EUR`;
-  }
-
-  if (priceMin !== null) {
-    return `Da ${priceMin} EUR`;
-  }
-
-  return `Fino a ${priceMax} EUR`;
 };
 
 const parseAgeAmount = (value: string): number | null => {
@@ -325,82 +258,62 @@ function Popover({
 }
 
 function MobileSheet({ children, description, onClose, open, title }: MobileSheetProps) {
-  const [mounted, setMounted] = useState(false);
+  const descriptionId = useId();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose, open]);
-
-  if (!mounted || !open) {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      className="mobile-sheet-backdrop"
-      data-test-mobile-sheet="true"
-      onPointerDown={onClose}
-      role="presentation"
-    >
-      <section
-        aria-label={title}
-        className="mobile-sheet"
-        onPointerDown={(event) => event.stopPropagation()}
+  return (
+    <Dialog onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)} open={open}>
+      <DialogContent
+        aria-describedby={description ? descriptionId : undefined}
+        className={cn(
+          '[&>button]:hidden lg:hidden',
+          'left-0 right-0 top-auto bottom-0 h-[min(92dvh,52rem)] w-full max-w-none translate-x-0 translate-y-0',
+          'rounded-t-[28px] rounded-b-none border-x-0 border-b-0 bg-[var(--color-surface-overlay-strong)] p-0 shadow-[0_-18px_44px_rgb(14_10_12_/_0.2)]',
+          'data-[state=closed]:translate-y-8 data-[state=closed]:scale-100 data-[state=open]:translate-y-0',
+        )}
       >
-        <div className="mobile-sheet-handle" />
-        <div className="mobile-sheet-header">
-          <div className="mobile-sheet-heading">
-            <h2 className="mobile-sheet-title">{title}</h2>
-            {description ? <p className="mobile-sheet-description">{description}</p> : null}
-          </div>
-          <button
-            aria-label={`Chiudi ${title.toLowerCase()}`}
-            className="mobile-sheet-close"
-            onClick={onClose}
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              fill="none"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M8 8l8 8M16 8l-8 8"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.9"
-              />
-            </svg>
-          </button>
-        </div>
+        <section
+          aria-label={title}
+          className="flex h-full min-h-0 flex-col"
+          data-test-mobile-sheet="true"
+        >
+          <div className="mobile-sheet-handle" />
+          <header className="mobile-sheet-header">
+            <div className="mobile-sheet-heading">
+              <DialogTitle className="mobile-sheet-title">{title}</DialogTitle>
+              {description ? (
+                <DialogDescription className="mobile-sheet-description" id={descriptionId}>
+                  {description}
+                </DialogDescription>
+              ) : null}
+            </div>
+            <DialogClose asChild>
+              <button
+                aria-label={`Chiudi ${title.toLowerCase()}`}
+                className="mobile-sheet-close"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M8 8l8 8M16 8l-8 8"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.9"
+                  />
+                </svg>
+              </button>
+            </DialogClose>
+          </header>
 
-        <div className="mobile-sheet-body">{children}</div>
-      </section>
-    </div>,
-    document.body,
+          <div className="mobile-sheet-body">{children}</div>
+        </section>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -543,6 +456,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
 
   const breedRef = useRef<HTMLButtonElement>(null);
   const locationRef = useRef<HTMLLabelElement>(null);
+  const mobileLocationRef = useRef<HTMLButtonElement>(null);
   const listingTypeRef = useRef<HTMLButtonElement>(null);
   const sexRef = useRef<HTMLButtonElement>(null);
   const ageRef = useRef<HTMLButtonElement>(null);
@@ -589,19 +503,13 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       return;
     }
 
-    if (!apiBaseUrl) {
-      setLocationError('La ricerca per localita non e disponibile in questo momento.');
-      setLocationLoading(false);
-      return;
-    }
-
     let cancelled = false;
     const timeoutId = window.setTimeout(async () => {
       setLocationLoading(true);
       setLocationError(null);
 
       try {
-        const suggestions = await fetchLocationSuggestions(apiBaseUrl, normalizedQuery, 8);
+        const suggestions = await fetchLocationSuggestions(normalizedQuery, 8);
         if (!cancelled) {
           setLocationSuggestions(suggestions);
         }
@@ -632,7 +540,9 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       openPopover === 'breed'
         ? breedRef
         : openPopover === 'comune'
-          ? locationRef
+          ? isCompactSearchLayout
+            ? mobileLocationRef
+            : locationRef
           : openPopover === 'listingType'
             ? listingTypeRef
             : openPopover === 'sex'
@@ -669,23 +579,33 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [openPopover]);
+  }, [isCompactSearchLayout, openPopover]);
 
   const breedLabel = optionLabel(BREEDS, search.breed);
   const listingTypeLabel = optionLabel(LISTING_TYPES, search.listingType);
   const sexLabel = optionLabel(SEX_OPTIONS, search.sex);
   const sortLabel = optionLabel(SORT_OPTIONS, search.sort);
   const ageLabel = buildAgeLabel(search);
-  const prezzoLabel = buildPriceLabel(search.priceMin, search.priceMax);
+  const prezzoLabel = buildPriceRangeLabel(search.priceMin, search.priceMax);
+  const locationDisplayValue = locationQuery.trim() || activeLocationLabel;
+  const hasLocationValue = locationDisplayValue.length > 0;
 
   const activeFiltersCount =
-    (search.listingType ? 1 : 0) +
-    (search.sex ? 1 : 0) +
-    (search.breed ? 1 : 0) +
-    (search.ageMinValue || search.ageMaxValue ? 1 : 0) +
-    (search.locationIntent ? 1 : 0) +
-    (search.priceMin !== null || search.priceMax !== null ? 1 : 0) +
-    (search.sort !== 'relevance' ? 1 : 0);
+    countActiveListingsFilters(
+      buildListingsFilters({
+        q: search.q,
+        listingType: search.listingType,
+        sex: search.sex,
+        breed: search.breed,
+        ageMinMonths: toAgeMonths(search.ageMinValue, search.ageMinUnit),
+        ageMaxMonths: toAgeMonths(search.ageMaxValue, search.ageMaxUnit),
+        priceMin: search.priceMin,
+        priceMax: search.priceMax,
+        sort: search.sort,
+        locationIntent: search.locationIntent,
+        locationQuery: search.locationIntent ? locationQuery : '',
+      }),
+    ) + (search.sort !== 'relevance' ? 1 : 0);
 
   const setField = <K extends keyof SearchState>(key: K, value: SearchState[K]) => {
     setSearch((currentSearch) => ({
@@ -784,6 +704,23 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     }));
   };
 
+  const updateLocationQuery = (nextValue: string) => {
+    setLocationQuery(nextValue);
+    setSearch((currentSearch) => {
+      if (
+        currentSearch.locationIntent &&
+        !areEquivalentSearchTexts(nextValue, currentSearch.locationIntent.label ?? '')
+      ) {
+        return {
+          ...currentSearch,
+          locationIntent: null,
+        };
+      }
+
+      return currentSearch;
+    });
+  };
+
   const selectLocation = (suggestion: GeographySuggestion) => {
     setSearch((currentSearch) => ({
       ...currentSearch,
@@ -794,136 +731,71 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     setOpenPopover(null);
   };
 
-  const buildSearchQueryString = (
-    searchState: SearchState = search,
-    fallbackLocationLabel: string | null = null,
-  ) => {
-    const params = new URLSearchParams();
-    const ageMinMonths = toAgeMonths(searchState.ageMinValue, searchState.ageMinUnit);
-    const ageMaxMonths = toAgeMonths(searchState.ageMaxValue, searchState.ageMaxUnit);
-
-    if (searchState.q.trim()) {
-      params.set('q', searchState.q.trim());
-    }
-
-    if (searchState.breed) {
-      params.set('breed', searchState.breed);
-    }
-
-    if (searchState.listingType) {
-      params.set('listingType', searchState.listingType);
-    }
-
-    if (searchState.sex) {
-      params.set('sex', searchState.sex);
-    }
-
-    if (ageMinMonths !== null) {
-      params.set('ageMinMonths', String(ageMinMonths));
-    }
-
-    if (ageMaxMonths !== null) {
-      params.set('ageMaxMonths', String(ageMaxMonths));
-    }
-
-    if (searchState.priceMin !== null) {
-      params.set('priceMin', String(searchState.priceMin));
-    }
-
-    if (searchState.priceMax !== null) {
-      params.set('priceMax', String(searchState.priceMax));
-    }
-
-    if (searchState.sort) {
-      params.set('sort', searchState.sort);
-    }
-
-    if (searchState.locationIntent) {
-      params.set('locationScope', searchState.locationIntent.scope);
-
-      if (searchState.locationIntent.regionId) {
-        params.set('regionId', searchState.locationIntent.regionId);
-      }
-
-      if (searchState.locationIntent.provinceId) {
-        params.set('provinceId', searchState.locationIntent.provinceId);
-      }
-
-      if (searchState.locationIntent.comuneId) {
-        params.set('comuneId', searchState.locationIntent.comuneId);
-      }
-
-      if (searchState.locationIntent.label) {
-        params.set('locationLabel', searchState.locationIntent.label);
-      }
-
-      if (searchState.locationIntent.secondaryLabel) {
-        params.set('locationSecondaryLabel', searchState.locationIntent.secondaryLabel);
-      }
-    } else if (fallbackLocationLabel) {
-      params.set('locationLabel', fallbackLocationLabel);
-    }
-
-    return params.toString();
-  };
-
   const runSearch = async () => {
     setValidationError(null);
 
     let effectiveSearch = search;
     let fallbackLocationLabel: string | null = null;
     const normalizedLocationQuery = locationQuery.trim();
-    const ageMinMonths = toAgeMonths(search.ageMinValue, search.ageMinUnit);
-    const ageMaxMonths = toAgeMonths(search.ageMaxValue, search.ageMaxUnit);
 
     if (!effectiveSearch.locationIntent && normalizedLocationQuery.length >= 2) {
       fallbackLocationLabel = normalizedLocationQuery;
 
-      if (apiBaseUrl) {
-        try {
-          const resolvedSuggestions = await fetchLocationSuggestions(
-            apiBaseUrl,
-            normalizedLocationQuery,
-            1,
-          );
-          const bestMatch = resolvedSuggestions[0];
+      try {
+        const resolvedSuggestions = await fetchLocationSuggestions(normalizedLocationQuery, 1);
+        const bestMatch = resolvedSuggestions[0];
 
-          if (bestMatch) {
-            effectiveSearch = {
-              ...effectiveSearch,
-              locationIntent: bestMatch.locationIntent,
-            };
+        if (bestMatch) {
+          effectiveSearch = {
+            ...effectiveSearch,
+            locationIntent: bestMatch.locationIntent,
+          };
 
-            fallbackLocationLabel = null;
+          fallbackLocationLabel = null;
 
-            setSearch((currentSearch) => ({
-              ...currentSearch,
-              locationIntent: bestMatch.locationIntent,
-            }));
-            setLocationQuery(bestMatch.label);
-          }
-        } catch {
-          // Preserve the free-text location fallback when autocomplete is unavailable.
+          setSearch((currentSearch) => ({
+            ...currentSearch,
+            locationIntent: bestMatch.locationIntent,
+          }));
+          setLocationQuery(bestMatch.label);
         }
+      } catch {
+        // Preserve the free-text location fallback when autocomplete is unavailable.
       }
     }
 
-    if (
-      effectiveSearch.priceMin !== null &&
-      effectiveSearch.priceMax !== null &&
-      Number(effectiveSearch.priceMin) > Number(effectiveSearch.priceMax)
-    ) {
-      setValidationError('Il prezzo minimo non puo essere superiore al prezzo massimo.');
+    const ageMinMonths = toAgeMonths(effectiveSearch.ageMinValue, effectiveSearch.ageMinUnit);
+    const ageMaxMonths = toAgeMonths(effectiveSearch.ageMaxValue, effectiveSearch.ageMaxUnit);
+
+    const rangeValidationError = getListingsRangeValidationError({
+      ageMaxMonths,
+      ageMinMonths,
+      priceMax: effectiveSearch.priceMax,
+      priceMin: effectiveSearch.priceMin,
+    });
+    if (rangeValidationError) {
+      setValidationError(rangeValidationError);
       return;
     }
 
-    if (ageMinMonths !== null && ageMaxMonths !== null && ageMinMonths > ageMaxMonths) {
-      setValidationError("L'eta minima non puo essere superiore all'eta massima.");
-      return;
-    }
+    const listingsFilters = buildListingsFilters({
+      q: effectiveSearch.q,
+      listingType: effectiveSearch.listingType,
+      sex: effectiveSearch.sex,
+      breed: effectiveSearch.breed,
+      ageMinMonths,
+      ageMaxMonths,
+      priceMin: effectiveSearch.priceMin,
+      priceMax: effectiveSearch.priceMax,
+      sort: effectiveSearch.sort,
+      locationIntent: effectiveSearch.locationIntent,
+      locationQuery: effectiveSearch.locationIntent
+        ? normalizedLocationQuery
+        : (fallbackLocationLabel ?? ''),
+      locationLabelFallback: fallbackLocationLabel,
+    });
 
-    const queryString = buildSearchQueryString(effectiveSearch, fallbackLocationLabel);
-    router.push(queryString ? `/annunci?${queryString}` : '/annunci');
+    router.push(buildListingsHref(listingsFilters, { page: 1 }));
   };
 
   const onFieldButtonClick = (key: PopoverKey) => {
@@ -937,6 +809,79 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
 
     setOpenPopover('comune');
   };
+
+  const closeMobileSheet = (sheet: 'comune' | 'eta' | 'prezzo') => {
+    setOpenPopover(null);
+
+    window.requestAnimationFrame(() => {
+      if (sheet === 'comune') {
+        mobileLocationRef.current?.focus();
+        return;
+      }
+
+      if (sheet === 'eta') {
+        ageRef.current?.focus();
+        return;
+      }
+
+      priceRef.current?.focus();
+    });
+  };
+
+  const renderLocationSuggestions = (compact = false) => (
+    <div className={cn('location-popover', compact ? 'location-popover-mobile' : '')}>
+      {compact ? (
+        <label className="filter-field-group" htmlFor={`${locationInputId}-sheet`}>
+          <span className="location-label">Localita</span>
+          <input
+            className="location-input"
+            id={`${locationInputId}-sheet`}
+            onChange={(event) => updateLocationQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                setOpenPopover(null);
+                void runSearch();
+              }
+            }}
+            placeholder="Citta, provincia o regione"
+            type="text"
+            value={locationQuery}
+          />
+        </label>
+      ) : (
+        <p className="location-label">Suggerimenti localita</p>
+      )}
+      {locationLoading ? <p className="location-meta">Cerco suggerimenti...</p> : null}
+      {locationError ? <p className="location-meta location-meta-error">{locationError}</p> : null}
+
+      {!locationLoading && !locationError && locationQuery.trim().length >= 2 ? (
+        <div className="popover-list location-results">
+          {locationSuggestions.length > 0 ? (
+            locationSuggestions.map((suggestion) => (
+              <button
+                className="popover-list-item"
+                key={`${suggestion.type}-${suggestion.id}`}
+                onClick={() => selectLocation(suggestion)}
+                type="button"
+              >
+                <span className="location-result-title">{suggestion.label}</span>
+                {suggestion.secondaryLabel ? (
+                  <span className="location-result-subtitle">{suggestion.secondaryLabel}</span>
+                ) : null}
+              </button>
+            ))
+          ) : (
+            <p className="location-meta">Nessun suggerimento trovato.</p>
+          )}
+        </div>
+      ) : null}
+
+      {!locationLoading && !locationError && locationQuery.trim().length < 2 ? (
+        <p className="location-meta">Scrivi almeno 2 lettere per vedere i suggerimenti.</p>
+      ) : null}
+    </div>
+  );
 
   const renderPriceFilters = () => (
     <div className="price-popover">
@@ -1011,8 +956,6 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
           )}
         </div>
       </div>
-
-      <p className="location-meta">Seleziona un intervallo rapido senza digitare importi.</p>
 
       <div className="filter-reset-row">
         <button className="filter-reset-btn" onClick={resetPriceFilters} type="button">
@@ -1104,10 +1047,6 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
         </div>
       </div>
 
-      <p className="location-meta">
-        Seleziona una fascia di eta in modo rapido.
-      </p>
-
       <div className="filter-reset-row">
         <button className="filter-reset-btn" onClick={resetAgeFilters} type="button">
           Azzera
@@ -1125,7 +1064,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
               <Badge variant="outline">Ricerca avanzata</Badge>
             </div>
             <h1>Trova il prossimo gatto da accogliere.</h1>
-            <p>Filtra per localita, eta, fascia prezzo e tipologia di annuncio.</p>
+            <p>Filtra per localita, tipologia, prezzo ed eta.</p>
           </div>
         ) : null}
 
@@ -1151,90 +1090,138 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                 />
               </label>
 
-              <button
-                className={`search-field search-field-breed search-field-button ${openPopover === 'breed' ? 'active' : ''}`}
-                onClick={() => onFieldButtonClick('breed')}
-                ref={breedRef}
-                type="button"
-              >
-                <span className="search-field-label">Razza</span>
-                <span className="search-field-value">{breedLabel}</span>
-              </button>
+              {!isCompactSearchLayout ? (
+                <button
+                  className={`search-field search-field-breed search-field-button ${openPopover === 'breed' ? 'active' : ''}`}
+                  onClick={() => onFieldButtonClick('breed')}
+                  ref={breedRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Razza</span>
+                  <span className="search-field-value">{breedLabel}</span>
+                </button>
+              ) : null}
 
-              <label
-                className={`search-field search-field-location ${openPopover === 'comune' ? 'active' : ''}`}
-                htmlFor={locationInputId}
-                ref={locationRef}
-              >
-                <span className="search-field-label">Dove</span>
-                <input
-                  className="search-field-input"
-                  id={locationInputId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setLocationQuery(nextValue);
-                    setOpenPopover('comune');
+              {isCompactSearchLayout ? (
+                <button
+                  className={`search-field search-field-button search-field-location ${openPopover === 'comune' ? 'active' : ''}`}
+                  onClick={openLocationPopover}
+                  ref={mobileLocationRef}
+                  type="button"
+                >
+                  <span className="search-field-label">Dove</span>
+                  <span
+                    className={cn(
+                      'search-field-value',
+                      hasLocationValue ? '' : 'search-field-value-placeholder',
+                    )}
+                  >
+                    {hasLocationValue ? locationDisplayValue : 'Citta, provincia o regione'}
+                  </span>
+                </button>
+              ) : (
+                <label
+                  className={`search-field search-field-location ${openPopover === 'comune' ? 'active' : ''}`}
+                  htmlFor={locationInputId}
+                  ref={locationRef}
+                >
+                  <span className="search-field-label">Dove</span>
+                  <input
+                    className="search-field-input"
+                    id={locationInputId}
+                    onChange={(event) => {
+                      updateLocationQuery(event.target.value);
+                      setOpenPopover('comune');
+                    }}
+                    onFocus={openLocationPopover}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void runSearch();
+                      }
 
-                    if (
-                      search.locationIntent &&
-                      normalizeLooseText(nextValue) !==
-                        normalizeLooseText(search.locationIntent.label ?? '')
-                    ) {
-                      setSearch((currentSearch) => ({
-                        ...currentSearch,
-                        locationIntent: null,
-                      }));
-                    }
-                  }}
-                  onFocus={openLocationPopover}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      void runSearch();
-                    }
-
-                    if (event.key === 'Escape') {
-                      setOpenPopover(null);
-                    }
-                  }}
-                  placeholder="Citta, provincia o regione"
-                  type="text"
-                  value={locationQuery}
-                />
-              </label>
+                      if (event.key === 'Escape') {
+                        setOpenPopover(null);
+                      }
+                    }}
+                    placeholder="Citta, provincia o regione"
+                    type="text"
+                    value={locationQuery}
+                  />
+                </label>
+              )}
             </div>
 
-            <div className={`search-bar-advanced ${expanded ? 'expanded' : ''}`}>
+            <div
+              className={cn(
+                'search-bar-advanced',
+                expanded ? 'expanded' : '',
+                isCompactSearchLayout ? 'search-bar-advanced-mobile' : '',
+              )}
+            >
+              {isCompactSearchLayout ? (
+                <p className="search-advanced-mobile-title">Filtri avanzati</p>
+              ) : null}
+
               <div className="adv-grid">
-                <button
-                  className={`search-field search-field-button advanced-field advanced-field-listing-type ${openPopover === 'listingType' ? 'active' : ''}`}
-                  onClick={() => onFieldButtonClick('listingType')}
-                  ref={listingTypeRef}
-                  type="button"
-                >
-                  <span className="search-field-label">Cosa stai cercando?</span>
-                  <span className="search-field-value">{listingTypeLabel}</span>
-                </button>
+                {isCompactSearchLayout ? (
+                  <div className="search-field advanced-field advanced-field-listing-type advanced-select-field">
+                    <span className="search-field-label">Cosa stai cercando?</span>
+                    <MobileFilterSelect
+                      ariaLabel="Cosa stai cercando?"
+                      className="w-full"
+                      onChange={(nextValue) => setField('listingType', nextValue)}
+                      options={LISTING_TYPES}
+                      value={search.listingType}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    className={`search-field search-field-button advanced-field advanced-field-listing-type ${openPopover === 'listingType' ? 'active' : ''}`}
+                    onClick={() => onFieldButtonClick('listingType')}
+                    ref={listingTypeRef}
+                    type="button"
+                  >
+                    <span className="search-field-label">Cosa stai cercando?</span>
+                    <span className="search-field-value">{listingTypeLabel}</span>
+                  </button>
+                )}
 
-                <button
-                  className={`search-field search-field-button advanced-field advanced-field-sex ${openPopover === 'sex' ? 'active' : ''}`}
-                  onClick={() => onFieldButtonClick('sex')}
-                  ref={sexRef}
-                  type="button"
-                >
-                  <span className="search-field-label">Sesso</span>
-                  <span className="search-field-value">{sexLabel}</span>
-                </button>
+                {isCompactSearchLayout ? (
+                  <div className="search-field advanced-field advanced-field-sex advanced-select-field">
+                    <span className="search-field-label">Sesso</span>
+                    <MobileFilterSelect
+                      ariaLabel="Sesso"
+                      className="w-full"
+                      onChange={(nextValue) => setField('sex', nextValue)}
+                      options={SEX_OPTIONS}
+                      value={search.sex}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    className={`search-field search-field-button advanced-field advanced-field-sex ${openPopover === 'sex' ? 'active' : ''}`}
+                    onClick={() => onFieldButtonClick('sex')}
+                    ref={sexRef}
+                    type="button"
+                  >
+                    <span className="search-field-label">Sesso</span>
+                    <span className="search-field-value">{sexLabel}</span>
+                  </button>
+                )}
 
-                <button
-                  className={`search-field search-field-button advanced-field advanced-field-sort ${openPopover === 'sort' ? 'active' : ''}`}
-                  onClick={() => onFieldButtonClick('sort')}
-                  ref={sortRef}
-                  type="button"
-                >
-                  <span className="search-field-label">Ordina per</span>
-                  <span className="search-field-value">{sortLabel}</span>
-                </button>
+                {isCompactSearchLayout ? (
+                  <div className="search-field advanced-field advanced-field-breed advanced-select-field">
+                    <span className="search-field-label">Razza</span>
+                    <MobileFilterSelect
+                      ariaLabel="Razza"
+                      className="w-full"
+                      onChange={(nextValue) => setField('breed', nextValue)}
+                      options={BREEDS}
+                      value={search.breed}
+                    />
+                  </div>
+                ) : null}
 
                 <button
                   className={`search-field search-field-button advanced-field advanced-field-price ${openPopover === 'prezzo' ? 'active' : ''}`}
@@ -1255,6 +1242,29 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   <span className="search-field-label">Eta del gatto</span>
                   <span className="search-field-value">{ageLabel}</span>
                 </button>
+
+                {isCompactSearchLayout ? (
+                  <div className="search-field advanced-field advanced-field-sort advanced-select-field">
+                    <span className="search-field-label">Ordina per</span>
+                    <MobileFilterSelect
+                      ariaLabel="Ordina per"
+                      className="w-full"
+                      onChange={(nextValue) => setField('sort', nextValue as SearchSort)}
+                      options={SORT_OPTIONS}
+                      value={search.sort}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    className={`search-field search-field-button advanced-field advanced-field-sort ${openPopover === 'sort' ? 'active' : ''}`}
+                    onClick={() => onFieldButtonClick('sort')}
+                    ref={sortRef}
+                    type="button"
+                  >
+                    <span className="search-field-label">Ordina per</span>
+                    <span className="search-field-value">{sortLabel}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1325,82 +1335,90 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
         {validationError ? <p className="error-message">{validationError}</p> : null}
       </div>
 
-      <Popover matchTriggerWidth minWidth={0} open={openPopover === 'breed'} parentRef={breedRef}>
-        <div className="popover-list">
-          {BREEDS.map((breed) => (
-            <button
-              className="popover-list-item"
-              key={breed.value || 'all-breeds'}
-              onClick={() => {
-                setField('breed', breed.value);
-                setOpenPopover(null);
-              }}
-              type="button"
-            >
-              {breed.label}
-            </button>
-          ))}
-        </div>
-      </Popover>
+      {!isCompactSearchLayout ? (
+        <Popover matchTriggerWidth minWidth={0} open={openPopover === 'breed'} parentRef={breedRef}>
+          <div className="popover-list">
+            {BREEDS.map((breed) => (
+              <button
+                className="popover-list-item"
+                key={breed.value || 'all-breeds'}
+                onClick={() => {
+                  setField('breed', breed.value);
+                  setOpenPopover(null);
+                }}
+                type="button"
+              >
+                {breed.label}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      ) : null}
 
-      <Popover
-        matchTriggerWidth
-        minWidth={0}
-        open={openPopover === 'listingType'}
-        parentRef={listingTypeRef}
-      >
-        <div className="popover-list">
-          {LISTING_TYPES.map((listingType) => (
-            <button
-              className="popover-list-item"
-              key={listingType.value || 'all-types'}
-              onClick={() => {
-                setField('listingType', listingType.value);
-                setOpenPopover(null);
-              }}
-              type="button"
-            >
-              {listingType.label}
-            </button>
-          ))}
-        </div>
-      </Popover>
+      {!isCompactSearchLayout ? (
+        <Popover
+          matchTriggerWidth
+          minWidth={0}
+          open={openPopover === 'listingType'}
+          parentRef={listingTypeRef}
+        >
+          <div className="popover-list">
+            {LISTING_TYPES.map((listingType) => (
+              <button
+                className="popover-list-item"
+                key={listingType.value || 'all-types'}
+                onClick={() => {
+                  setField('listingType', listingType.value);
+                  setOpenPopover(null);
+                }}
+                type="button"
+              >
+                {listingType.label}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      ) : null}
 
-      <Popover matchTriggerWidth minWidth={0} open={openPopover === 'sex'} parentRef={sexRef}>
-        <div className="popover-list">
-          {SEX_OPTIONS.map((option) => (
-            <button
-              className="popover-list-item"
-              key={option.value || 'any-sex'}
-              onClick={() => {
-                setField('sex', option.value);
-                setOpenPopover(null);
-              }}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </Popover>
+      {!isCompactSearchLayout ? (
+        <Popover matchTriggerWidth minWidth={0} open={openPopover === 'sex'} parentRef={sexRef}>
+          <div className="popover-list">
+            {SEX_OPTIONS.map((option) => (
+              <button
+                className="popover-list-item"
+                key={option.value || 'any-sex'}
+                onClick={() => {
+                  setField('sex', option.value);
+                  setOpenPopover(null);
+                }}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      ) : null}
 
-      <Popover matchTriggerWidth minWidth={0} open={openPopover === 'sort'} parentRef={sortRef}>
-        <div className="popover-list">
-          {SORT_OPTIONS.map((option) => (
-            <button
-              className="popover-list-item"
-              key={option.value}
-              onClick={() => {
-                setField('sort', option.value);
-                setOpenPopover(null);
-              }}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </Popover>
+      {!isCompactSearchLayout ? (
+        <Popover matchTriggerWidth minWidth={0} open={openPopover === 'sort'} parentRef={sortRef}>
+          <div className="popover-list">
+            {SORT_OPTIONS.map((option) => (
+              <button
+                className="popover-list-item"
+                key={option.value}
+                onClick={() => {
+                  setField('sort', option.value);
+                  setOpenPopover(null);
+                }}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      ) : null}
 
       {!isCompactSearchLayout ? (
         <Popover maxWidth={420} minWidth={340} open={openPopover === 'prezzo'} parentRef={priceRef}>
@@ -1417,7 +1435,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       {isCompactSearchLayout ? (
         <MobileSheet
           description={prezzoLabel}
-          onClose={() => setOpenPopover(null)}
+          onClose={() => closeMobileSheet('prezzo')}
           open={openPopover === 'prezzo'}
           title="Prezzo"
         >
@@ -1428,7 +1446,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       {isCompactSearchLayout ? (
         <MobileSheet
           description={ageLabel}
-          onClose={() => setOpenPopover(null)}
+          onClose={() => closeMobileSheet('eta')}
           open={openPopover === 'eta'}
           title="Eta del gatto"
         >
@@ -1436,48 +1454,29 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
         </MobileSheet>
       ) : null}
 
-      <Popover
-        matchTriggerWidth
-        maxWidth={460}
-        minWidth={260}
-        open={openPopover === 'comune'}
-        parentRef={locationRef}
-        scrollable={false}
-      >
-        <div className="location-popover">
-          <p className="location-label">Suggerimenti localita</p>
-          {locationLoading ? <p className="location-meta">Cerco suggerimenti...</p> : null}
-          {locationError ? (
-            <p className="location-meta location-meta-error">{locationError}</p>
-          ) : null}
+      {!isCompactSearchLayout ? (
+        <Popover
+          matchTriggerWidth
+          maxWidth={460}
+          minWidth={260}
+          open={openPopover === 'comune'}
+          parentRef={locationRef}
+          scrollable={false}
+        >
+          {renderLocationSuggestions(false)}
+        </Popover>
+      ) : null}
 
-          {!locationLoading && !locationError && locationQuery.trim().length >= 2 ? (
-            <div className="popover-list location-results">
-              {locationSuggestions.length > 0 ? (
-                locationSuggestions.map((suggestion) => (
-                  <button
-                    className="popover-list-item"
-                    key={`${suggestion.type}-${suggestion.id}`}
-                    onClick={() => selectLocation(suggestion)}
-                    type="button"
-                  >
-                    <span className="location-result-title">{suggestion.label}</span>
-                    {suggestion.secondaryLabel ? (
-                      <span className="location-result-subtitle">{suggestion.secondaryLabel}</span>
-                    ) : null}
-                  </button>
-                ))
-              ) : (
-                <p className="location-meta">Nessun suggerimento trovato.</p>
-              )}
-            </div>
-          ) : null}
-
-          {!locationLoading && !locationError && locationQuery.trim().length < 2 ? (
-            <p className="location-meta">Scrivi almeno 2 lettere per vedere i suggerimenti.</p>
-          ) : null}
-        </div>
-      </Popover>
+      {isCompactSearchLayout ? (
+        <MobileSheet
+          description={search.locationIntent?.label ?? 'Seleziona la localita dai suggerimenti.'}
+          onClose={() => closeMobileSheet('comune')}
+          open={openPopover === 'comune'}
+          title="Dove"
+        >
+          {renderLocationSuggestions(true)}
+        </MobileSheet>
+      ) : null}
     </>
   );
 }

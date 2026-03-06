@@ -1,8 +1,7 @@
 import 'server-only';
 
 import { loadAdminEnv } from '@adottaungatto/config';
-import { cookies } from 'next/headers';
-import { adminSessionCookieName } from './auth';
+import { getAdminAccessTokenFromSessionCookie } from './auth';
 
 const env = loadAdminEnv();
 
@@ -78,8 +77,7 @@ const parseNumber = (value: unknown, fallbackValue: number): number => {
 export const fetchAdminAnalyticsKpis = async (
   windowDays: number,
 ): Promise<AdminAnalyticsKpiSnapshot> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(adminSessionCookieName)?.value;
+  const token = await getAdminAccessTokenFromSessionCookie();
   if (!token) {
     throw new Error('Missing admin session token.');
   }

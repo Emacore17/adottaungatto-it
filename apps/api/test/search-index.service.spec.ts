@@ -368,6 +368,8 @@ describe('SearchIndexService', () => {
     const indexedCount = await service.reindexAllPublishedListings(200);
 
     expect(indexedCount).toBe(2);
+    expect(listPublishedSearchIndexDocuments).toHaveBeenNthCalledWith(1, 200, null);
+    expect(listPublishedSearchIndexDocuments).toHaveBeenNthCalledWith(2, 200, '2');
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(
       expect.arrayContaining([
         expect.stringContaining(`/_alias/${SEARCH_INDEX_READ_ALIAS}`),

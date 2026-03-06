@@ -14,13 +14,13 @@ export const motionEasing = {
 
 export const motionPresets = {
   page: {
-    initial: { opacity: 0, y: 12, scale: 0.998, filter: 'blur(4px)' },
-    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    initial: { opacity: 0, y: 12, scale: 0.998 },
+    animate: { opacity: 1, y: 0, scale: 1 },
     transition: { duration: motionDurations.base, ease: motionEasing.premium },
   },
   sectionEnter: {
-    initial: { opacity: 0, y: 22, scale: 0.996, filter: 'blur(3px)' },
-    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    initial: { opacity: 0, y: 22, scale: 0.996 },
+    animate: { opacity: 1, y: 0, scale: 1 },
     transition: { duration: motionDurations.base, ease: motionEasing.smooth },
   },
   listEnter: {
@@ -34,9 +34,9 @@ export const motionPresets = {
     transition: { duration: motionDurations.instant, ease: motionEasing.smooth },
   },
   crossfade: {
-    initial: { opacity: 0, y: 10, filter: 'blur(3px)' },
-    animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
-    exit: { opacity: 0, y: -8, filter: 'blur(1px)' },
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -8 },
     transition: { duration: motionDurations.quick, ease: motionEasing.smooth },
   },
   staggerContainer: {

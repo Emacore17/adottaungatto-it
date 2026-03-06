@@ -76,7 +76,7 @@ export function PublicListingsList({
 
         return (
           <article
-            className={`group relative overflow-hidden rounded-[32px] border bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_90%,white_10%)] shadow-[0_22px_60px_rgb(66_40_49_/_0.08)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-[2px] hover:border-[var(--color-border-strong)] hover:shadow-[0_30px_80px_rgb(66_40_49_/_0.12)] ${
+            className={`group relative overflow-hidden rounded-[30px] border bg-[color:color-mix(in_srgb,var(--color-surface-elevated)_90%,white_10%)] shadow-[0_16px_44px_rgb(66_40_49_/_0.08)] transition-[border-color,box-shadow] duration-300 hover:border-[var(--color-border-strong)] hover:shadow-[0_24px_62px_rgb(66_40_49_/_0.12)] ${
               listing.isSponsored
                 ? 'border-[color:color-mix(in_srgb,var(--color-primary)_35%,var(--color-border)_65%)]'
                 : 'border-[var(--color-border)]'
@@ -87,9 +87,9 @@ export function PublicListingsList({
               <ListingSponsoredBadge className="absolute left-4 top-4 z-20" />
             ) : null}
 
-            <div className="grid grid-cols-1 md:min-h-[248px] md:grid-cols-[minmax(260px,31%)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 md:min-h-[232px] md:grid-cols-[minmax(250px,30%)_minmax(0,1fr)]">
               <Link
-                className="relative block h-full overflow-hidden rounded-t-[31px] border-b border-[var(--color-border)] isolate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 md:rounded-l-[31px] md:rounded-t-none md:border-b-0 md:border-r"
+                className="relative isolate block h-full overflow-hidden rounded-t-[29px] border-b border-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 md:rounded-l-[29px] md:rounded-t-none md:border-b-0 md:border-r"
                 href={`/annunci/${listing.id}`}
               >
                 <ListingMediaPreview
@@ -100,10 +100,10 @@ export function PublicListingsList({
                 />
               </Link>
 
-              <div className="flex min-w-0 flex-col gap-4 p-4 sm:p-5 md:p-6">
+              <div className="flex min-w-0 flex-col gap-3 p-4 sm:p-5 md:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-2.5">
-                    <h3 className="line-clamp-2 text-[1.2rem] font-semibold tracking-[-0.03em] text-[var(--color-text)] sm:text-[1.35rem] md:text-[1.65rem]">
+                    <h3 className="line-clamp-2 text-[1.12rem] font-semibold tracking-[-0.03em] text-[var(--color-text)] sm:text-[1.25rem] md:text-[1.45rem]">
                       <Link
                         className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
                         href={`/annunci/${listing.id}`}
@@ -124,7 +124,7 @@ export function PublicListingsList({
                       ) : null}
                     </div>
 
-                    <p className="line-clamp-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)] sm:line-clamp-3 md:text-[0.98rem]">
+                    <p className="line-clamp-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)] md:text-[0.95rem]">
                       {descriptionLabel}
                     </p>
                   </div>
@@ -135,28 +135,28 @@ export function PublicListingsList({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)]">
+                  <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
                     {listingTypeLabel}
                   </span>
                   {breedLabel ? (
-                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)]">
+                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
                       {breedLabel}
                     </span>
                   ) : null}
                   {sexLabel ? (
-                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)]">
+                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
                       {sexLabel}
                     </span>
                   ) : null}
                   {ageLabel ? (
-                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)]">
+                    <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
                       {ageLabel}
                     </span>
                   ) : null}
                 </div>
 
-                <div className="mt-auto flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--color-text-muted)]">
+                <div className="mt-auto flex flex-col gap-2 border-t border-[var(--color-border)] pt-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-3 text-[13px] text-[var(--color-text-muted)]">
                     <span className="inline-flex items-center gap-2">
                       <CalendarDays aria-hidden="true" className="h-4 w-4" />
                       {publishedLabel}

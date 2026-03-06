@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = 'http://localhost:3100';
+const baseURL = 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm exec next dev -p 3100',
+    command: 'pnpm exec next dev --webpack -p 3000',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

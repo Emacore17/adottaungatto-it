@@ -6,12 +6,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Input,
 } from '@adottaungatto/ui';
 import { redirect } from 'next/navigation';
 import { LinkButton } from '../../components/link-button';
+import { NativeLinkButton } from '../../components/native-link-button';
 import { PageShell } from '../../components/page-shell';
-import { getWebSession } from '../../lib/auth';
+import { getWebSession, isWebSocialProviderEnabled } from '../../lib/auth';
 
 interface LoginPageProps {
   searchParams?: Promise<{
@@ -29,12 +29,24 @@ const getFirstParamValue = (value: string | string[] | undefined) => {
 };
 
 const mapErrorMessage = (code: string | undefined) => {
-  if (code === 'invalid_credentials') {
-    return 'Credenziali non valide. Riprova.';
+  if (code === 'auth_provider_unavailable') {
+    return 'Servizio di accesso temporaneamente non disponibile. Riprova tra poco.';
   }
 
-  if (code === 'missing_credentials') {
-    return 'Inserisci username e password.';
+  if (code === 'auth_cancelled') {
+    return 'Accesso annullato. Puoi riprovare quando vuoi.';
+  }
+
+  if (code === 'invalid_callback_state') {
+    return 'Sessione di accesso non valida. Riprova dal pulsante di login.';
+  }
+
+  if (code === 'invalid_callback_nonce') {
+    return 'Verifica di sicurezza fallita. Riprova il login.';
+  }
+
+  if (code === 'social_provider_unavailable') {
+    return 'Accesso social non disponibile in questo ambiente.';
   }
 
   return undefined;
@@ -43,12 +55,15 @@ const mapErrorMessage = (code: string | undefined) => {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getWebSession().catch(() => null);
   if (session) {
-    redirect('/account');
+    redirect(session.user.emailVerified === true ? '/account' : '/verifica-account');
   }
 
   const resolvedSearchParams = await searchParams;
   const nextPath = getFirstParamValue(resolvedSearchParams?.next) ?? '/account';
   const errorMessage = mapErrorMessage(getFirstParamValue(resolvedSearchParams?.error));
+  const googleSocialEnabled = isWebSocialProviderEnabled('google');
+  const loginHref = `/api/auth/login?next=${encodeURIComponent(nextPath)}`;
+  const googleLoginHref = `/api/auth/login/google?next=${encodeURIComponent(nextPath)}`;
 
   return (
     <PageShell
@@ -76,36 +91,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <Card>
           <CardHeader>
             <CardTitle>Login</CardTitle>
-            <CardDescription>Usa le credenziali del tuo account per continuare.</CardDescription>
+            <CardDescription>
+              Continua con il provider sicuro per accedere al tuo account.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action="/api/auth/login" className="space-y-4" method="post">
-              <input name="next" type="hidden" value={nextPath} />
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="username">
-                  Username
-                </label>
-                <Input id="username" name="username" placeholder="utente.demo" required />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="password">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  name="password"
-                  placeholder="demo1234"
-                  required
-                  type="password"
-                />
-              </div>
+            <div className="space-y-4">
               {errorMessage ? (
                 <p className="text-sm text-[var(--color-danger-fg)]">{errorMessage}</p>
               ) : null}
-              <Button className="w-full" type="submit">
-                Accedi
-              </Button>
-            </form>
+              <NativeLinkButton className="w-full" href={loginHref}>
+                Continua con account
+              </NativeLinkButton>
+            </div>
+            {googleSocialEnabled ? (
+              <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                <LinkButton className="w-full" href={googleLoginHref} variant="outline">
+                  Continua con Google
+                </LinkButton>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

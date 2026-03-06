@@ -1,6 +1,6 @@
 import { loadApiEnv } from '@adottaungatto/config';
 import { config as loadDotEnv } from 'dotenv';
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 import { UserRole } from '../src/auth/roles.enum';
 import { parseListingAgeTextToMonths } from '../src/listings/listing-age';
 import { ListingsRepository } from '../src/listings/listings.repository';
@@ -42,7 +42,10 @@ const run = async () => {
   const client = new Client({
     connectionString: env.DATABASE_URL,
   });
-  const repository = new ListingsRepository();
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+  });
+  const repository = new ListingsRepository(pool);
 
   await client.connect();
 
@@ -103,7 +106,7 @@ const run = async () => {
     );
     console.log('[smoke:listings] OK');
   } finally {
-    await repository.onModuleDestroy();
+    await pool.end();
     await client.end();
   }
 };

@@ -1,6 +1,5 @@
 import { loadWebEnv } from '@adottaungatto/config';
-import { cookies } from 'next/headers';
-import { webSessionCookieName } from './auth';
+import { getWebAccessTokenFromSessionCookie } from './auth';
 
 const env = loadWebEnv();
 
@@ -180,8 +179,7 @@ const parseThreadPagination = (value: unknown): MessageThreadPage['pagination'] 
 };
 
 const fetchAuthedJson = async (pathname: string) => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(webSessionCookieName)?.value;
+  const token = await getWebAccessTokenFromSessionCookie();
   if (!token) {
     return null;
   }
