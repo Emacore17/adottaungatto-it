@@ -167,8 +167,8 @@ export function ProfileSettingsForm({
 
       setToast({
         open: true,
-        title: 'Profilo aggiornato',
-        description: 'Le informazioni personali sono state salvate con successo.',
+        title: 'Modifiche salvate',
+        description: 'Salvato con successo.',
         variant: 'success',
       });
     } catch (error) {

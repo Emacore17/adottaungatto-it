@@ -1278,8 +1278,7 @@ export const searchPublicListingsWithMetadata = async (
     const rawListings = Array.isArray(payload.items) ? payload.items : [];
     const parsedListings = rawListings
       .map((item) => parsePublicSummary(item))
-      .filter((item): item is PublicListingSummary => item !== null)
-      .filter((item) => !isDemoPublicListing(item));
+      .filter((item): item is PublicListingSummary => item !== null);
 
     return {
       items: parsedListings,
@@ -1350,7 +1349,7 @@ export const fetchPublicListingById = async (
 
     const payload = asRecord(await response.json());
     const listing = parsePublicDetail(payload.listing);
-    if (!listing || isDemoPublicListing(listing)) {
+    if (!listing) {
       return null;
     }
 

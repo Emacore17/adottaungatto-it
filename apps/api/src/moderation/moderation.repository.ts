@@ -151,7 +151,7 @@ export class ModerationRepository {
           p.name AS "provinceName",
           p.sigla AS "provinceSigla",
           c.name AS "comuneName",
-          COALESCE(media_stats.mediaCount, '0') AS "mediaCount"
+          COALESCE(media_stats."mediaCount", '0') AS "mediaCount"
         FROM listings l
         INNER JOIN app_users u
           ON u.id = l.owner_user_id

@@ -58,8 +58,8 @@ export function MessagingPreferencesForm({
 
       setToast({
         open: true,
-        title: 'Preferenze aggiornate',
-        description: 'Le notifiche della chat sono state salvate correttamente.',
+        title: 'Modifiche salvate',
+        description: 'Salvato con successo.',
         variant: 'success',
       });
     } catch (error) {

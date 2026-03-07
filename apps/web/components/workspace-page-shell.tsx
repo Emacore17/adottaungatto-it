@@ -21,7 +21,6 @@ const resolveWorkspaceAccountLabel = (
     firstName: string | null;
     lastName: string | null;
   } | null,
-  fallbackEmail: string | null,
 ): string | null => {
   const displayName = profile?.displayName?.trim();
   if (displayName) {
@@ -37,7 +36,7 @@ const resolveWorkspaceAccountLabel = (
     return fullName;
   }
 
-  return fallbackEmail;
+  return null;
 };
 
 export async function WorkspacePageShell({
@@ -51,7 +50,7 @@ export async function WorkspacePageShell({
   const session = await getWebSession().catch(() => null);
   const emailVerified = session?.user.emailVerified === true;
   const profile = session ? await fetchMyProfile().catch(() => null) : null;
-  const workspaceAccountLabel = resolveWorkspaceAccountLabel(profile, session?.user.email ?? null);
+  const workspaceAccountLabel = resolveWorkspaceAccountLabel(profile);
 
   return (
     <div className="space-y-6">

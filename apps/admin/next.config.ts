@@ -1,11 +1,18 @@
 import type { NextConfig } from 'next';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const oidcFormActionSources = [
+  "'self'",
+  'http://localhost:8080',
+  'https://localhost:8080',
+  'http://127.0.0.1:8080',
+  'https://127.0.0.1:8080',
+].join(' ');
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
-  "form-action 'self'",
+  `form-action ${oidcFormActionSources}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "img-src 'self' data: blob: http: https:",

@@ -3,7 +3,8 @@
 import { Button, Toast } from '@adottaungatto/ui';
 import { LoaderCircle, MessageCircleMore } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 
 type ToastState = {
   open: boolean;
@@ -21,11 +22,21 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
   const router = useRouter();
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const loginRedirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [toast, setToast] = useState<ToastState>({
     open: false,
     title: '',
     variant: 'info',
   });
+
+  useEffect(
+    () => () => {
+      if (loginRedirectTimeoutRef.current !== null) {
+        clearTimeout(loginRedirectTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   const handleSubmit = async () => {
     const normalizedBody = body.trim();
@@ -41,7 +52,7 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/messages/listings/${listingId}/thread`, {
+      const response = await fetchWithAuthRefresh(`/api/messages/listings/${listingId}/thread`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -53,6 +64,9 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
       });
       const payload = asRecord(await response.json().catch(() => null));
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(String(payload.message ?? 'Impossibile aprire la conversazione.'));
       }
 
@@ -65,6 +79,27 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
       router.push(`/messaggi/${threadId}`);
       router.refresh();
     } catch (error) {
+      const isSessionExpired = error instanceof Error && error.message === SESSION_EXPIRED_MESSAGE;
+      if (isSessionExpired) {
+        setToast({
+          open: true,
+          title: 'Sessione scaduta',
+          description: 'Sessione scaduta, accedi di nuovo.',
+          variant: 'warning',
+        });
+
+        if (loginRedirectTimeoutRef.current !== null) {
+          clearTimeout(loginRedirectTimeoutRef.current);
+        }
+
+        loginRedirectTimeoutRef.current = setTimeout(() => {
+          const nextPath = `${window.location.pathname}${window.location.search}`;
+          router.replace(`/login?next=${encodeURIComponent(nextPath)}`);
+          router.refresh();
+        }, 1200);
+        return;
+      }
+
       setToast({
         open: true,
         title: 'Invio non riuscito',

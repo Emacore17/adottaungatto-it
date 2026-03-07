@@ -37,6 +37,7 @@ export async function POST(request: Request) {
 
   try {
     const token = await refreshWebSessionToken(session.refreshToken);
+    const expiresAt = Date.now() + token.expiresIn * 1_000;
     const sessionCookie = buildWebSessionCookie({
       accessToken: token.accessToken,
       expiresIn: token.expiresIn,
@@ -56,7 +57,11 @@ export async function POST(request: Request) {
       maxAge: sessionCookie.maxAge,
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      expiresAt,
+      expiresIn: token.expiresIn,
+    });
   } catch (error) {
     if (isOidcInvalidGrantError(error)) {
       await clearSessionCookie();

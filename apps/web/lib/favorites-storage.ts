@@ -162,6 +162,47 @@ const requestFavoriteIds = async (input: {
 
 let syncFavoriteIdsPromise: Promise<string[]> | null = null;
 
+const mergeLocalFavoriteIdsIntoAccount = async (
+  localFavoriteIds: string[],
+  accountFavoriteIds: string[],
+): Promise<string[]> => {
+  const accountFavoriteIdsSet = new Set(accountFavoriteIds);
+  const missingLocalFavoriteIds = localFavoriteIds.filter(
+    (favoriteId) => !accountFavoriteIdsSet.has(favoriteId),
+  );
+
+  if (missingLocalFavoriteIds.length === 0) {
+    return accountFavoriteIds;
+  }
+
+  let mergedFavoriteIds = accountFavoriteIds;
+  const unsyncedFavoriteIds: string[] = [];
+
+  for (const missingFavoriteId of missingLocalFavoriteIds) {
+    try {
+      mergedFavoriteIds = await requestFavoriteIds({
+        path: `${favoritesApiPath}/${missingFavoriteId}`,
+        method: 'PUT',
+        fallbackMessage: 'Impossibile sincronizzare i preferiti.',
+      });
+    } catch (error) {
+      const status = (error as FavoriteApiError).status;
+      if (status === 401) {
+        throw error;
+      }
+
+      // Keep unsynced local ids to avoid losing favorites when account sync is temporarily unavailable.
+      unsyncedFavoriteIds.push(missingFavoriteId);
+    }
+  }
+
+  if (unsyncedFavoriteIds.length > 0) {
+    return normalizeFavoriteIds([...mergedFavoriteIds, ...unsyncedFavoriteIds]);
+  }
+
+  return mergedFavoriteIds;
+};
+
 export const syncFavoriteIdsFromApi = async (): Promise<string[]> => {
   if (typeof window === 'undefined') {
     return [];
@@ -170,13 +211,18 @@ export const syncFavoriteIdsFromApi = async (): Promise<string[]> => {
   if (!syncFavoriteIdsPromise) {
     syncFavoriteIdsPromise = (async () => {
       try {
-        const favoriteIds = await requestFavoriteIds({
+        const localFavoriteIds = readFavoriteIds();
+        const accountFavoriteIds = await requestFavoriteIds({
           path: favoritesApiPath,
           method: 'GET',
           fallbackMessage: 'Impossibile caricare i preferiti.',
         });
-        writeFavoriteIds(favoriteIds);
-        return favoriteIds;
+        const mergedFavoriteIds = await mergeLocalFavoriteIdsIntoAccount(
+          localFavoriteIds,
+          accountFavoriteIds,
+        );
+        writeFavoriteIds(mergedFavoriteIds);
+        return mergedFavoriteIds;
       } finally {
         syncFavoriteIdsPromise = null;
       }

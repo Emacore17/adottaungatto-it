@@ -2,6 +2,7 @@ import { loadWebEnv } from '@adottaungatto/config';
 import { NO_BREED_FILTER, type SearchSort } from '@adottaungatto/types';
 import { Badge, Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import Script from 'next/script';
 import { LinkButton } from '../../components/link-button';
 import { ListingsPagination } from '../../components/listings-pagination';
@@ -406,6 +407,11 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
   const totalCount = searchResult.pagination?.total ?? searchResult.items.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / listingsPerPage));
+
+  if (page > totalPages) {
+    redirect(buildListingsHref(filters, { page: totalPages }));
+  }
+
   const activeFilterLabels = buildActiveFilterLabels(filters);
   const pageTitle = buildPageTitle(filters);
   const pageDescription = buildPageDescription(filters);

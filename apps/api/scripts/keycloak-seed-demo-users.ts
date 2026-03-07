@@ -25,6 +25,16 @@ type KeycloakIdentityProvider = {
   config?: Record<string, string>;
 };
 
+type KeycloakRealmRepresentation = Record<string, unknown> & {
+  realm?: string;
+  internationalizationEnabled?: boolean;
+  supportedLocales?: unknown;
+  defaultLocale?: unknown;
+  accessTokenLifespan?: unknown;
+  ssoSessionIdleTimeout?: unknown;
+  ssoSessionMaxLifespan?: unknown;
+};
+
 type DemoUserSeed = {
   username: string;
   firstName: string;
@@ -42,6 +52,7 @@ type SeedCounter = {
   roleMappingsAdded: number;
   socialProvidersCreated: number;
   socialProvidersUpdated: number;
+  realmSettingsUpdated: number;
 };
 
 const demoUsers: DemoUserSeed[] = [
@@ -248,6 +259,75 @@ const upsertGoogleIdentityProvider = async (
   }
 
   return 'updated';
+};
+
+const ensureRealmLocalization = async (
+  keycloakBaseUrl: string,
+  realm: string,
+  accessToken: string,
+): Promise<boolean> => {
+  const desiredAccessTokenLifespan = 900;
+  const desiredSsoSessionIdleTimeout = 28_800;
+  const desiredSsoSessionMaxLifespan = 604_800;
+
+  const getResponse = await keycloakAdminRequest(keycloakBaseUrl, realm, accessToken, '');
+  if (!getResponse.ok) {
+    await throwRequestError('get realm settings', getResponse);
+  }
+
+  const realmRepresentation = await parseJson<KeycloakRealmRepresentation>(getResponse);
+  const currentSupportedLocales = Array.isArray(realmRepresentation.supportedLocales)
+    ? realmRepresentation.supportedLocales.filter(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0,
+      )
+    : [];
+  const normalizedSupportedLocales = Array.from(new Set(['it', 'en', ...currentSupportedLocales]));
+  const internationalizationEnabled = realmRepresentation.internationalizationEnabled === true;
+  const hasItalianLocale = currentSupportedLocales.includes('it');
+  const defaultLocaleIsItalian = realmRepresentation.defaultLocale === 'it';
+  const accessTokenLifespan =
+    typeof realmRepresentation.accessTokenLifespan === 'number'
+      ? realmRepresentation.accessTokenLifespan
+      : null;
+  const ssoSessionIdleTimeout =
+    typeof realmRepresentation.ssoSessionIdleTimeout === 'number'
+      ? realmRepresentation.ssoSessionIdleTimeout
+      : null;
+  const ssoSessionMaxLifespan =
+    typeof realmRepresentation.ssoSessionMaxLifespan === 'number'
+      ? realmRepresentation.ssoSessionMaxLifespan
+      : null;
+
+  if (
+    internationalizationEnabled &&
+    hasItalianLocale &&
+    defaultLocaleIsItalian &&
+    accessTokenLifespan === desiredAccessTokenLifespan &&
+    ssoSessionIdleTimeout === desiredSsoSessionIdleTimeout &&
+    ssoSessionMaxLifespan === desiredSsoSessionMaxLifespan
+  ) {
+    return false;
+  }
+
+  const updateRepresentation: KeycloakRealmRepresentation = {
+    accessTokenLifespan: desiredAccessTokenLifespan,
+    ssoSessionIdleTimeout: desiredSsoSessionIdleTimeout,
+    ssoSessionMaxLifespan: desiredSsoSessionMaxLifespan,
+    internationalizationEnabled: true,
+    supportedLocales: normalizedSupportedLocales,
+    defaultLocale: 'it',
+  };
+
+  const updateResponse = await keycloakAdminRequest(keycloakBaseUrl, realm, accessToken, '', {
+    method: 'PUT',
+    body: JSON.stringify(updateRepresentation),
+  });
+
+  if (updateResponse.status !== 204) {
+    await throwRequestError('update realm localization', updateResponse);
+  }
+
+  return true;
 };
 
 const getRoleByName = async (
@@ -482,11 +562,22 @@ const run = async (): Promise<void> => {
     roleMappingsAdded: 0,
     socialProvidersCreated: 0,
     socialProvidersUpdated: 0,
+    realmSettingsUpdated: 0,
   };
 
   console.log(`[auth:seed] Target Keycloak: ${keycloakBaseUrl} (realm: ${realm})`);
 
   const accessToken = await requestAdminToken(keycloakBaseUrl, adminUsername, adminPassword);
+  const realmLocalizationUpdated = await ensureRealmLocalization(keycloakBaseUrl, realm, accessToken);
+  if (realmLocalizationUpdated) {
+    counters.realmSettingsUpdated += 1;
+    console.log(
+      '[auth:seed] Realm settings updated: locale it + accessTokenLifespan=900s + ssoSessionIdleTimeout=28800s.',
+    );
+  } else {
+    console.log('[auth:seed] Realm settings already aligned (locale/session policy).');
+  }
+
   const googleProviderResult = await upsertGoogleIdentityProvider(
     keycloakBaseUrl,
     realm,
@@ -556,6 +647,7 @@ const run = async (): Promise<void> => {
   console.log(
     `[auth:seed] Social providers created=${counters.socialProvidersCreated}, updated=${counters.socialProvidersUpdated}.`,
   );
+  console.log(`[auth:seed] Realm settings updated=${counters.realmSettingsUpdated}.`);
   console.log('[auth:seed] Demo users seed completed.');
 };
 

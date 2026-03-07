@@ -1,11 +1,12 @@
 import { loadWebEnv } from '@adottaungatto/config';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { getWebSession } from '../lib/auth';
+import { getWebSession, getWebSessionCookiePayload } from '../lib/auth';
 import { LinkButton } from './link-button';
 import { LogoutButton } from './logout-button';
 import { MobileNavMenu } from './mobile-nav-menu';
 import { ScrollAwareHeader } from './scroll-aware-header';
+import { SessionExpiryMonitor } from './session-expiry-monitor';
 import { ShellNavLink, type ShellNavMatchMode } from './shell-nav-link';
 import { ShellRouteVisibility } from './shell-route-visibility';
 import { ThemeToggle } from './theme-toggle';
@@ -44,7 +45,10 @@ interface AppShellProps {
 
 export async function AppShell({ children }: AppShellProps) {
   const env = loadWebEnv();
-  const session = await getWebSession().catch(() => null);
+  const [session, sessionCookie] = await Promise.all([
+    getWebSession().catch(() => null),
+    getWebSessionCookiePayload().catch(() => null),
+  ]);
   const primaryNavigation = session
     ? [
         ...baseNavigation,
@@ -129,6 +133,10 @@ export async function AppShell({ children }: AppShellProps) {
       <main className="relative mx-auto w-full max-w-6xl px-4 py-[var(--shell-main-padding)] sm:px-6">
         {children}
       </main>
+      <SessionExpiryMonitor
+        enabled={Boolean(sessionCookie?.refreshToken)}
+        initialExpiresAt={sessionCookie?.expiresAt ?? null}
+      />
 
       <ShellRouteVisibility sections={['marketing', 'discovery']}>
         <footer className="border-t border-[var(--color-border)] bg-[var(--color-surface-overlay)]">

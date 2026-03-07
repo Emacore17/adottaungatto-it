@@ -1101,15 +1101,15 @@ export function ListingEditor({
 
       setToast({
         open: true,
-        title: currentListingId ? 'Annuncio aggiornato' : 'Annuncio creato',
+        title: 'Modifiche salvate',
         description: currentListingId
-          ? 'Le modifiche sono state salvate correttamente.'
-          : 'Ora puoi continuare a rifinire foto e contenuti.',
+          ? 'Salvato con successo.'
+          : 'Annuncio creato con successo. Puoi continuare a rifinire foto e contenuti.',
         variant: 'success',
       });
       setSaveFeedback({
         status: 'success',
-        message: 'Modifiche salvate con successo.',
+        message: 'Modifiche salvate.',
       });
 
       if (!currentListingId) {

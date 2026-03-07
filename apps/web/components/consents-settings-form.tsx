@@ -172,8 +172,8 @@ export function ConsentsSettingsForm({
 
       setToast({
         open: true,
-        title: 'Consensi aggiornati',
-        description: 'Le preferenze privacy sono state salvate correttamente.',
+        title: 'Modifiche salvate',
+        description: 'Salvato con successo.',
         variant: 'success',
       });
     } catch (error) {
