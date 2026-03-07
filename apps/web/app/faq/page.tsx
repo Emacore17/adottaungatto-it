@@ -1,4 +1,5 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import { Breadcrumbs } from '../../components/breadcrumbs';
 import { LinkButton } from '../../components/link-button';
 import { PageShell } from '../../components/page-shell';
 
@@ -11,7 +12,7 @@ const faqItems = [
   {
     question: 'Posso salvare i preferiti senza accedere?',
     answer:
-      'Si. I preferiti vengono mantenuti sul dispositivo che stai usando, cosi puoi ritrovare gli annunci salvati anche senza sessione attiva.',
+      'Si. Senza login restano sul browser corrente; con account attivo vengono sincronizzati anche lato server e disponibili su piu dispositivi.',
   },
   {
     question: "Come contatto l'inserzionista?",
@@ -45,8 +46,8 @@ export default function FaqPage() {
             <Badge variant="outline">Risposte brevi</Badge>
           </div>
           <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-            Le domande qui sotto coprono i flussi principali: catalogo, contatto, account,
-            preferiti e pubblicazione.
+            Le domande qui sotto coprono i flussi principali: catalogo, contatto, account, preferiti
+            e pubblicazione.
           </p>
           <div className="flex flex-wrap gap-2">
             <LinkButton href="/annunci">Vai agli annunci</LinkButton>
@@ -56,6 +57,7 @@ export default function FaqPage() {
           </div>
         </div>
       }
+      breadcrumbs={<Breadcrumbs items={[{ href: '/', label: 'Home' }, { label: 'FAQ' }]} />}
       description="Le risposte piu utili per capire come muoversi nel sito senza cercare informazioni disperse tra piu pagine."
       eyebrow="FAQ"
       title="Domande frequenti"

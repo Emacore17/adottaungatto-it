@@ -2,12 +2,13 @@
 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { LoaderCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { PublicListingSummary } from '../lib/listings';
 import {
   FAVORITES_STORAGE_KEY,
   FAVORITES_UPDATED_EVENT,
   readFavoriteIds,
+  syncFavoriteIdsFromApi,
   writeFavoriteIds,
 } from '../lib/favorites-storage';
 import { LinkButton } from './link-button';
@@ -44,23 +45,30 @@ export function FavoritesPageContent() {
   const [status, setStatus] = useState<FavoritesStatus>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const syncFavoriteIds = () => {
-      setFavoriteIds(readFavoriteIds());
-    };
+  const refreshFavoriteIds = useCallback(() => {
+    setFavoriteIds(readFavoriteIds());
+    void syncFavoriteIdsFromApi()
+      .then((favoriteIdsFromApi) => {
+        setFavoriteIds(favoriteIdsFromApi);
+      })
+      .catch(() => {
+        // Keep current local cache if server sync fails.
+      });
+  }, []);
 
-    syncFavoriteIds();
+  useEffect(() => {
+    refreshFavoriteIds();
 
     const onStorage = (event: StorageEvent) => {
       if (event.key !== FAVORITES_STORAGE_KEY) {
         return;
       }
 
-      syncFavoriteIds();
+      refreshFavoriteIds();
     };
 
     const onFavoritesUpdated = () => {
-      syncFavoriteIds();
+      refreshFavoriteIds();
     };
 
     window.addEventListener('storage', onStorage);
@@ -70,7 +78,7 @@ export function FavoritesPageContent() {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener(FAVORITES_UPDATED_EVENT, onFavoritesUpdated as EventListener);
     };
-  }, []);
+  }, [refreshFavoriteIds]);
 
   useEffect(() => {
     setListings((currentListings) =>
@@ -161,8 +169,8 @@ export function FavoritesPageContent() {
             <div className="space-y-2">
               <CardTitle>I tuoi annunci salvati</CardTitle>
               <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                I cuori salvati da catalogo e dettaglio compaiono qui su questo browser, pronti da
-                riaprire senza rifare la ricerca.
+                I cuori salvati da catalogo e dettaglio compaiono qui in modo persistente sul tuo
+                account, pronti da riaprire anche da dispositivi diversi.
               </p>
             </div>
           </CardHeader>
@@ -205,7 +213,13 @@ export function FavoritesPageContent() {
             </p>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Button onClick={() => setFavoriteIds(readFavoriteIds())} type="button" variant="secondary">
+            <Button
+              onClick={() => {
+                refreshFavoriteIds();
+              }}
+              type="button"
+              variant="secondary"
+            >
               Riprova
             </Button>
             <LinkButton href="/annunci" variant="outline">

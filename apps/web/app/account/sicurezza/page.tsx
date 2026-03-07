@@ -1,9 +1,10 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { AccountPhoneVerificationForms } from '../../../components/account-phone-verification-forms';
+import { AccountSecuritySessionControls } from '../../../components/account-security-session-controls';
 import { LinkButton } from '../../../components/link-button';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
-import { requireWebSession } from '../../../lib/auth';
-import { fetchMyProfile } from '../../../lib/users';
+import { isWebSocialProviderEnabled, requireWebSession } from '../../../lib/auth';
+import { fetchMyLinkedIdentities, fetchMyProfile, fetchMySessions } from '../../../lib/users';
 
 interface AccountSecurityPageProps {
   searchParams?: Promise<{
@@ -132,7 +133,11 @@ const resolvePhoneVerificationMessage = (
 
 export default async function AccountSecurityPage({ searchParams }: AccountSecurityPageProps) {
   const session = await requireWebSession('/account/sicurezza');
-  const profile = await fetchMyProfile();
+  const [profile, linkedIdentities, sessions] = await Promise.all([
+    fetchMyProfile(),
+    fetchMyLinkedIdentities(),
+    fetchMySessions(),
+  ]);
   const resolvedSearchParams = await searchParams;
   const verificationStatus = getFirstParamValue(resolvedSearchParams?.phoneVerification);
   const devCode = getFirstParamValue(resolvedSearchParams?.devCode);
@@ -142,6 +147,9 @@ export default async function AccountSecurityPage({ searchParams }: AccountSecur
   const verificationMessage = resolvePhoneVerificationMessage(verificationStatus, retryAfterSeconds);
   const phoneIsVerified = Boolean(profile.phoneVerifiedAt && profile.phoneE164);
   const roleLabel = session.user.roles.length > 0 ? session.user.roles.join(', ') : 'utente';
+  const enabledSocialProviders = ['google'].filter((provider) =>
+    isWebSocialProviderEnabled(provider),
+  );
 
   return (
     <WorkspacePageShell
@@ -244,6 +252,12 @@ export default async function AccountSecurityPage({ searchParams }: AccountSecur
           </CardContent>
         </Card>
       </div>
+
+      <AccountSecuritySessionControls
+        enabledSocialProviders={enabledSocialProviders}
+        initialLinkedIdentities={linkedIdentities}
+        initialSessions={sessions}
+      />
 
       <div className="flex flex-wrap gap-2">
         <LinkButton href="/account/impostazioni">Apri impostazioni</LinkButton>

@@ -8,6 +8,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly",
     "lint": "biome check .",
+    "openapi:generate": "openapi-typescript ./openapi/openapi.v1.json -o ./src/generated/openapi.ts",
+    "openapi:check": "node ./scripts/check-openapi-drift.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"No tests for @adottaungatto/sdk\""
   },
@@ -15,6 +17,7 @@
     "@adottaungatto/types": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10"
+    "@types/node": "^22.13.10",
+    "openapi-typescript": "^7.10.1"
   }
 }

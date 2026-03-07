@@ -54,6 +54,26 @@
       "webOrigins": ["*"]
     }
   ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "trustEmail": true,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "syncMode": "FORCE",
+        "useJwksUrl": "true",
+        "defaultScope": "openid profile email",
+        "clientId": "__SET_KEYCLOAK_GOOGLE_CLIENT_ID__",
+        "clientSecret": "__SET_KEYCLOAK_GOOGLE_CLIENT_SECRET__"
+      }
+    }
+  ],
   "users": [
     {
       "username": "utente.demo",

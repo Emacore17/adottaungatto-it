@@ -22,10 +22,19 @@ type AuthRequestWithClientInfo = {
   ip?: string;
 };
 
-const apiEnv = loadApiEnv();
+let apiTrustProxyEnabledCache: boolean | null = null;
+
+const getApiTrustProxyEnabled = (): boolean => {
+  if (apiTrustProxyEnabledCache !== null) {
+    return apiTrustProxyEnabledCache;
+  }
+
+  apiTrustProxyEnabledCache = loadApiEnv().API_TRUST_PROXY_ENABLED;
+  return apiTrustProxyEnabledCache;
+};
 
 const parseSenderIp = (request: AuthRequestWithClientInfo): string | null => {
-  return resolveClientIp(request, apiEnv.API_TRUST_PROXY_ENABLED);
+  return resolveClientIp(request, getApiTrustProxyEnabled());
 };
 
 const parseUserAgent = (request: AuthRequestWithClientInfo): string | null => {

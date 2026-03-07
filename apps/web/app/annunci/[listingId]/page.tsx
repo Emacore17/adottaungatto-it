@@ -2,6 +2,8 @@ import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/
 import { MapPin } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { BackToListingsButton } from '../../../components/back-to-listings-button';
+import { Breadcrumbs } from '../../../components/breadcrumbs';
 import { FavoriteHeartButton } from '../../../components/favorite-heart-button';
 import { LinkButton } from '../../../components/link-button';
 import { ListingGallery } from '../../../components/listing-gallery';
@@ -16,7 +18,39 @@ interface ListingDetailPageProps {
   params: Promise<{
     listingId: string;
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
+
+const getFirstParamValue = (value: string | string[] | undefined) => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
+
+const sanitizeBackToListingsHref = (value: string | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized.startsWith('/') || normalized.startsWith('//')) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(normalized, 'https://adottaungatto.local');
+    const normalizedPath = parsed.pathname.replace(/\/+$/u, '') || '/';
+    if (normalizedPath !== '/annunci') {
+      return null;
+    }
+
+    return `${normalizedPath}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+};
 
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   const { listingId } = await params;
@@ -25,7 +59,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   if (!listing) {
     return {
       title: {
-        absolute: 'Annuncio | adottaungatto-it',
+        absolute: 'Annuncio non trovato | adottaungatto-it',
       },
     };
   }
@@ -38,8 +72,12 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   };
 }
 
-export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
+export default async function ListingDetailPage({ params, searchParams }: ListingDetailPageProps) {
   const { listingId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const backToListingsHref = sanitizeBackToListingsHref(
+    getFirstParamValue(resolvedSearchParams?.backTo),
+  );
   const [listing, session] = await Promise.all([
     fetchPublicListingById(listingId).catch(() => null),
     getWebSession().catch(() => null),
@@ -73,6 +111,8 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     ? `${listing.sex.trim()[0]?.toUpperCase() ?? ''}${listing.sex.trim().slice(1)}`
     : 'Non specificato';
   const ageLabel = listing.ageText?.trim() || 'Non specificata';
+  const catCount = Math.max(1, listing.catCount);
+  const catCountLabel = `${catCount} ${catCount === 1 ? 'gatto' : 'gatti'}`;
   const cityLabel = listing.comuneName.trim();
   const provinceNameLabel = listing.provinceName.trim();
   const provinceSiglaLabel = listing.provinceSigla.trim();
@@ -86,18 +126,27 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const locationFullLabel = [cityProvinceLabel, regionLabel].filter(Boolean).join(', ');
   const summaryItems = [
     { label: 'Prezzo', value: priceLabel },
+    { label: 'Numero gatti', value: catCountLabel },
     { label: 'Razza', value: breedLabel },
     { label: 'Sesso', value: sexLabel },
-    { label: 'Eta', value: ageLabel },
+    { label: 'Età', value: ageLabel },
   ];
 
   return (
     <div className="space-y-6">
       <SectionReveal>
+        <Breadcrumbs
+          items={[
+            { href: '/', label: 'Home' },
+            { href: '/annunci', label: 'Annunci' },
+            { label: listing.title },
+          ]}
+        />
+      </SectionReveal>
+
+      <SectionReveal>
         <div className="flex flex-wrap gap-2">
-          <LinkButton href="/annunci" variant="outline">
-            Torna agli annunci
-          </LinkButton>
+          <BackToListingsButton preferredHref={backToListingsHref} />
           {session ? (
             <LinkButton href="/messaggi" variant="secondary">
               Apri inbox
@@ -108,7 +157,10 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
       <SectionReveal delay={0.04}>
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_430px]">
-          <div className="order-1 space-y-4 lg:col-start-1 lg:row-start-1" data-test-listing-gallery>
+          <div
+            className="order-1 space-y-4 lg:col-start-1 lg:row-start-1"
+            data-test-listing-gallery
+          >
             <ListingGallery listingId={listing.id} media={listing.media} title={listing.title} />
           </div>
 
@@ -176,14 +228,17 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             <CardHeader className="space-y-3">
               <CardTitle>Contatta l'inserzionista</CardTitle>
               <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                Usa la chat privata per fare domande, ricevere aggiornamenti e mantenere lo
-                storico della conversazione.
+                Usa la chat privata per fare domande, ricevere aggiornamenti e mantenere lo storico
+                della conversazione.
               </p>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-[var(--color-text-muted)]">
               {listing.contactName ? (
                 <p>
-                  Referente: <span className="font-medium text-[var(--color-text)]">{listing.contactName}</span>
+                  Referente:{' '}
+                  <span className="font-medium text-[var(--color-text)]">
+                    {listing.contactName}
+                  </span>
                 </p>
               ) : null}
 
@@ -196,7 +251,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                     continuare la conversazione dalla tua inbox privata.
                   </p>
                   <div className="pt-3">
-                    <LinkButton href={`/login?next=${encodeURIComponent(`/annunci/${listing.id}`)}`}>
+                    <LinkButton
+                      href={`/login?next=${encodeURIComponent(`/annunci/${listing.id}`)}`}
+                    >
                       Accedi per contattare
                     </LinkButton>
                   </div>

@@ -1,3 +1,4 @@
+import { Breadcrumbs } from '../../components/breadcrumbs';
 import { ContentPage } from '../../components/content-page';
 import { LinkButton } from '../../components/link-button';
 
@@ -12,6 +13,7 @@ export default function ContactsPage() {
           </LinkButton>
         </>
       }
+      breadcrumbs={<Breadcrumbs items={[{ href: '/', label: 'Home' }, { label: 'Contatti' }]} />}
       asideDescription="Il canale migliore dipende da cosa devi fare: annuncio, account, pubblicazione o supporto generale."
       badges={[
         { label: 'Supporto orientato al task', variant: 'secondary' },
@@ -31,8 +33,8 @@ export default function ContactsPage() {
             "Se vuoi chiedere informazioni su un gatto, usa sempre il dettaglio dell'annuncio o la conversazione privata collegata.",
           body: (
             <p>
-              E il percorso piu veloce per parlare con l&apos;inserzionista, mantenere uno storico dei
-              messaggi e non perdere il contesto del profilo che ti interessa.
+              E il percorso piu veloce per parlare con l&apos;inserzionista, mantenere uno storico
+              dei messaggi e non perdere il contesto del profilo che ti interessa.
             </p>
           ),
           footer: (

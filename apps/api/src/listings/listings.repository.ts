@@ -65,6 +65,11 @@ type ListingRow = {
   ageText: string;
   sex: string;
   breed: string | null;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   status: ListingStatus;
   regionId: string;
   provinceId: string;
@@ -324,6 +329,11 @@ export class ListingsRepository {
       age_text AS "ageText",
       sex,
       breed,
+      is_sterilized AS "isSterilized",
+      is_vaccinated AS "isVaccinated",
+      has_microchip AS "hasMicrochip",
+      compatible_with_children AS "compatibleWithChildren",
+      compatible_with_other_animals AS "compatibleWithOtherAnimals",
       status::text AS "status",
       region_id::text AS "regionId",
       province_id::text AS "provinceId",
@@ -395,6 +405,11 @@ export class ListingsRepository {
           age_months,
           sex,
           breed,
+          is_sterilized,
+          is_vaccinated,
+          has_microchip,
+          compatible_with_children,
+          compatible_with_other_animals,
           status,
           region_id,
           province_id,
@@ -416,15 +431,20 @@ export class ListingsRepository {
           $8,
           $9,
           $10,
-          $11::listing_status,
-          $12::bigint,
-          $13::bigint,
-          $14::bigint,
+          $11,
+          $12,
+          $13,
+          $14,
           $15,
-          $16,
-          $17,
-          $18::timestamptz,
-          $19::timestamptz
+          $16::listing_status,
+          $17::bigint,
+          $18::bigint,
+          $19::bigint,
+          $20,
+          $21,
+          $22,
+          $23::timestamptz,
+          $24::timestamptz
         )
         RETURNING
           id::text AS "id",
@@ -437,6 +457,11 @@ export class ListingsRepository {
           age_text AS "ageText",
           sex,
           breed,
+          is_sterilized AS "isSterilized",
+          is_vaccinated AS "isVaccinated",
+          has_microchip AS "hasMicrochip",
+          compatible_with_children AS "compatibleWithChildren",
+          compatible_with_other_animals AS "compatibleWithOtherAnimals",
           status::text AS "status",
           region_id::text AS "regionId",
           province_id::text AS "provinceId",
@@ -461,6 +486,11 @@ export class ListingsRepository {
         input.ageMonths,
         input.sex,
         input.breed,
+        input.isSterilized,
+        input.isVaccinated,
+        input.hasMicrochip,
+        input.compatibleWithChildren,
+        input.compatibleWithOtherAnimals,
         input.status,
         input.regionId,
         input.provinceId,
@@ -869,8 +899,8 @@ export class ListingsRepository {
 
   async searchPublished(query: SearchListingsQueryDto): Promise<SearchPublishedResultRecord> {
     const whereClauses = [`l.status = 'published'`, 'l.deleted_at IS NULL'];
-    const values: Array<string | number> = [];
-    const addValue = (value: string | number): string => {
+    const values: Array<string | number | boolean> = [];
+    const addValue = (value: string | number | boolean): string => {
       values.push(value);
       return `$${values.length}`;
     };
@@ -965,6 +995,26 @@ export class ListingsRepository {
       const breedPatternPlaceholder = addValue(`%${query.breed}%`);
       whereClauses.push(`COALESCE(l.breed, '') ILIKE ${breedPatternPlaceholder}`);
     }
+
+    const addBooleanFilter = (columnSql: string, value: boolean | null | undefined) => {
+      if (value === null || value === undefined) {
+        return;
+      }
+
+      if (value === true) {
+        whereClauses.push(`${columnSql} IS TRUE`);
+        return;
+      }
+
+      // Backward compatibility: old listings can have NULL for these profile flags.
+      whereClauses.push(`(${columnSql} IS FALSE OR ${columnSql} IS NULL)`);
+    };
+
+    addBooleanFilter('l.is_sterilized', query.isSterilized);
+    addBooleanFilter('l.is_vaccinated', query.isVaccinated);
+    addBooleanFilter('l.has_microchip', query.hasMicrochip);
+    addBooleanFilter('l.compatible_with_children', query.compatibleWithChildren);
+    addBooleanFilter('l.compatible_with_other_animals', query.compatibleWithOtherAnimals);
 
     const distanceOrderSql = this.buildDistanceOrderSql(referencePoint, addValue);
     const sponsoredPriorityOrderSql = `
@@ -1465,11 +1515,11 @@ export class ListingsRepository {
     input: UpdateListingInput,
   ): Promise<ListingRecord | null> {
     const setClauses: string[] = [];
-    const values: Array<string | number | null> = [];
+    const values: Array<string | number | boolean | null> = [];
 
     const addValue = (
       column: string,
-      value: string | number | null,
+      value: string | number | boolean | null,
       castSuffix?: '::bigint' | '::listing_status' | '::numeric' | '::timestamptz',
     ) => {
       values.push(value);
@@ -1503,6 +1553,21 @@ export class ListingsRepository {
     }
     if (input.breed !== undefined) {
       addValue('breed', input.breed);
+    }
+    if (input.isSterilized !== undefined) {
+      addValue('is_sterilized', input.isSterilized);
+    }
+    if (input.isVaccinated !== undefined) {
+      addValue('is_vaccinated', input.isVaccinated);
+    }
+    if (input.hasMicrochip !== undefined) {
+      addValue('has_microchip', input.hasMicrochip);
+    }
+    if (input.compatibleWithChildren !== undefined) {
+      addValue('compatible_with_children', input.compatibleWithChildren);
+    }
+    if (input.compatibleWithOtherAnimals !== undefined) {
+      addValue('compatible_with_other_animals', input.compatibleWithOtherAnimals);
     }
     if (input.status !== undefined) {
       addValue('status', input.status, '::listing_status');
@@ -1559,6 +1624,11 @@ export class ListingsRepository {
           age_text AS "ageText",
           sex,
           breed,
+          is_sterilized AS "isSterilized",
+          is_vaccinated AS "isVaccinated",
+          has_microchip AS "hasMicrochip",
+          compatible_with_children AS "compatibleWithChildren",
+          compatible_with_other_animals AS "compatibleWithOtherAnimals",
           status::text AS "status",
           region_id::text AS "regionId",
           province_id::text AS "provinceId",
@@ -1605,6 +1675,11 @@ export class ListingsRepository {
           age_text AS "ageText",
           sex,
           breed,
+          is_sterilized AS "isSterilized",
+          is_vaccinated AS "isVaccinated",
+          has_microchip AS "hasMicrochip",
+          compatible_with_children AS "compatibleWithChildren",
+          compatible_with_other_animals AS "compatibleWithOtherAnimals",
           status::text AS "status",
           region_id::text AS "regionId",
           province_id::text AS "provinceId",
@@ -2077,6 +2152,11 @@ export class ListingsRepository {
       ageText: row.ageText,
       sex: row.sex,
       breed: row.breed,
+      isSterilized: row.isSterilized,
+      isVaccinated: row.isVaccinated,
+      hasMicrochip: row.hasMicrochip,
+      compatibleWithChildren: row.compatibleWithChildren,
+      compatibleWithOtherAnimals: row.compatibleWithOtherAnimals,
       status: row.status,
       regionId: row.regionId,
       provinceId: row.provinceId,
@@ -2141,9 +2221,26 @@ export class ListingsRepository {
           : null,
       isSponsored: row.isSponsored,
       promotionWeight: Number.isFinite(promotionWeight) ? promotionWeight : 1,
-      publishedAt: row.publishedAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      publishedAt: this.toSearchIndexNullableDate(row.publishedAt),
+      createdAt: this.toSearchIndexDate(row.createdAt),
+      updatedAt: this.toSearchIndexDate(row.updatedAt),
     };
+  }
+
+  private toSearchIndexNullableDate(value: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return this.toSearchIndexDate(value);
+  }
+
+  private toSearchIndexDate(value: string): string {
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return value;
+    }
+
+    return parsedDate.toISOString();
   }
 }

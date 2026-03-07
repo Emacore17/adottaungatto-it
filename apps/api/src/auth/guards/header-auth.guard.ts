@@ -55,6 +55,8 @@ export class HeaderAuthGuard implements CanActivate {
       request.requestUser = this.usersService.upsertFromIdentity({
         provider: 'keycloak',
         providerSubject: tokenUser.subject,
+        authSessionId: tokenUser.sessionId ?? null,
+        authClientId: tokenUser.clientId,
         email: tokenUser.email,
         emailVerified: tokenUser.emailVerified,
         roles: tokenUser.roles,
@@ -83,6 +85,8 @@ export class HeaderAuthGuard implements CanActivate {
     request.requestUser = this.usersService.upsertFromIdentity({
       provider: 'dev-header',
       providerSubject: subject,
+      authSessionId: null,
+      authClientId: null,
       email,
       emailVerified,
       roles,

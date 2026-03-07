@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 import { formatDate } from '../lib/formatters';
 import type { MessageSummary, MessageThreadPage } from '../lib/messages';
 
@@ -145,7 +146,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
       return;
     }
 
-    await fetch(`/api/messages/threads/${threadId}/read`, {
+    await fetchWithAuthRefresh(`/api/messages/threads/${threadId}/read`, {
       method: 'POST',
     });
 
@@ -161,7 +162,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
   const refreshThread = useEffectEvent(async () => {
     setRefreshing(true);
     try {
-      const response = await fetch(
+      const response = await fetchWithAuthRefresh(
         `/api/messages/threads/${threadPage.thread.id}?limit=${threadPage.pagination.limit.toString()}`,
         {
           cache: 'no-store',
@@ -177,6 +178,9 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
         router.replace('/messaggi');
         router.refresh();
         return;
+      }
+      if (response.status === 401) {
+        throw new Error(SESSION_EXPIRED_MESSAGE);
       }
 
       const payload = parseThreadPagePayload(await response.json().catch(() => null));
@@ -221,12 +225,15 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
 
     setLoadingOlder(true);
     try {
-      const response = await fetch(
+      const response = await fetchWithAuthRefresh(
         `/api/messages/threads/${threadPage.thread.id}?limit=${threadPage.pagination.limit.toString()}&beforeMessageId=${beforeMessageId}`,
         {
           cache: 'no-store',
         },
       );
+      if (response.status === 401) {
+        throw new Error(SESSION_EXPIRED_MESSAGE);
+      }
       const payload = parseThreadPagePayload(await response.json().catch(() => null));
       if (!response.ok || !payload) {
         throw new Error('Impossibile caricare i messaggi precedenti.');
@@ -253,7 +260,7 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
   };
 
   const sendTypingState = useEffectEvent(async (isTyping: boolean) => {
-    await fetch(`/api/messages/threads/${threadPage.thread.id}/typing`, {
+    await fetchWithAuthRefresh(`/api/messages/threads/${threadPage.thread.id}/typing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -307,18 +314,23 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
     setSending(true);
     try {
       await stopTyping();
-      const response = await fetch(`/api/messages/threads/${threadPage.thread.id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetchWithAuthRefresh(
+        `/api/messages/threads/${threadPage.thread.id}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ body }),
         },
-        body: JSON.stringify({ body }),
-      });
+      );
       const rawPayload = asRecord(await response.json().catch(() => null));
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(String(rawPayload.message ?? 'Impossibile inviare il messaggio.'));
       }
-
       const nextThread = parseThreadPagePayload({
         thread: rawPayload.thread,
         pagination: {
@@ -372,11 +384,14 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
     setArchiving(true);
     try {
       await stopTyping();
-      const response = await fetch(`/api/messages/threads/${threadPage.thread.id}`, {
+      const response = await fetchWithAuthRefresh(`/api/messages/threads/${threadPage.thread.id}`, {
         method: 'DELETE',
       });
       const payload = asRecord(await response.json().catch(() => null));
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(String(payload.message ?? 'Impossibile eliminare la conversazione.'));
       }
 
@@ -407,11 +422,17 @@ export function MessageThreadView({ initialThreadPage }: { initialThreadPage: Me
     setDeletingEveryone(true);
     try {
       await stopTyping();
-      const response = await fetch(`/api/messages/threads/${threadPage.thread.id}/everyone`, {
-        method: 'DELETE',
-      });
+      const response = await fetchWithAuthRefresh(
+        `/api/messages/threads/${threadPage.thread.id}/everyone`,
+        {
+          method: 'DELETE',
+        },
+      );
       const payload = asRecord(await response.json().catch(() => null));
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(String(payload.message ?? 'Impossibile eliminare la conversazione.'));
       }
 

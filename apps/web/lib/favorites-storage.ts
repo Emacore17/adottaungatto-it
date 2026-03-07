@@ -1,6 +1,12 @@
 export const FAVORITES_STORAGE_KEY = 'adottaungatto:web:favorites';
 export const FAVORITES_UPDATED_EVENT = 'adottaungatto:favorites-updated';
 
+const favoritesApiPath = '/api/users/me/favorites';
+
+interface FavoriteApiError extends Error {
+  status?: number;
+}
+
 const normalizeFavoriteIds = (favoriteIds: string[]) =>
   Array.from(
     new Set(
@@ -9,6 +15,47 @@ const normalizeFavoriteIds = (favoriteIds: string[]) =>
         .filter((favoriteId) => favoriteId.length > 0),
     ),
   );
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const parseFavoriteIdsFromPayload = (value: unknown): string[] => {
+  const record = asRecord(value);
+
+  if (Array.isArray(record.favoriteIds)) {
+    return normalizeFavoriteIds(
+      record.favoriteIds.filter((item): item is string => typeof item === 'string'),
+    );
+  }
+
+  if (Array.isArray(record.favorites)) {
+    const listingIds = record.favorites
+      .map((item) => {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+          return null;
+        }
+
+        const listingId = (item as Record<string, unknown>).listingId;
+        return typeof listingId === 'string' ? listingId : null;
+      })
+      .filter((item): item is string => item !== null);
+
+    return normalizeFavoriteIds(listingIds);
+  }
+
+  return [];
+};
+
+const parseErrorMessage = (payload: unknown, fallbackMessage: string): string => {
+  const record = asRecord(payload);
+  if (typeof record.message === 'string') {
+    return record.message;
+  }
+
+  return fallbackMessage;
+};
 
 const dispatchFavoritesUpdatedEvent = (favoriteIds: string[]) => {
   if (typeof window === 'undefined') {
@@ -54,7 +101,13 @@ export const writeFavoriteIds = (favoriteIds: string[]) => {
   }
 
   const normalizedFavoriteIds = normalizeFavoriteIds(favoriteIds);
-  window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(normalizedFavoriteIds));
+  const nextSerializedValue = JSON.stringify(normalizedFavoriteIds);
+  const currentSerializedValue = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+  if (currentSerializedValue === nextSerializedValue) {
+    return;
+  }
+
+  window.localStorage.setItem(FAVORITES_STORAGE_KEY, nextSerializedValue);
   dispatchFavoritesUpdatedEvent(normalizedFavoriteIds);
 };
 
@@ -67,8 +120,109 @@ export const toggleFavoriteId = (listingId: string): string[] => {
   const currentFavoriteIds = readFavoriteIds();
   const nextFavoriteIds = currentFavoriteIds.includes(normalizedListingId)
     ? currentFavoriteIds.filter((favoriteId) => favoriteId !== normalizedListingId)
-    : [normalizedListingId, ...currentFavoriteIds.filter((favoriteId) => favoriteId !== normalizedListingId)];
+    : [
+        normalizedListingId,
+        ...currentFavoriteIds.filter((favoriteId) => favoriteId !== normalizedListingId),
+      ];
 
   writeFavoriteIds(nextFavoriteIds);
   return nextFavoriteIds;
+};
+
+const buildApiError = (
+  payload: unknown,
+  fallbackMessage: string,
+  status: number,
+): FavoriteApiError => {
+  const error = new Error(parseErrorMessage(payload, fallbackMessage)) as FavoriteApiError;
+  error.status = status;
+  return error;
+};
+
+const requestFavoriteIds = async (input: {
+  path: string;
+  method: 'GET' | 'PUT' | 'DELETE';
+  fallbackMessage: string;
+}): Promise<string[]> => {
+  const response = await fetch(input.path, {
+    method: input.method,
+    cache: 'no-store',
+    headers: {
+      accept: 'application/json',
+    },
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw buildApiError(payload, input.fallbackMessage, response.status);
+  }
+
+  return parseFavoriteIdsFromPayload(payload);
+};
+
+let syncFavoriteIdsPromise: Promise<string[]> | null = null;
+
+export const syncFavoriteIdsFromApi = async (): Promise<string[]> => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  if (!syncFavoriteIdsPromise) {
+    syncFavoriteIdsPromise = (async () => {
+      try {
+        const favoriteIds = await requestFavoriteIds({
+          path: favoritesApiPath,
+          method: 'GET',
+          fallbackMessage: 'Impossibile caricare i preferiti.',
+        });
+        writeFavoriteIds(favoriteIds);
+        return favoriteIds;
+      } finally {
+        syncFavoriteIdsPromise = null;
+      }
+    })();
+  }
+
+  try {
+    return await syncFavoriteIdsPromise;
+  } catch (error) {
+    if ((error as FavoriteApiError).status === 401) {
+      return readFavoriteIds();
+    }
+    throw error;
+  }
+};
+
+export const toggleFavoriteIdWithApi = async (
+  listingId: string,
+  isCurrentlyFavorite: boolean,
+): Promise<{ favoriteIds: string[]; persistedToAccount: boolean }> => {
+  const normalizedListingId = listingId.trim();
+  if (!normalizedListingId) {
+    return {
+      favoriteIds: readFavoriteIds(),
+      persistedToAccount: false,
+    };
+  }
+
+  try {
+    const favoriteIds = await requestFavoriteIds({
+      path: `${favoritesApiPath}/${normalizedListingId}`,
+      method: isCurrentlyFavorite ? 'DELETE' : 'PUT',
+      fallbackMessage: 'Impossibile aggiornare i preferiti.',
+    });
+    writeFavoriteIds(favoriteIds);
+    return {
+      favoriteIds,
+      persistedToAccount: true,
+    };
+  } catch (error) {
+    if ((error as FavoriteApiError).status === 401) {
+      return {
+        favoriteIds: toggleFavoriteId(normalizedListingId),
+        persistedToAccount: false,
+      };
+    }
+    throw error;
+  }
 };

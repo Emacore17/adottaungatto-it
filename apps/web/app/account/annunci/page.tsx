@@ -3,6 +3,7 @@ import { LinkButton } from '../../../components/link-button';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { formatDate } from '../../../lib/formatters';
+import { formatListingStatusLabel } from '../../../lib/listing-status';
 import { fetchMyListings } from '../../../lib/listings';
 
 export default async function AccountListingsPage() {
@@ -45,7 +46,7 @@ export default async function AccountListingsPage() {
               <CardContent className="flex flex-col gap-4 pt-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{listing.status}</Badge>
+                    <Badge variant="outline">{formatListingStatusLabel(listing.status)}</Badge>
                     <Badge variant="secondary">{listing.listingType}</Badge>
                   </div>
                   <div className="space-y-1">
@@ -63,7 +64,7 @@ export default async function AccountListingsPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <LinkButton href={`/account/listings/${listing.id}`} variant="outline">
+                  <LinkButton href={`/account/annunci/${listing.id}`} variant="outline">
                     Apri dettaglio
                   </LinkButton>
                   <LinkButton href={`/annunci/${listing.id}/modifica`}>

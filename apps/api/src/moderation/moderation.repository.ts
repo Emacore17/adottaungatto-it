@@ -21,6 +21,11 @@ type ListingRow = {
   ageText: string;
   sex: string;
   breed: string | null;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   status: ListingStatus;
   regionId: string;
   provinceId: string;
@@ -86,6 +91,11 @@ export class ModerationRepository {
       l.age_text AS "ageText",
       l.sex AS "sex",
       l.breed AS "breed",
+      l.is_sterilized AS "isSterilized",
+      l.is_vaccinated AS "isVaccinated",
+      l.has_microchip AS "hasMicrochip",
+      l.compatible_with_children AS "compatibleWithChildren",
+      l.compatible_with_other_animals AS "compatibleWithOtherAnimals",
       l.status::text AS "status",
       l.region_id::text AS "regionId",
       l.province_id::text AS "provinceId",
@@ -119,6 +129,11 @@ export class ModerationRepository {
           l.age_text AS "ageText",
           l.sex AS "sex",
           l.breed AS "breed",
+          l.is_sterilized AS "isSterilized",
+          l.is_vaccinated AS "isVaccinated",
+          l.has_microchip AS "hasMicrochip",
+          l.compatible_with_children AS "compatibleWithChildren",
+          l.compatible_with_other_animals AS "compatibleWithOtherAnimals",
           l.status::text AS "status",
           l.region_id::text AS "regionId",
           l.province_id::text AS "provinceId",
@@ -213,6 +228,11 @@ export class ModerationRepository {
             age_text AS "ageText",
             sex AS "sex",
             breed AS "breed",
+            is_sterilized AS "isSterilized",
+            is_vaccinated AS "isVaccinated",
+            has_microchip AS "hasMicrochip",
+            compatible_with_children AS "compatibleWithChildren",
+            compatible_with_other_animals AS "compatibleWithOtherAnimals",
             status::text AS "status",
             region_id::text AS "regionId",
             province_id::text AS "provinceId",
@@ -343,6 +363,11 @@ export class ModerationRepository {
       ageText: row.ageText,
       sex: row.sex,
       breed: row.breed,
+      isSterilized: row.isSterilized,
+      isVaccinated: row.isVaccinated,
+      hasMicrochip: row.hasMicrochip,
+      compatibleWithChildren: row.compatibleWithChildren,
+      compatibleWithOtherAnimals: row.compatibleWithOtherAnimals,
       status: row.status,
       regionId: row.regionId,
       provinceId: row.provinceId,

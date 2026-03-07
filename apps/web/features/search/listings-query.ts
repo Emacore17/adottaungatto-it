@@ -5,6 +5,11 @@ export interface ListingsFilterValues {
   listingType: string;
   sex: string;
   breed: string;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   ageMinMonths: number | null;
   ageMaxMonths: number | null;
   priceMin: number | null;
@@ -31,6 +36,11 @@ interface BuildListingsFiltersOptions {
   listingType: string;
   sex: string;
   breed: string;
+  isSterilized?: boolean | null;
+  isVaccinated?: boolean | null;
+  hasMicrochip?: boolean | null;
+  compatibleWithChildren?: boolean | null;
+  compatibleWithOtherAnimals?: boolean | null;
   ageMinMonths: number | null;
   ageMaxMonths: number | null;
   priceMin: number | null;
@@ -103,6 +113,11 @@ export const buildListingsFilters = ({
   listingType,
   sex,
   breed,
+  isSterilized = null,
+  isVaccinated = null,
+  hasMicrochip = null,
+  compatibleWithChildren = null,
+  compatibleWithOtherAnimals = null,
   ageMinMonths,
   ageMaxMonths,
   priceMin,
@@ -122,6 +137,11 @@ export const buildListingsFilters = ({
     listingType,
     sex,
     breed,
+    isSterilized,
+    isVaccinated,
+    hasMicrochip,
+    compatibleWithChildren,
+    compatibleWithOtherAnimals,
     ageMinMonths,
     ageMaxMonths,
     priceMin,
@@ -189,6 +209,20 @@ export const buildListingsHref = (
     params.set('priceMax', String(filters.priceMax));
   }
 
+  const appendBooleanFilter = (paramName: string, value: boolean | null) => {
+    if (value === true) {
+      params.set(paramName, 'true');
+    } else if (value === false) {
+      params.set(paramName, 'false');
+    }
+  };
+
+  appendBooleanFilter('isSterilized', filters.isSterilized);
+  appendBooleanFilter('isVaccinated', filters.isVaccinated);
+  appendBooleanFilter('hasMicrochip', filters.hasMicrochip);
+  appendBooleanFilter('compatibleWithChildren', filters.compatibleWithChildren);
+  appendBooleanFilter('compatibleWithOtherAnimals', filters.compatibleWithOtherAnimals);
+
   if (hasStructuredLocationFilter(filters)) {
     params.set('locationScope', filters.locationScope ?? 'comune');
 
@@ -243,6 +277,11 @@ export const countActiveListingsFilters = (filters: ListingsFilterValues) =>
   (filters.listingType ? 1 : 0) +
   (filters.sex ? 1 : 0) +
   (filters.breed ? 1 : 0) +
+  (filters.isSterilized !== null ? 1 : 0) +
+  (filters.isVaccinated !== null ? 1 : 0) +
+  (filters.hasMicrochip !== null ? 1 : 0) +
+  (filters.compatibleWithChildren !== null ? 1 : 0) +
+  (filters.compatibleWithOtherAnimals !== null ? 1 : 0) +
   (filters.ageMinMonths !== null || filters.ageMaxMonths !== null ? 1 : 0) +
   (filters.priceMin !== null || filters.priceMax !== null ? 1 : 0) +
   (hasStructuredLocationFilter(filters) || filters.referenceLat !== null ? 1 : 0);

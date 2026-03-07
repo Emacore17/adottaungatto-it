@@ -36,6 +36,7 @@ describe('Auth RBAC', () => {
         if (token === bearerAdminToken) {
           return {
             subject: 'kc-admin-1',
+            clientId: 'adottaungatto-admin',
             email: 'admin.demo@adottaungatto.local',
             roles: [UserRole.ADMIN],
           };

@@ -612,6 +612,29 @@ export class ListingsService {
       return this.listingsRepository.searchPublished(query);
     }
 
+    if (query.isSterilized !== null && query.isSterilized !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
+    if (query.isVaccinated !== null && query.isVaccinated !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
+    if (query.hasMicrochip !== null && query.hasMicrochip !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
+    if (query.compatibleWithChildren !== null && query.compatibleWithChildren !== undefined) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
+    if (
+      query.compatibleWithOtherAnimals !== null &&
+      query.compatibleWithOtherAnimals !== undefined
+    ) {
+      return this.listingsRepository.searchPublished(query);
+    }
+
     try {
       return await this.searchIndexService.searchPublished(query);
     } catch (error) {

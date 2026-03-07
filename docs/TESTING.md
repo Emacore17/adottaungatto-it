@@ -2,7 +2,7 @@
 
 Guida compatta ai test realmente presenti nel repo.
 
-Ultima verifica documentata: 2026-03-06.
+Ultima verifica documentata: 2026-03-07.
 
 ## Comandi principali
 
@@ -11,8 +11,10 @@ Da root workspace:
 ```bash
 pnpm lint
 pnpm typecheck
+pnpm openapi:check
 pnpm test
 pnpm test:e2e
+pnpm test:e2e:web:install
 pnpm test:e2e:web
 pnpm test:smoke:auth
 pnpm test:smoke:web:auth-pages
@@ -33,16 +35,22 @@ pnpm search:cleanup
 pnpm search:verify
 pnpm cleanup:retention
 pnpm promotions:lifecycle
+pnpm users:reconcile-identities
+pnpm ops:metrics
+pnpm ops:alerts
 ```
 
 Note:
 
 - `backup:restore -- --yes` e distruttivo sul dataset locale corrente
+- `pnpm test:e2e:web:install` scarica browser/runtime Playwright richiesti in locale
 - `test:smoke:auth` richiede web (`localhost:3000`), api (`localhost:3002`) e Keycloak attivi
 - `test:smoke:web:auth-pages` richiede web attivo su `localhost:3000` (override con `AUTH_PAGES_BASE_URL`)
 - `test:smoke:auth` usa flow OIDC reale (no password grant legacy) e fallisce in preflight se `/health` API non e raggiungibile
 - le suite E2E API (`apps/api/test/**/*.e2e-spec.ts`) girano in modo sequenziale (`fileParallelism: false`, `maxWorkers: 1`) per evitare flakiness da stato condiviso (`process.env`, Redis, DB)
 - le spec `auth-phone-verification*.e2e-spec.ts` usano un `RATE_LIMIT_KEY_PREFIX` univoco per run per evitare collisioni Redis tra esecuzioni ravvicinate
+- `pnpm ops:alerts` ritorna exit code `1` quando lo stato alert supera la policy `OPS_ALERT_FAIL_ON` (default: solo `critical`)
+- `pnpm openapi:check` fallisce se `packages/sdk/src/generated/openapi.ts` non e allineato a `packages/sdk/openapi/openapi.v1.json`
 
 ## Prerequisiti locali consigliati
 
@@ -64,7 +72,10 @@ Presente copertura su:
 
 - health e runtime safety
 - auth RBAC/recovery/identity-linking
-- users e profile/avatar key
+- users e profile/avatar upload
+- consensi utente versionati (`GET/PATCH /v1/users/me/consents`)
+- preferiti utente (`GET/PUT/DELETE /v1/users/me/favorites`)
+- linked identities e session management account (`GET/POST/DELETE /v1/users/me/linked-identities*`, `GET/DELETE /v1/users/me/sessions*`)
 - listings create/update/public/search/media/contact + integrazione reale iniziale
 - messaging
 - moderation
@@ -83,6 +94,7 @@ Spec di riferimento:
 - `auth-phone-verification-integration.e2e-spec.ts`
 - `auth-phone-verification-delivery.service.spec.ts`
 - `auth-identity-linking.e2e-spec.ts`
+- `users.e2e-spec.ts`
 - `listings-integration.e2e-spec.ts`
 - `messaging.e2e-spec.ts`
 - `moderation.e2e-spec.ts`
@@ -117,6 +129,7 @@ Spec presenti:
 
 - `scaffold-smoke.spec.ts`
 - `auth-smoke.spec.ts` (condizionale con `E2E_WEB_AUTH_SMOKE=1`)
+- `social-auth-smoke.spec.ts` (fallback sempre attivo + ramo provider attivo condizionale con `E2E_WEB_SOCIAL_SMOKE=1`)
 
 Copertura attuale:
 
@@ -126,6 +139,15 @@ Copertura attuale:
 - ricerca home mobile con controlli principali
 - ordine blocchi mobile su `/annunci/[listingId]` (gallery prima del titolo)
 - smoke auth: redirect anonimo, login demo, invalidazione sessione logout via `POST /api/auth/logout` in modalita SPA
+- smoke social auth:
+  - fallback `social_provider_unavailable` su provider non ammesso
+  - redirect OIDC provider-aware con `kc_idp_hint` e parametri signup (`screen_hint`, `kc_action`) quando provider abilitato
+
+Comando social smoke (provider attivo):
+
+```bash
+CI=1 E2E_WEB_SOCIAL_SMOKE=1 KEYCLOAK_SOCIAL_PROVIDERS=google pnpm --filter @adottaungatto/web exec playwright test tests/e2e/social-auth-smoke.spec.ts
+```
 
 ## Check manuale rapido
 

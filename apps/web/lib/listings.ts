@@ -33,6 +33,11 @@ export interface MyListing {
   ageMonths: number | null;
   sex: string;
   breed: string | null;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   status: ListingStatus;
   regionId: string;
   provinceId: string;
@@ -80,6 +85,7 @@ export interface PublicListingSummary {
   listingType: string;
   priceAmount: string | null;
   currency: string;
+  catCount: number;
   ageText: string;
   sex: string;
   breed: string | null;
@@ -121,6 +127,11 @@ export interface PublicListingsSearchOptions {
   ageMaxMonths?: number | null;
   sex?: string | null;
   breed?: string | null;
+  isSterilized?: boolean | null;
+  isVaccinated?: boolean | null;
+  hasMicrochip?: boolean | null;
+  compatibleWithChildren?: boolean | null;
+  compatibleWithOtherAnimals?: boolean | null;
   sort?: SearchSort;
   limit?: number;
   offset?: number;
@@ -202,6 +213,15 @@ const parseListing = (value: unknown): MyListing | null => {
         : parsedAgeMonths,
     sex: String(record.sex ?? ''),
     breed: record.breed === null ? null : String(record.breed ?? ''),
+    isSterilized: parseNullableBoolean(record.isSterilized ?? record.is_sterilized),
+    isVaccinated: parseNullableBoolean(record.isVaccinated ?? record.is_vaccinated),
+    hasMicrochip: parseNullableBoolean(record.hasMicrochip ?? record.has_microchip),
+    compatibleWithChildren: parseNullableBoolean(
+      record.compatibleWithChildren ?? record.compatible_with_children,
+    ),
+    compatibleWithOtherAnimals: parseNullableBoolean(
+      record.compatibleWithOtherAnimals ?? record.compatible_with_other_animals,
+    ),
     status: String(record.status ?? 'pending_review') as ListingStatus,
     regionId: String(record.regionId ?? ''),
     provinceId: String(record.provinceId ?? ''),
@@ -245,6 +265,39 @@ const parseNullableNumber = (value: unknown): number | null => {
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed)) {
       return parsed;
+    }
+  }
+
+  return null;
+};
+
+const parseNullableBoolean = (value: unknown): boolean | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    if (value === 1) {
+      return true;
+    }
+
+    if (value === 0) {
+      return false;
+    }
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'si'].includes(normalized)) {
+      return true;
+    }
+
+    if (['false', '0', 'no'].includes(normalized)) {
+      return false;
     }
   }
 
@@ -337,6 +390,18 @@ const parsePublicSummary = (value: unknown): PublicListingSummary | null => {
     return null;
   }
 
+  const catCount = Math.max(
+    1,
+    parseInteger(
+      record.catCount ??
+        record.catsCount ??
+        record.numberOfCats ??
+        record.cat_count ??
+        record.cats_count,
+      1,
+    ),
+  );
+
   return {
     id: record.id,
     title: record.title,
@@ -344,6 +409,7 @@ const parsePublicSummary = (value: unknown): PublicListingSummary | null => {
     listingType: String(record.listingType ?? ''),
     priceAmount: record.priceAmount === null ? null : String(record.priceAmount ?? ''),
     currency: String(record.currency ?? 'EUR'),
+    catCount,
     ageText: String(record.ageText ?? ''),
     sex: String(record.sex ?? ''),
     breed: record.breed === null ? null : String(record.breed ?? ''),
@@ -381,6 +447,14 @@ const parsePublicDetail = (value: unknown): PublicListingDetail | null => {
   };
 };
 
+const demoListingTitlePattern = /^\s*\[demo\b/i;
+const demoListingDescriptionPattern =
+  /\bannuncio seed locale\b|\bseed locale per test\b|\bdati demo\b/i;
+
+const isDemoPublicListing = (listing: Pick<PublicListingSummary, 'title' | 'description'>) =>
+  demoListingTitlePattern.test(listing.title) ||
+  demoListingDescriptionPattern.test(listing.description.toLowerCase());
+
 export const mapMockListingToPublicSummary = (listing: ListingCardData): PublicListingSummary => {
   const primaryMedia = listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
 
@@ -391,6 +465,7 @@ export const mapMockListingToPublicSummary = (listing: ListingCardData): PublicL
     listingType: listing.listingType,
     priceAmount: listing.priceAmount === null ? null : String(listing.priceAmount),
     currency: listing.currency,
+    catCount: 1,
     ageText: listing.ageText,
     sex: listing.sex,
     breed: listing.breed,
@@ -476,6 +551,14 @@ const normalizeOptionalNonNegativeInteger = (value: number | null | undefined): 
   return Math.trunc(normalized);
 };
 
+const normalizeOptionalBoolean = (value: boolean | null | undefined): boolean | null => {
+  if (typeof value !== 'boolean') {
+    return null;
+  }
+
+  return value;
+};
+
 const appendOptionalQueryParam = (
   query: URLSearchParams,
   key: string,
@@ -504,6 +587,16 @@ const appendOptionalDecimalQueryParam = (
 ) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     query.set(key, String(value));
+  }
+};
+
+const appendOptionalBooleanQueryParam = (
+  query: URLSearchParams,
+  key: string,
+  value: boolean | null | undefined,
+) => {
+  if (typeof value === 'boolean') {
+    query.set(key, value ? 'true' : 'false');
   }
 };
 
@@ -1042,7 +1135,8 @@ export const fetchPublicListings = async (
 
     return rawListings
       .map((item) => parsePublicSummary(item))
-      .filter((item): item is PublicListingSummary => item !== null);
+      .filter((item): item is PublicListingSummary => item !== null)
+      .filter((item) => !isDemoPublicListing(item));
   } catch {
     if (shouldFallbackToMock(null)) {
       return mockListings
@@ -1070,8 +1164,19 @@ export const searchPublicListingsWithMetadata = async (
   const priceMax = normalizeOptionalNonNegativeNumber(options.priceMax);
   const ageMinMonths = normalizeOptionalNonNegativeInteger(options.ageMinMonths);
   const ageMaxMonths = normalizeOptionalNonNegativeInteger(options.ageMaxMonths);
+  const isSterilized = normalizeOptionalBoolean(options.isSterilized);
+  const isVaccinated = normalizeOptionalBoolean(options.isVaccinated);
+  const hasMicrochip = normalizeOptionalBoolean(options.hasMicrochip);
+  const compatibleWithChildren = normalizeOptionalBoolean(options.compatibleWithChildren);
+  const compatibleWithOtherAnimals = normalizeOptionalBoolean(options.compatibleWithOtherAnimals);
   const referenceLat = normalizeOptionalFiniteNumber(options.referenceLat);
   const referenceLon = normalizeOptionalFiniteNumber(options.referenceLon);
+  const hasProfileBooleanFilter =
+    isSterilized !== null ||
+    isVaccinated !== null ||
+    hasMicrochip !== null ||
+    compatibleWithChildren !== null ||
+    compatibleWithOtherAnimals !== null;
   const effectiveReferenceLat =
     referenceLat !== null && referenceLon !== null ? referenceLat : null;
   const effectiveReferenceLon =
@@ -1106,6 +1211,15 @@ export const searchPublicListingsWithMetadata = async (
   appendOptionalNumberQueryParam(query, 'ageMaxMonths', effectiveAgeMaxMonths);
   appendOptionalQueryParam(query, 'sex', options.sex);
   appendOptionalQueryParam(query, 'breed', options.breed);
+  appendOptionalBooleanQueryParam(query, 'isSterilized', isSterilized);
+  appendOptionalBooleanQueryParam(query, 'isVaccinated', isVaccinated);
+  appendOptionalBooleanQueryParam(query, 'hasMicrochip', hasMicrochip);
+  appendOptionalBooleanQueryParam(query, 'compatibleWithChildren', compatibleWithChildren);
+  appendOptionalBooleanQueryParam(
+    query,
+    'compatibleWithOtherAnimals',
+    compatibleWithOtherAnimals,
+  );
 
   if (effectivePriceMin !== null) {
     query.set('priceMin', String(effectivePriceMin));
@@ -1122,6 +1236,11 @@ export const searchPublicListingsWithMetadata = async (
     priceMax: effectivePriceMax,
     ageMinMonths: effectiveAgeMinMonths,
     ageMaxMonths: effectiveAgeMaxMonths,
+    isSterilized,
+    isVaccinated,
+    hasMicrochip,
+    compatibleWithChildren,
+    compatibleWithOtherAnimals,
     referenceLat: effectiveReferenceLat,
     referenceLon: effectiveReferenceLon,
   };
@@ -1135,7 +1254,7 @@ export const searchPublicListingsWithMetadata = async (
     );
 
     if (!response.ok) {
-      if (shouldFallbackToMock(response.status)) {
+      if (shouldFallbackToMock(response.status) && !hasProfileBooleanFilter) {
         if (isMockModeEnabled) {
           const publicFallback = await searchPublicListingsFromPublicEndpoint(
             fallbackOptions,
@@ -1159,33 +1278,17 @@ export const searchPublicListingsWithMetadata = async (
     const rawListings = Array.isArray(payload.items) ? payload.items : [];
     const parsedListings = rawListings
       .map((item) => parsePublicSummary(item))
-      .filter((item): item is PublicListingSummary => item !== null);
+      .filter((item): item is PublicListingSummary => item !== null)
+      .filter((item) => !isDemoPublicListing(item));
 
-    if (parsedListings.length > 0 || !isMockModeEnabled) {
-      return {
-        items: parsedListings,
-        pagination:
-          parsedPagination ?? buildSearchPagination(limit, offset, offset + parsedListings.length),
-        metadata: parsedMetadata,
-      };
-    }
-
-    const publicFallback = await searchPublicListingsFromPublicEndpoint(
-      fallbackOptions,
-      limit,
-      offset,
-    ).catch(() => null);
-    if (publicFallback && publicFallback.items.length > 0) {
-      return { ...publicFallback, metadata: parsedMetadata };
-    }
-
-    const mockFallback = searchMockPublicListings(fallbackOptions, limit, offset);
     return {
-      ...mockFallback,
+      items: parsedListings,
+      pagination:
+        parsedPagination ?? buildSearchPagination(limit, offset, offset + parsedListings.length),
       metadata: parsedMetadata,
     };
   } catch {
-    if (shouldFallbackToMock(null)) {
+    if (shouldFallbackToMock(null) && !hasProfileBooleanFilter) {
       if (isMockModeEnabled) {
         const publicFallback = await searchPublicListingsFromPublicEndpoint(
           fallbackOptions,
@@ -1246,7 +1349,12 @@ export const fetchPublicListingById = async (
     }
 
     const payload = asRecord(await response.json());
-    return parsePublicDetail(payload.listing);
+    const listing = parsePublicDetail(payload.listing);
+    if (!listing || isDemoPublicListing(listing)) {
+      return null;
+    }
+
+    return listing;
   } catch {
     if (shouldFallbackToMock(null)) {
       const mockListing = findMockListingBySlug(normalizedId);

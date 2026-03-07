@@ -9,6 +9,7 @@ interface KeycloakAccessBlock {
 
 interface KeycloakTokenPayload extends JWTPayload {
   azp?: string;
+  sid?: string;
   email?: string;
   email_verified?: boolean;
   preferred_username?: string;
@@ -17,6 +18,8 @@ interface KeycloakTokenPayload extends JWTPayload {
 
 export interface VerifiedKeycloakToken {
   subject: string;
+  sessionId?: string;
+  clientId: string;
   email: string;
   emailVerified?: boolean;
   roles: UserRole[];
@@ -64,6 +67,8 @@ export class KeycloakTokenService {
 
     return {
       subject: payload.sub,
+      sessionId: typeof payload.sid === 'string' ? payload.sid : undefined,
+      clientId: payload.azp,
       email,
       emailVerified: payload.email_verified,
       roles,

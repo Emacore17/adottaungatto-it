@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 import { LinkButton } from './link-button';
 import { MessageThreadList } from './message-thread-list';
 import { MessageThreadView } from './message-thread-view';
@@ -131,7 +132,7 @@ export function MessageThreadWorkspace({
   }, [initialThreadListPage]);
 
   const refreshThreads = useEffectEvent(async () => {
-    const response = await fetch(
+    const response = await fetchWithAuthRefresh(
       `/api/messages/threads?limit=${threadListPage.pagination.limit.toString()}&offset=0`,
       {
         cache: 'no-store',
@@ -139,6 +140,9 @@ export function MessageThreadWorkspace({
     );
     const payload = parseThreadsPagePayload(await response.json().catch(() => null));
     if (!response.ok || !payload) {
+      if (response.status === 401) {
+        throw new Error(SESSION_EXPIRED_MESSAGE);
+      }
       throw new Error('Impossibile aggiornare le conversazioni.');
     }
 

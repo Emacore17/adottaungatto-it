@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
 import { Badge } from '@adottaungatto/ui';
+import type { ReactNode } from 'react';
 import { getWebSession } from '../lib/auth';
+import { fetchMyProfile } from '../lib/users';
 import { LinkButton } from './link-button';
 import { PageShell } from './page-shell';
 import { WorkspaceSubnav } from './workspace-subnav';
@@ -14,6 +15,31 @@ interface WorkspacePageShellProps {
   titleExtra?: ReactNode;
 }
 
+const resolveWorkspaceAccountLabel = (
+  profile: {
+    displayName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  } | null,
+  fallbackEmail: string | null,
+): string | null => {
+  const displayName = profile?.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+
+  const fullName = [profile?.firstName, profile?.lastName]
+    .map((item) => item?.trim() ?? '')
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  return fallbackEmail;
+};
+
 export async function WorkspacePageShell({
   aside,
   children,
@@ -24,10 +50,12 @@ export async function WorkspacePageShell({
 }: WorkspacePageShellProps) {
   const session = await getWebSession().catch(() => null);
   const emailVerified = session?.user.emailVerified === true;
+  const profile = session ? await fetchMyProfile().catch(() => null) : null;
+  const workspaceAccountLabel = resolveWorkspaceAccountLabel(profile, session?.user.email ?? null);
 
   return (
     <div className="space-y-6">
-      <WorkspaceSubnav />
+      <WorkspaceSubnav accountLabel={workspaceAccountLabel} />
       {!emailVerified ? (
         <section className="rounded-3xl border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-4 py-4 shadow-[var(--shadow-sm)] sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

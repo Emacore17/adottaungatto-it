@@ -13,10 +13,6 @@ interface AdminShellProps {
 const navItems = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/moderazione', label: 'Moderazione' },
-  { href: '/admin/utenti', label: 'Utenti' },
-  { href: '/admin/segnalazioni', label: 'Segnalazioni' },
-  { href: '/admin/impostazioni', label: 'Impostazioni' },
-  { href: '/admin/audit-log', label: 'Audit log' },
 ];
 
 const isPathActive = (pathname: string, href: string) =>

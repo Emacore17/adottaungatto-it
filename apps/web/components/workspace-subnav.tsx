@@ -64,7 +64,11 @@ const subnavLinkActiveClassName =
 const subnavLinkInactiveClassName =
   'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]';
 
-export function WorkspaceSubnav() {
+interface WorkspaceSubnavProps {
+  accountLabel?: string | null;
+}
+
+export function WorkspaceSubnav({ accountLabel = null }: WorkspaceSubnavProps) {
   const pathname = usePathname() ?? '/account';
 
   return (
@@ -75,7 +79,9 @@ export function WorkspaceSubnav() {
             Workspace
           </p>
           <p className="text-sm text-[var(--color-text-muted)]">
-            Annunci, messaggi, preferiti e impostazioni del tuo account.
+            {accountLabel
+              ? `Accesso attivo: ${accountLabel}.`
+              : 'Annunci, messaggi, preferiti e impostazioni del tuo account.'}
           </p>
         </div>
 

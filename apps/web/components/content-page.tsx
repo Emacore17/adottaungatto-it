@@ -24,6 +24,7 @@ interface ContentPageProps {
   actions?: ReactNode;
   asideDescription?: string;
   badges?: ContentPageBadge[];
+  breadcrumbs?: ReactNode;
   children?: ReactNode;
   description: string;
   eyebrow?: string;
@@ -54,6 +55,7 @@ export function ContentPage({
   actions,
   asideDescription,
   badges = [],
+  breadcrumbs,
   children,
   description,
   eyebrow,
@@ -103,6 +105,7 @@ export function ContentPage({
           {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
         </div>
       }
+      breadcrumbs={breadcrumbs}
       description={description}
       eyebrow={eyebrow}
       title={title}

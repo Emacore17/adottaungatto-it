@@ -13,6 +13,9 @@
     "test:smoke:minio": "tsx src/smoke-minio.ts",
     "cleanup:retention": "tsx src/retention-cleanup-run-once.ts",
     "promotions:lifecycle": "tsx src/promotions-lifecycle-run-once.ts",
+    "users:reconcile-identities": "tsx src/user-identity-reconciliation-run-once.ts",
+    "ops:metrics": "tsx src/ops-observability-snapshot.ts",
+    "ops:alerts": "tsx src/ops-observability-alerts.ts",
     "search:cleanup": "tsx src/search-cleanup.ts",
     "search:reindex": "tsx src/search-reindex.ts",
     "search:verify": "tsx src/search-verify.ts"

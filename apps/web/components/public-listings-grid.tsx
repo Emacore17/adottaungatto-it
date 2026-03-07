@@ -124,6 +124,8 @@ export function PublicListingsGrid({
         const sexLabel = listing.sex.trim()
           ? `${listing.sex.trim()[0].toUpperCase()}${listing.sex.trim().slice(1)}`
           : '';
+        const catCount = Math.max(1, listing.catCount);
+        const catCountLabel = `${catCount} ${catCount === 1 ? 'gatto' : 'gatti'}`;
         const ageLabel = listing.ageText.trim();
         const breedLabel = listing.breed?.trim() ?? '';
         const publishedLabel = formatDate(listing.publishedAt ?? listing.createdAt);
@@ -237,7 +239,7 @@ export function PublicListingsGrid({
                       strokeWidth="1.8"
                     />
                   </svg>
-                  1 gatto
+                  {catCountLabel}
                 </span>
                 {breedLabel ? (
                   <span className={pillClassName}>

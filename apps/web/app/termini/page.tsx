@@ -1,3 +1,4 @@
+import { Breadcrumbs } from '../../components/breadcrumbs';
 import { ContentPage } from '../../components/content-page';
 import { LinkButton } from '../../components/link-button';
 
@@ -12,6 +13,7 @@ export default function TermsPage() {
           </LinkButton>
         </>
       }
+      breadcrumbs={<Breadcrumbs items={[{ href: '/', label: 'Home' }, { label: 'Termini' }]} />}
       asideDescription="Le regole d'uso servono a mantenere annunci credibili, conversazioni ordinate e una piattaforma piu affidabile per tutti."
       badges={[
         { label: 'Uso responsabile', variant: 'secondary' },

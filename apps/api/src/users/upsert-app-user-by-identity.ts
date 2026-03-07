@@ -129,6 +129,43 @@ const insertIdentityLinkSecurityEvent = async (
   }
 };
 
+const touchLinkedIdentityBestEffort = async (
+  pool: Pool,
+  input: {
+    userId: string;
+    provider: string;
+    providerSubject: string;
+    emailAtLink: string;
+  },
+): Promise<void> => {
+  try {
+    await pool.query(
+      `
+        INSERT INTO user_linked_identities (
+          user_id,
+          provider,
+          provider_subject,
+          email_at_link
+        )
+        VALUES ($1::bigint, $2, $3, $4)
+        ON CONFLICT (provider, provider_subject)
+        DO UPDATE SET
+          user_id = EXCLUDED.user_id,
+          email_at_link = EXCLUDED.email_at_link,
+          last_seen_at = NOW();
+      `,
+      [input.userId, input.provider, input.providerSubject, input.emailAtLink],
+    );
+  } catch (error) {
+    const pgError = error as { code?: string };
+    if (pgError.code === '42P01') {
+      // Best effort fallback while migration rollout completes.
+      return;
+    }
+    throw error;
+  }
+};
+
 const tryLinkVerifiedEmailIdentity = async (
   pool: Pool,
   identity: AppUserIdentity,
@@ -212,15 +249,35 @@ export const upsertAppUserByIdentity = async (
 
   const userIdByIdentity = await findUserIdByIdentity(pool, normalizedIdentity);
   if (userIdByIdentity) {
-    return updateUserIdentityById(pool, userIdByIdentity, normalizedIdentity);
+    const userId = await updateUserIdentityById(pool, userIdByIdentity, normalizedIdentity);
+    await touchLinkedIdentityBestEffort(pool, {
+      userId,
+      provider: normalizedIdentity.provider,
+      providerSubject: normalizedIdentity.providerSubject,
+      emailAtLink: normalizedIdentity.email,
+    });
+    return userId;
   }
 
   if (normalizedIdentity.emailVerified) {
     const userIdByVerifiedEmail = await tryLinkVerifiedEmailIdentity(pool, normalizedIdentity);
     if (userIdByVerifiedEmail) {
+      await touchLinkedIdentityBestEffort(pool, {
+        userId: userIdByVerifiedEmail,
+        provider: normalizedIdentity.provider,
+        providerSubject: normalizedIdentity.providerSubject,
+        emailAtLink: normalizedIdentity.email,
+      });
       return userIdByVerifiedEmail;
     }
   }
 
-  return upsertUserByIdentity(pool, normalizedIdentity);
+  const createdUserId = await upsertUserByIdentity(pool, normalizedIdentity);
+  await touchLinkedIdentityBestEffort(pool, {
+    userId: createdUserId,
+    provider: normalizedIdentity.provider,
+    providerSubject: normalizedIdentity.providerSubject,
+    emailAtLink: normalizedIdentity.email,
+  });
+  return createdUserId;
 };

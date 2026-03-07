@@ -2,6 +2,7 @@ import { loadWebEnv } from '@adottaungatto/config';
 import { Badge, Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
 import { Cat, MapPin, PawPrint, SlidersHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { Metadata } from 'next';
 import { FeaturedListingsCarousel } from '../components/featured-listings-carousel';
 import { LinkButton } from '../components/link-button';
 import { NearbyListingsSection } from '../components/nearby-listings-section';
@@ -18,6 +19,27 @@ const parseListingTimestamp = (listing: PublicListingSummary) => {
 
 const sortByLatest = (listings: PublicListingSummary[]) => {
   return [...listings].sort((a, b) => parseListingTimestamp(b) - parseListingTimestamp(a));
+};
+
+const dedupeListingsById = (listings: PublicListingSummary[]) => {
+  const seenIds = new Set<string>();
+
+  return listings.filter((listing) => {
+    if (seenIds.has(listing.id)) {
+      return false;
+    }
+
+    seenIds.add(listing.id);
+    return true;
+  });
+};
+
+export const metadata: Metadata = {
+  title: {
+    absolute: 'adottaungatto.it - Adozioni, stalli e segnalazioni di gatti in Italia',
+  },
+  description:
+    'Trova gatti in adozione, stallo o segnalazione in tutta Italia con filtri per localita, razza, sesso, eta e prezzo.',
 };
 
 interface HeroMetaItemProps {
@@ -67,7 +89,7 @@ export default async function Page() {
   const listings = await fetchPublicListings({ limit: Math.max(featuredListingsLimit, 24) }).catch(
     () => [],
   );
-  const orderedListings = sortByLatest(listings);
+  const orderedListings = dedupeListingsById(sortByLatest(listings));
   const featuredListings = orderedListings.slice(0, featuredListingsLimit);
   const listingCountLabel =
     orderedListings.length > 0

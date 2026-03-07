@@ -22,7 +22,7 @@ export default function CookiePage() {
       highlights={[
         { label: 'Sessione', value: 'Accesso alle aree riservate' },
         { label: 'Tema', value: 'Preferenza chiara o scura salvata localmente' },
-        { label: 'Preferiti', value: 'Annunci salvati sul dispositivo attuale' },
+        { label: 'Preferiti', value: 'Sincronizzati su account (con fallback locale ospite)' },
       ]}
       sections={[
         {
@@ -37,7 +37,7 @@ export default function CookiePage() {
           title: 'Preferenze locali',
           items: [
             'La scelta del tema e altre preferenze leggere possono essere mantenute nel browser per evitare di reimpostarle a ogni visita.',
-            'I preferiti pubblici sono salvati sul dispositivo corrente, cosi restano rapidi da consultare anche senza login.',
+            'I preferiti usano persistenza account lato server quando sei autenticato; senza login resta un fallback locale sul browser corrente.',
             'Questi dati servono soprattutto a migliorare continuita e usabilita dell esperienza.',
           ],
         },

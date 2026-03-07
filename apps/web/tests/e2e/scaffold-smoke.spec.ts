@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
 
 const mobileViewport = { width: 390, height: 844 };
 
@@ -29,13 +29,66 @@ test('renders the functional login scaffold', async ({ page }) => {
   await page.goto('/login');
 
   await expect(page.getByRole('heading', { name: 'Accedi al tuo account' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continua con account' })).toBeVisible();
+  const continueWithAccountLink = page.getByRole('link', { name: 'Continua con account' });
+  if ((await continueWithAccountLink.count()) > 0) {
+    await expect(continueWithAccountLink.first()).toBeVisible();
+  } else {
+    await expect(page.getByRole('button', { name: 'Continua con account' })).toBeVisible();
+  }
+});
+
+test('shows session expired message on login', async ({ page }) => {
+  await page.goto('/login?error=session_expired&next=%2Faccount');
+
+  await expect(
+    page.getByText('La sessione e scaduta. Accedi di nuovo per continuare.'),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Continua con account' })).toHaveAttribute(
+    'href',
+    '/api/auth/login?next=%2Faccount',
+  );
+});
+
+test('applies italian locale params to OIDC login and register redirects', async ({ request }) => {
+  const loginResponse = await request.get('/api/auth/login?next=%2Faccount', {
+    maxRedirects: 0,
+  });
+  expect(loginResponse.status()).toBe(303);
+  const loginLocation = loginResponse.headers().location ?? '';
+  expect(loginLocation).toContain('ui_locales=it');
+  expect(loginLocation).toContain('kc_locale=it');
+
+  const registerResponse = await request.get('/api/auth/register?next=%2Faccount', {
+    maxRedirects: 0,
+  });
+  expect(registerResponse.status()).toBe(303);
+  const registerLocation = registerResponse.headers().location ?? '';
+  expect(registerLocation).toContain('ui_locales=it');
+  expect(registerLocation).toContain('kc_locale=it');
 });
 
 test('renders the public listings scaffold', async ({ page }) => {
   await page.goto('/annunci');
 
   await expect(page.getByRole('heading', { name: 'Annunci gatti da tutta Italia' })).toBeVisible();
+});
+
+test('explains login requirement from privacy manage preferences action', async ({ page }) => {
+  await page.goto('/privacy');
+
+  const managePreferencesLink = page.getByRole('link', {
+    name: 'Accedi per gestire preferenze',
+  });
+  await expect(managePreferencesLink).toBeVisible();
+  await expect(managePreferencesLink).toHaveAttribute(
+    'href',
+    '/login?next=%2Faccount%2Fimpostazioni',
+  );
+  await expect(
+    page.getByText(
+      'Per gestire consensi e preferenze del tuo account devi prima accedere; dopo il login verrai portato direttamente nelle impostazioni.',
+    ),
+  ).toBeVisible();
 });
 
 test('switches between light and dark theme tokens', async ({ page }) => {
@@ -134,7 +187,9 @@ test('uses mobile home search inline filters and opens location sheet', async ({
   const filtersButton = searchContainer.getByRole('button', { name: 'Filtri avanzati' });
   await expect(filtersButton).toBeVisible();
   await filtersButton.click();
-  await expect(searchContainer.locator('.search-bar-advanced.expanded')).toBeVisible();
+  await expect(
+    searchContainer.getByRole('button', { name: 'Cosa stai cercando?' }).first(),
+  ).toBeVisible();
 
   await searchContainer.getByRole('button', { name: 'Cosa stai cercando?' }).first().click();
   await searchContainer
@@ -166,6 +221,105 @@ test('uses mobile home search inline filters and opens location sheet', async ({
   await expect.poll(() => new URL(page.url()).searchParams.get('listingType')).toBe('adozione');
   await expect.poll(() => new URL(page.url()).searchParams.get('sex')).toBe('femmina');
   await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe('relevance');
+});
+
+test('applies desktop home search filters to query params', async ({ page }) => {
+  await page.goto('/');
+
+  const searchContainer = page.locator('.ricerca-container').first();
+
+  await searchContainer.getByRole('textbox', { name: 'Cerca gatti' }).fill('cucciolo roma');
+  await searchContainer.getByRole('textbox', { name: 'Dove' }).fill('Roma');
+
+  await searchContainer
+    .getByRole('button', { name: /^Razza/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page
+    .getByRole('button', { name: /^Persiano$/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+
+  await searchContainer
+    .getByRole('button', { name: /Cosa stai cercando\?/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page
+    .getByRole('button', { name: /^Adozione$/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+
+  await searchContainer
+    .getByRole('button', { name: /^Sesso/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page
+    .getByRole('button', { name: /^Femmina$/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+
+  await searchContainer
+    .getByRole('button', { name: /^Prezzo/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page.locator('#price-min').selectOption('50');
+  await page.locator('#price-max').selectOption('200');
+
+  await searchContainer
+    .getByRole('button', { name: /^Età del gatto/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page.getByLabel('Età minima').selectOption('12');
+  await page.getByLabel('Età massima').selectOption('24');
+
+  await searchContainer
+    .getByRole('button', { name: /^Ordina per/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+  await page
+    .getByRole('button', { name: /^Prezzo crescente$/ })
+    .first()
+    .evaluate((node) => {
+      (node as HTMLButtonElement).click();
+    });
+
+  await searchContainer.getByRole('button', { exact: true, name: 'Cerca' }).evaluate((node) => {
+    (node as HTMLButtonElement).click();
+  });
+
+  await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('cucciolo roma');
+  await expect.poll(() => new URL(page.url()).searchParams.get('listingType')).toBe('adozione');
+  await expect.poll(() => new URL(page.url()).searchParams.get('sex')).toBe('femmina');
+  await expect.poll(() => new URL(page.url()).searchParams.get('breed')).toBe('Persiano');
+  await expect.poll(() => new URL(page.url()).searchParams.get('priceMin')).toBe('50');
+  await expect.poll(() => new URL(page.url()).searchParams.get('priceMax')).toBe('200');
+  await expect.poll(() => new URL(page.url()).searchParams.get('ageMinMonths')).toBe('12');
+  await expect.poll(() => new URL(page.url()).searchParams.get('ageMaxMonths')).toBe('24');
+  await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe('price_asc');
+  await expect
+    .poll(() => {
+      const locationLabel = new URL(page.url()).searchParams.get('locationLabel');
+      return typeof locationLabel === 'string' && locationLabel.toLowerCase().includes('roma');
+    })
+    .toBeTruthy();
 });
 
 test('does not render quick chips in mobile listings toolbar', async ({ page }) => {
@@ -201,9 +355,12 @@ test('uses inline mobile selects for listing type, sex and breed in filters shee
   await breedField.getByRole('button').first().click();
   await filtersDialog.getByRole('button', { name: 'Non di razza' }).first().click();
 
-  await filtersDialog.locator('form').first().evaluate((node) => {
-    (node as HTMLFormElement).requestSubmit();
-  });
+  await filtersDialog
+    .locator('form')
+    .first()
+    .evaluate((node) => {
+      (node as HTMLFormElement).requestSubmit();
+    });
 
   await expect.poll(() => new URL(page.url()).searchParams.get('listingType')).toBe('adozione');
   await expect.poll(() => new URL(page.url()).searchParams.get('sex')).toBe('femmina');
@@ -254,9 +411,79 @@ test('favorite button does not trigger card navigation in listings grid', async 
   await favoriteButton.click();
 
   await expect.poll(() => page.url()).toBe(initialUrl);
+  await expect(favoriteButton).toHaveAttribute('aria-label', 'Rimuovi dai preferiti');
 });
 
-test('renders listing detail on mobile with gallery before title summary block', async ({ page }) => {
+test('hides demo listings from public catalog', async ({ page }) => {
+  await page.goto('/annunci');
+
+  const demoCards = page.locator('article').filter({ hasText: '[DEMO' });
+  await expect(demoCards).toHaveCount(0);
+});
+
+test('uses a not-found title for missing listing detail pages', async ({ page }) => {
+  await page.goto('/annunci/99999');
+
+  await expect(page).toHaveTitle('Annuncio non trovato | adottaungatto-it');
+  await expect(
+    page.getByRole('heading', { level: 1, name: '404 - Pagina non trovata' }),
+  ).toBeVisible();
+});
+
+test('shows cat count in listing detail summary', async ({ page }) => {
+  await page.goto('/annunci');
+
+  const firstListingLink = page.locator('a[href^="/annunci/"]').first();
+  await expect(firstListingLink).toBeVisible();
+  const detailHref = await firstListingLink.getAttribute('href');
+  expect(detailHref).toBeTruthy();
+
+  await page.goto(detailHref as string);
+
+  const summaryBlock = page.locator('[data-test-listing-summary]').first();
+  await expect(summaryBlock.getByText('Numero gatti', { exact: true })).toBeVisible();
+  await expect(summaryBlock.getByText(/^1 gatto$/)).toBeVisible();
+});
+
+test('keeps active listing filters when returning from detail page', async ({ page }) => {
+  await page.goto('/annunci?sex=femmina&sort=price_asc');
+
+  const firstListingLink = page.locator('a[href^="/annunci/"]').first();
+  await expect(firstListingLink).toBeVisible();
+  await firstListingLink.click();
+
+  await expect(page.getByRole('link', { name: 'Torna agli annunci' })).toBeVisible();
+  await page.getByRole('link', { name: 'Torna agli annunci' }).click();
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/annunci');
+  await expect.poll(() => new URL(page.url()).searchParams.get('sex')).toBe('femmina');
+  await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe('price_asc');
+});
+
+test('renders breadcrumbs on privacy and listing detail pages', async ({ page }) => {
+  await page.goto('/privacy');
+
+  const privacyBreadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(privacyBreadcrumb).toBeVisible();
+  await expect(privacyBreadcrumb.getByRole('link', { name: 'Home' })).toBeVisible();
+  await expect(privacyBreadcrumb.getByText('Privacy', { exact: true })).toBeVisible();
+
+  await page.goto('/annunci');
+  const firstListingLink = page.locator('a[href^="/annunci/"]').first();
+  await expect(firstListingLink).toBeVisible();
+  const detailHref = await firstListingLink.getAttribute('href');
+  expect(detailHref).toBeTruthy();
+  await page.goto(detailHref as string);
+
+  const detailBreadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(detailBreadcrumb).toBeVisible();
+  await expect(detailBreadcrumb.getByRole('link', { name: 'Home' })).toBeVisible();
+  await expect(detailBreadcrumb.getByRole('link', { name: 'Annunci' })).toBeVisible();
+});
+
+test('renders listing detail on mobile with gallery before title summary block', async ({
+  page,
+}) => {
   await page.setViewportSize(mobileViewport);
   await page.goto('/annunci');
 
@@ -287,7 +514,10 @@ test('renders listing detail on mobile with gallery before title summary block',
   });
 
   expect(topPositions).not.toBeNull();
-  expect(topPositions!.galleryTop).toBeLessThan(topPositions!.summaryTop);
+  if (!topPositions) {
+    throw new Error('Posizioni gallery/summary non disponibili.');
+  }
+  expect(topPositions.galleryTop).toBeLessThan(topPositions.summaryTop);
 });
 
 test('keeps listings toolbar readable on tablet viewport without horizontal overflow', async ({
@@ -325,7 +555,9 @@ test('captures baseline screenshots for home, listings and listing detail', asyn
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Trova il gatto da accogliere.' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Trova il gatto da accogliere.' }),
+    ).toBeVisible();
     const homeScreenshot = testInfo.outputPath(`${viewport.name}-home.png`);
     await page.screenshot({ fullPage: true, path: homeScreenshot });
     await testInfo.attach(`${viewport.name}-home`, {
@@ -334,7 +566,9 @@ test('captures baseline screenshots for home, listings and listing detail', asyn
     });
 
     await page.goto('/annunci');
-    await expect(page.getByRole('heading', { name: 'Annunci gatti da tutta Italia' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Annunci gatti da tutta Italia' }),
+    ).toBeVisible();
     const listingsScreenshot = testInfo.outputPath(`${viewport.name}-annunci.png`);
     await page.screenshot({ fullPage: true, path: listingsScreenshot });
     await testInfo.attach(`${viewport.name}-annunci`, {

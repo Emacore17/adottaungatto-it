@@ -1,17 +1,28 @@
+import { Breadcrumbs } from '../../components/breadcrumbs';
 import { ContentPage } from '../../components/content-page';
 import { LinkButton } from '../../components/link-button';
+import { getWebSession } from '../../lib/auth';
 
-export default function PrivacyPage() {
+const accountSettingsPath = '/account/impostazioni';
+
+export default async function PrivacyPage() {
+  const session = await getWebSession().catch(() => null);
+  const managePreferencesHref = session
+    ? accountSettingsPath
+    : `/login?next=${encodeURIComponent(accountSettingsPath)}`;
+  const managePreferencesLabel = session ? 'Gestisci preferenze' : 'Accedi per gestire preferenze';
+
   return (
     <ContentPage
       actions={
         <>
-          <LinkButton href="/account/impostazioni">Gestisci preferenze</LinkButton>
+          <LinkButton href={managePreferencesHref}>{managePreferencesLabel}</LinkButton>
           <LinkButton href="/contatti" variant="outline">
             Supporto
           </LinkButton>
         </>
       }
+      breadcrumbs={<Breadcrumbs items={[{ href: '/', label: 'Home' }, { label: 'Privacy' }]} />}
       asideDescription="Questa pagina riassume in modo semplice quali dati entrano in gioco nelle funzioni attive del sito."
       badges={[
         { label: 'Trasparenza', variant: 'secondary' },
@@ -54,7 +65,10 @@ export default function PrivacyPage() {
           items: [
             'Puoi fare logout in qualsiasi momento dalle aree riservate o dalla testata del sito.',
             'Le preferenze di notifica messaggi sono modificabili direttamente dal tuo account.',
-            'Preferiti e alcune preferenze di esperienza vengono mantenuti in modo leggero per semplificare il ritorno al sito.',
+            session
+              ? 'Hai accesso diretto alla gestione dei consensi e delle preferenze dalla pagina impostazioni.'
+              : 'Per gestire consensi e preferenze del tuo account devi prima accedere; dopo il login verrai portato direttamente nelle impostazioni.',
+            'I preferiti vengono sincronizzati sul tuo account (con fallback locale per utenti non autenticati) insieme alle preferenze di esperienza leggere.',
           ],
         },
       ]}

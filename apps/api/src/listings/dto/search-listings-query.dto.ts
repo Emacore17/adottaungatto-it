@@ -171,6 +171,51 @@ const optionalInteger = (fieldName: string, minValue: number, maxValue?: number)
       .optional(),
   );
 
+const optionalBoolean = (fieldName: string) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined;
+      }
+
+      if (typeof value === 'boolean') {
+        return value;
+      }
+
+      if (typeof value === 'number') {
+        if (value === 1) {
+          return true;
+        }
+
+        if (value === 0) {
+          return false;
+        }
+      }
+
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+          return undefined;
+        }
+
+        if (['true', '1', 'yes', 'si'].includes(normalized)) {
+          return true;
+        }
+
+        if (['false', '0', 'no'].includes(normalized)) {
+          return false;
+        }
+      }
+
+      return value;
+    },
+    z
+      .boolean({
+        invalid_type_error: `Query parameter "${fieldName}" must be a boolean.`,
+      })
+      .optional(),
+  );
+
 const optionalSort = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') {
     return undefined;
@@ -214,6 +259,9 @@ const buildLocationIntent = (
   secondaryLabel: options.secondaryLabel ?? null,
 });
 
+const coalesceOptionalBoolean = (...values: Array<boolean | undefined>) =>
+  values.find((value) => value !== undefined);
+
 const searchListingsQuerySchema = z
   .object({
     q: optionalTrimmedString(120, 'q'),
@@ -237,6 +285,16 @@ const searchListingsQuerySchema = z
     ageMaxMonths: optionalInteger('ageMaxMonths', 0, 480),
     sex: optionalTrimmedString(20, 'sex'),
     breed: optionalTrimmedString(120, 'breed'),
+    isSterilized: optionalBoolean('isSterilized'),
+    is_sterilized: optionalBoolean('isSterilized'),
+    isVaccinated: optionalBoolean('isVaccinated'),
+    is_vaccinated: optionalBoolean('isVaccinated'),
+    hasMicrochip: optionalBoolean('hasMicrochip'),
+    has_microchip: optionalBoolean('hasMicrochip'),
+    compatibleWithChildren: optionalBoolean('compatibleWithChildren'),
+    compatible_with_children: optionalBoolean('compatibleWithChildren'),
+    compatibleWithOtherAnimals: optionalBoolean('compatibleWithOtherAnimals'),
+    compatible_with_other_animals: optionalBoolean('compatibleWithOtherAnimals'),
     sort: optionalSort,
     limit: optionalInteger('limit', 1, 100),
     offset: optionalInteger('offset', 0),
@@ -351,6 +409,17 @@ const searchListingsQuerySchema = z
     const locationScope = value.locationScope ?? value.scope;
     const listingType = value.listingType ?? value.listing_type ?? value.type ?? null;
     const queryText = value.q ?? value.query ?? null;
+    const isSterilized = coalesceOptionalBoolean(value.isSterilized, value.is_sterilized);
+    const isVaccinated = coalesceOptionalBoolean(value.isVaccinated, value.is_vaccinated);
+    const hasMicrochip = coalesceOptionalBoolean(value.hasMicrochip, value.has_microchip);
+    const compatibleWithChildren = coalesceOptionalBoolean(
+      value.compatibleWithChildren,
+      value.compatible_with_children,
+    );
+    const compatibleWithOtherAnimals = coalesceOptionalBoolean(
+      value.compatibleWithOtherAnimals,
+      value.compatible_with_other_animals,
+    );
 
     const locationIntent = locationScope
       ? buildLocationIntent(locationScope, {
@@ -383,6 +452,11 @@ const searchListingsQuerySchema = z
         value.breed === NO_BREED_FILTER
           ? NO_BREED_FILTER
           : (normalizeCatBreedLabel(value.breed) ?? null),
+      ...(isSterilized !== undefined ? { isSterilized } : {}),
+      ...(isVaccinated !== undefined ? { isVaccinated } : {}),
+      ...(hasMicrochip !== undefined ? { hasMicrochip } : {}),
+      ...(compatibleWithChildren !== undefined ? { compatibleWithChildren } : {}),
+      ...(compatibleWithOtherAnimals !== undefined ? { compatibleWithOtherAnimals } : {}),
       sort: (value.sort ?? 'relevance') as SearchSort,
       limit: value.limit ?? 24,
       offset: value.offset ?? 0,
@@ -404,6 +478,11 @@ export interface SearchListingsQueryDto {
   ageMaxMonths?: number | null;
   sex: string | null;
   breed: string | null;
+  isSterilized?: boolean | null;
+  isVaccinated?: boolean | null;
+  hasMicrochip?: boolean | null;
+  compatibleWithChildren?: boolean | null;
+  compatibleWithOtherAnimals?: boolean | null;
   sort: SearchSort;
   limit: number;
   offset: number;

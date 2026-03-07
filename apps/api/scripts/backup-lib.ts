@@ -527,7 +527,11 @@ export const createLocalBackup = async (requestedDirectory?: string): Promise<st
     : resolve(backupRootDirectory, timestamp);
   const postgresDumpPath = resolve(backupDir, postgresDumpFileName);
   const manifestPath = resolve(backupDir, manifestFileName);
-  const bucketNames = [env.MINIO_BUCKET_LISTING_ORIGINALS, env.MINIO_BUCKET_LISTING_THUMBS];
+  const bucketNames = [
+    env.MINIO_BUCKET_LISTING_ORIGINALS,
+    env.MINIO_BUCKET_LISTING_THUMBS,
+    env.MINIO_BUCKET_USER_AVATARS,
+  ];
 
   await ensureDirectory(backupDir);
 

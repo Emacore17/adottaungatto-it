@@ -12,6 +12,19 @@ type KeycloakUser = {
   username: string;
 };
 
+type KeycloakIdentityProvider = {
+  alias: string;
+  providerId: string;
+  enabled?: boolean;
+  trustEmail?: boolean;
+  storeToken?: boolean;
+  addReadTokenRoleOnCreate?: boolean;
+  authenticateByDefault?: boolean;
+  linkOnly?: boolean;
+  firstBrokerLoginFlowAlias?: string;
+  config?: Record<string, string>;
+};
+
 type DemoUserSeed = {
   username: string;
   firstName: string;
@@ -27,6 +40,8 @@ type SeedCounter = {
   usersUpdated: number;
   passwordsReset: number;
   roleMappingsAdded: number;
+  socialProvidersCreated: number;
+  socialProvidersUpdated: number;
 };
 
 const demoUsers: DemoUserSeed[] = [
@@ -120,6 +135,119 @@ const keycloakAdminRequest = async (
       ...(init?.headers ?? {}),
     },
   });
+};
+
+const getIdentityProviderByAlias = async (
+  keycloakBaseUrl: string,
+  realm: string,
+  accessToken: string,
+  alias: string,
+): Promise<KeycloakIdentityProvider | null> => {
+  const response = await keycloakAdminRequest(
+    keycloakBaseUrl,
+    realm,
+    accessToken,
+    `/identity-provider/instances/${encodeURIComponent(alias)}`,
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    await throwRequestError(`get identity provider "${alias}"`, response);
+  }
+
+  return parseJson<KeycloakIdentityProvider>(response);
+};
+
+const upsertGoogleIdentityProvider = async (
+  keycloakBaseUrl: string,
+  realm: string,
+  accessToken: string,
+  env: ReturnType<typeof loadApiEnv>,
+): Promise<'skipped' | 'created' | 'updated'> => {
+  if (!env.KEYCLOAK_GOOGLE_IDP_ENABLED) {
+    return 'skipped';
+  }
+
+  const clientId = env.KEYCLOAK_GOOGLE_CLIENT_ID.trim();
+  const clientSecret = env.KEYCLOAK_GOOGLE_CLIENT_SECRET.trim();
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'KEYCLOAK_GOOGLE_IDP_ENABLED=true richiede KEYCLOAK_GOOGLE_CLIENT_ID e KEYCLOAK_GOOGLE_CLIENT_SECRET valorizzati.',
+    );
+  }
+
+  const defaultScopes = env.KEYCLOAK_GOOGLE_DEFAULT_SCOPES.trim() || 'openid profile email';
+  const hostedDomain = env.KEYCLOAK_GOOGLE_HOSTED_DOMAIN.trim();
+  const alias = 'google';
+  const providerConfig: Record<string, string> = {
+    clientId,
+    clientSecret,
+    defaultScope: defaultScopes,
+    syncMode: 'FORCE',
+    useJwksUrl: 'true',
+  };
+  if (hostedDomain) {
+    providerConfig.hostedDomain = hostedDomain;
+  }
+
+  const desiredRepresentation: KeycloakIdentityProvider = {
+    alias,
+    providerId: 'google',
+    enabled: true,
+    trustEmail: true,
+    storeToken: false,
+    addReadTokenRoleOnCreate: false,
+    authenticateByDefault: false,
+    linkOnly: false,
+    firstBrokerLoginFlowAlias: 'first broker login',
+    config: providerConfig,
+  };
+
+  const existing = await getIdentityProviderByAlias(keycloakBaseUrl, realm, accessToken, alias);
+
+  if (!existing) {
+    const createResponse = await keycloakAdminRequest(
+      keycloakBaseUrl,
+      realm,
+      accessToken,
+      '/identity-provider/instances',
+      {
+        method: 'POST',
+        body: JSON.stringify(desiredRepresentation),
+      },
+    );
+    if (createResponse.status !== 201) {
+      await throwRequestError(`create identity provider "${alias}"`, createResponse);
+    }
+    return 'created';
+  }
+
+  const updateRepresentation: KeycloakIdentityProvider = {
+    ...existing,
+    ...desiredRepresentation,
+    config: {
+      ...(existing.config ?? {}),
+      ...providerConfig,
+    },
+  };
+  const updateResponse = await keycloakAdminRequest(
+    keycloakBaseUrl,
+    realm,
+    accessToken,
+    `/identity-provider/instances/${encodeURIComponent(alias)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(updateRepresentation),
+    },
+  );
+  if (updateResponse.status !== 204) {
+    await throwRequestError(`update identity provider "${alias}"`, updateResponse);
+  }
+
+  return 'updated';
 };
 
 const getRoleByName = async (
@@ -352,11 +480,31 @@ const run = async (): Promise<void> => {
     usersUpdated: 0,
     passwordsReset: 0,
     roleMappingsAdded: 0,
+    socialProvidersCreated: 0,
+    socialProvidersUpdated: 0,
   };
 
   console.log(`[auth:seed] Target Keycloak: ${keycloakBaseUrl} (realm: ${realm})`);
 
   const accessToken = await requestAdminToken(keycloakBaseUrl, adminUsername, adminPassword);
+  const googleProviderResult = await upsertGoogleIdentityProvider(
+    keycloakBaseUrl,
+    realm,
+    accessToken,
+    env,
+  );
+  if (googleProviderResult === 'created') {
+    counters.socialProvidersCreated += 1;
+  } else if (googleProviderResult === 'updated') {
+    counters.socialProvidersUpdated += 1;
+  }
+
+  if (googleProviderResult === 'skipped') {
+    console.log('[auth:seed] Google IdP skip: KEYCLOAK_GOOGLE_IDP_ENABLED=false.');
+  } else {
+    console.log(`[auth:seed] Google IdP ${googleProviderResult} (alias: google).`);
+  }
+
   const requiredRoleNames = Array.from(new Set(demoUsers.flatMap((user) => user.roles)));
   const rolesByName = new Map<string, KeycloakRole>();
 
@@ -404,6 +552,9 @@ const run = async (): Promise<void> => {
   );
   console.log(
     `[auth:seed] Passwords reset=${counters.passwordsReset}, role mappings added=${counters.roleMappingsAdded}.`,
+  );
+  console.log(
+    `[auth:seed] Social providers created=${counters.socialProvidersCreated}, updated=${counters.socialProvidersUpdated}.`,
   );
   console.log('[auth:seed] Demo users seed completed.');
 };

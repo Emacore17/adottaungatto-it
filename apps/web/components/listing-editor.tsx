@@ -26,9 +26,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
+import { formatListingStatusLabel } from '../lib/listing-status';
 import type { ListingBreedOption, MyListing, MyListingMedia } from '../lib/listings';
 
 type AgeUnit = 'months' | 'years';
+type TernaryChoice = 'unknown' | 'yes' | 'no';
 
 type RegionOption = {
   id: string;
@@ -66,6 +69,8 @@ type ToastState = {
   variant: 'success' | 'danger' | 'warning' | 'info';
 };
 
+type ValidationField = 'title' | 'description' | 'location' | 'age' | 'price';
+
 type ListingFormState = {
   title: string;
   description: string;
@@ -76,6 +81,11 @@ type ListingFormState = {
   ageUnit: AgeUnit;
   sex: string;
   breed: string;
+  isSterilized: TernaryChoice;
+  isVaccinated: TernaryChoice;
+  hasMicrochip: TernaryChoice;
+  compatibleWithChildren: TernaryChoice;
+  compatibleWithOtherAnimals: TernaryChoice;
   regionId: string;
   provinceId: string;
   comuneId: string;
@@ -92,6 +102,11 @@ type ListingMediaApiPayload = {
   media: MyListingMedia[] | MyListingMedia;
 };
 
+type SaveFeedbackState = {
+  status: 'idle' | 'saving' | 'success' | 'error';
+  message: string;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
 const emptyInitialMedia: MyListingMedia[] = [];
 
@@ -105,10 +120,17 @@ const sexOptions = [
   { value: 'maschio', label: 'Maschio' },
   { value: 'femmina', label: 'Femmina' },
 ] as const;
+const ternaryChoiceOptions = [
+  { value: 'unknown', label: 'Non specificato' },
+  { value: 'yes', label: 'Si' },
+  { value: 'no', label: 'No' },
+] as const;
 
 const fieldClassName =
   'h-11 rounded-[18px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_92%,white_8%)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-[border-color,box-shadow,background-color] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_14%,transparent)]';
 const selectFieldClassName = 'platform-select';
+const invalidFieldClassName =
+  'border-[var(--color-danger-border)] focus:border-[var(--color-danger-border)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-danger-border)_24%,transparent)]';
 
 const textareaClassName = cn(fieldClassName, 'min-h-[150px] h-auto resize-y py-3 leading-6');
 const sectionCardClassName =
@@ -130,7 +152,7 @@ type EditorSectionItem = {
 };
 
 const parseAgeFromMonths = (ageMonths: number | null | undefined) => {
-  if (typeof ageMonths !== 'number' || !Number.isFinite(ageMonths) || ageMonths < 0) {
+  if (typeof ageMonths !== 'number' || !Number.isFinite(ageMonths) || ageMonths <= 0) {
     return {
       ageValue: '',
       ageUnit: 'months' as AgeUnit,
@@ -161,6 +183,14 @@ const parseAgeFromText = (value: string | null | undefined) => {
 
   const yearsMatch = normalized.match(/(\d+)\s*(anno|anni)\b/);
   if (yearsMatch?.[1]) {
+    const parsedYears = Number.parseInt(yearsMatch[1], 10);
+    if (!Number.isInteger(parsedYears) || parsedYears <= 0) {
+      return {
+        ageValue: '',
+        ageUnit: 'months' as AgeUnit,
+      };
+    }
+
     return {
       ageValue: yearsMatch[1],
       ageUnit: 'years' as AgeUnit,
@@ -169,6 +199,14 @@ const parseAgeFromText = (value: string | null | undefined) => {
 
   const monthsMatch = normalized.match(/(\d+)\s*(mese|mesi)\b/);
   if (monthsMatch?.[1]) {
+    const parsedMonths = Number.parseInt(monthsMatch[1], 10);
+    if (!Number.isInteger(parsedMonths) || parsedMonths <= 0) {
+      return {
+        ageValue: '',
+        ageUnit: 'months' as AgeUnit,
+      };
+    }
+
     return {
       ageValue: monthsMatch[1],
       ageUnit: 'months' as AgeUnit,
@@ -179,6 +217,30 @@ const parseAgeFromText = (value: string | null | undefined) => {
     ageValue: '',
     ageUnit: 'months' as AgeUnit,
   };
+};
+
+const toTernaryChoice = (value: boolean | null | undefined): TernaryChoice => {
+  if (value === true) {
+    return 'yes';
+  }
+
+  if (value === false) {
+    return 'no';
+  }
+
+  return 'unknown';
+};
+
+const fromTernaryChoice = (value: TernaryChoice): boolean | null => {
+  if (value === 'yes') {
+    return true;
+  }
+
+  if (value === 'no') {
+    return false;
+  }
+
+  return null;
 };
 
 const createInitialFormState = (listing: MyListing | null | undefined): ListingFormState => {
@@ -192,11 +254,16 @@ const createInitialFormState = (listing: MyListing | null | undefined): ListingF
     description: listing?.description ?? '',
     listingType: listing?.listingType ?? 'adozione',
     priceAmount: listing?.priceAmount ?? '',
-    currency: listing?.currency ?? 'EUR',
+    currency: 'EUR',
     ageValue: parsedAge.ageValue,
     ageUnit: parsedAge.ageUnit,
     sex: listing?.sex ?? 'maschio',
     breed: listing?.breed ?? '',
+    isSterilized: toTernaryChoice(listing?.isSterilized),
+    isVaccinated: toTernaryChoice(listing?.isVaccinated),
+    hasMicrochip: toTernaryChoice(listing?.hasMicrochip),
+    compatibleWithChildren: toTernaryChoice(listing?.compatibleWithChildren),
+    compatibleWithOtherAnimals: toTernaryChoice(listing?.compatibleWithOtherAnimals),
     regionId: listing?.regionId ?? '',
     provinceId: listing?.provinceId ?? '',
     comuneId: listing?.comuneId ?? '',
@@ -250,9 +317,12 @@ const readFileAsDataUrl = (file: File) =>
   });
 
 const fetchJson = async <TPayload,>(input: RequestInfo | URL, init?: RequestInit) => {
-  const response = await fetch(input, init);
+  const response = await fetchWithAuthRefresh(input, init);
   const payload = (await response.json().catch(() => null)) as TPayload | null;
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(SESSION_EXPIRED_MESSAGE);
+    }
     throw new Error(
       parseApiError(payload, `Richiesta fallita con stato ${response.status.toString()}.`),
     );
@@ -414,6 +484,11 @@ export function ListingEditor({
   const [saving, setSaving] = useState(false);
   const [mediaActionId, setMediaActionId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<ValidationField | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<SaveFeedbackState>({
+    status: 'idle',
+    message: '',
+  });
   const [toast, setToast] = useState<ToastState>({
     open: false,
     title: '',
@@ -430,7 +505,7 @@ export function ListingEditor({
     : existingPrimaryMediaId
       ? 'La foto di copertina attuale e gia salvata.'
       : 'Se non scegli una copertina, verra usata la prima foto caricata.';
-  const listingStatusLabel = currentListingStatus.replaceAll('_', ' ');
+  const listingStatusLabel = formatListingStatusLabel(currentListingStatus);
   const titleLength = form.title.trim().length;
   const descriptionLength = form.description.trim().length;
   const totalMediaCount = media.length + queuedMedia.length;
@@ -449,11 +524,11 @@ export function ListingEditor({
     {
       complete: profileComplete,
       label: 'Profilo del gatto',
-      description: 'Tipologia, sesso ed eta strutturata pronti per i filtri pubblici.',
+      description: 'Tipologia, sesso ed età strutturata pronti per i filtri pubblici.',
     },
     {
       complete: locationComplete,
-      label: 'Localita precisa',
+      label: 'Località precisa',
       description: 'Regione, provincia e comune servono per ricerca e vicinanza.',
     },
     {
@@ -468,7 +543,7 @@ export function ListingEditor({
   const sectionItems: EditorSectionItem[] = [
     { id: 'listing-data', label: 'Annuncio', icon: Files },
     { id: 'listing-profile', label: 'Profilo', icon: Camera },
-    { id: 'listing-location', label: 'Localita', icon: MapPinned },
+    { id: 'listing-location', label: 'Località', icon: MapPinned },
     { id: 'listing-contacts', label: 'Contatti', icon: Phone },
     { id: 'listing-media', label: 'Foto', icon: ImagePlus },
     { id: 'listing-review', label: 'Controlli', icon: ShieldCheck },
@@ -491,8 +566,8 @@ export function ListingEditor({
           : form.provinceId && comuni.length === 0
             ? 'Non ci sono comuni disponibili per la provincia selezionata.'
             : locationComplete
-              ? 'La localita e pronta per ricerca e vicinanza.'
-              : 'Completa tutti i livelli geografici per rendere la scheda piu trovabile.';
+              ? 'La località è pronta per ricerca e vicinanza.'
+              : 'Completa tutti i livelli geografici per rendere la scheda più trovabile.';
   const remainingMediaSlots = Math.max(0, maxMediaItems - totalMediaCount);
   const mediaCapacityLabel =
     remainingMediaSlots > 0
@@ -508,8 +583,19 @@ export function ListingEditor({
     });
   };
 
-  const reportValidationError = (message: string, sectionId: string) => {
+  const reportValidationError = (message: string, sectionId: string, field: ValidationField) => {
     setValidationError(message);
+    setInvalidField(field);
+    setSaveFeedback({
+      status: 'error',
+      message,
+    });
+    setToast({
+      open: true,
+      title: 'Controlla i campi obbligatori',
+      description: message,
+      variant: 'warning',
+    });
     scrollToSection(sectionId);
   };
 
@@ -538,6 +624,11 @@ export function ListingEditor({
     });
     setQueuedCoverId(null);
     setValidationError(null);
+    setInvalidField(null);
+    setSaveFeedback({
+      status: 'idle',
+      message: '',
+    });
   }, [initialListing, initialMedia]);
 
   useEffect(() => {
@@ -648,6 +739,11 @@ export function ListingEditor({
         [field]: nextValue,
       }));
       setValidationError(null);
+      setInvalidField(null);
+      setSaveFeedback({
+        status: 'idle',
+        message: '',
+      });
     };
   };
 
@@ -660,6 +756,11 @@ export function ListingEditor({
       comuneId: '',
     }));
     setValidationError(null);
+    setInvalidField(null);
+    setSaveFeedback({
+      status: 'idle',
+      message: '',
+    });
   };
 
   const handleProvinceChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -670,6 +771,11 @@ export function ListingEditor({
       comuneId: '',
     }));
     setValidationError(null);
+    setInvalidField(null);
+    setSaveFeedback({
+      status: 'idle',
+      message: '',
+    });
   };
 
   const refreshMedia = async (listingId: string) => {
@@ -792,6 +898,7 @@ export function ListingEditor({
 
     setMediaActionId(mediaId);
     setValidationError(null);
+    setInvalidField(null);
 
     try {
       await fetchJson<ListingMediaApiPayload>(
@@ -826,6 +933,7 @@ export function ListingEditor({
 
     setMediaActionId(mediaId);
     setValidationError(null);
+    setInvalidField(null);
 
     try {
       await fetchJson<ListingMediaApiPayload>(
@@ -856,6 +964,11 @@ export function ListingEditor({
 
   const handleSubmit = async () => {
     setValidationError(null);
+    setInvalidField(null);
+    setSaveFeedback({
+      status: 'idle',
+      message: '',
+    });
 
     const title = form.title.trim();
     const description = form.description.trim();
@@ -866,7 +979,11 @@ export function ListingEditor({
       priceValue.length === 0 ? null : Number.parseFloat(priceValue.replace(',', '.'));
 
     if (!title) {
-      reportValidationError('Inserisci un titolo chiaro per il tuo annuncio.', 'listing-data');
+      reportValidationError(
+        'Inserisci un titolo chiaro per il tuo annuncio.',
+        'listing-data',
+        'title',
+      );
       return;
     }
 
@@ -874,17 +991,26 @@ export function ListingEditor({
       reportValidationError(
         'La descrizione deve contenere almeno 40 caratteri utili.',
         'listing-data',
+        'description',
       );
       return;
     }
 
     if (!form.regionId || !form.provinceId || !form.comuneId) {
-      reportValidationError('Seleziona regione, provincia e comune.', 'listing-location');
+      reportValidationError(
+        'Seleziona regione, provincia e comune.',
+        'listing-location',
+        'location',
+      );
       return;
     }
 
-    if (!ageValue || !Number.isInteger(ageInteger) || ageInteger < 0) {
-      reportValidationError("Inserisci un'eta valida in mesi o anni.", 'listing-profile');
+    if (!ageValue || !Number.isInteger(ageInteger) || ageInteger <= 0) {
+      reportValidationError(
+        "Inserisci un'età valida maggiore di zero, in mesi o anni.",
+        'listing-profile',
+        'age',
+      );
       return;
     }
 
@@ -892,6 +1018,7 @@ export function ListingEditor({
       reportValidationError(
         'Il prezzo deve essere un numero positivo oppure lasciato vuoto.',
         'listing-data',
+        'price',
       );
       return;
     }
@@ -902,10 +1029,15 @@ export function ListingEditor({
       description,
       listingType: form.listingType,
       priceAmount,
-      currency: form.currency,
+      currency: 'EUR',
       ageMonths,
       sex: form.sex,
       breed: form.breed || null,
+      isSterilized: fromTernaryChoice(form.isSterilized),
+      isVaccinated: fromTernaryChoice(form.isVaccinated),
+      hasMicrochip: fromTernaryChoice(form.hasMicrochip),
+      compatibleWithChildren: fromTernaryChoice(form.compatibleWithChildren),
+      compatibleWithOtherAnimals: fromTernaryChoice(form.compatibleWithOtherAnimals),
       regionId: form.regionId,
       provinceId: form.provinceId,
       comuneId: form.comuneId,
@@ -915,6 +1047,10 @@ export function ListingEditor({
     };
 
     setSaving(true);
+    setSaveFeedback({
+      status: 'saving',
+      message: 'Salvataggio in corso...',
+    });
 
     try {
       const listingPayload = currentListingId
@@ -971,6 +1107,10 @@ export function ListingEditor({
           : 'Ora puoi continuare a rifinire foto e contenuti.',
         variant: 'success',
       });
+      setSaveFeedback({
+        status: 'success',
+        message: 'Modifiche salvate con successo.',
+      });
 
       if (!currentListingId) {
         router.replace(`/annunci/${nextListingId}/modifica`);
@@ -980,14 +1120,19 @@ export function ListingEditor({
 
       router.refresh();
     } catch (error) {
-      setValidationError(
-        error instanceof Error ? error.message : "Impossibile salvare l'annuncio.",
-      );
+      setInvalidField(null);
+      const saveErrorMessage =
+        error instanceof Error ? error.message : "Impossibile salvare l'annuncio.";
+      setValidationError(saveErrorMessage);
+      setSaveFeedback({
+        status: 'error',
+        message: saveErrorMessage,
+      });
       scrollToSection('listing-review');
       setToast({
         open: true,
         title: 'Salvataggio non riuscito',
-        description: error instanceof Error ? error.message : "Impossibile salvare l'annuncio.",
+        description: saveErrorMessage,
         variant: 'danger',
       });
     } finally {
@@ -1023,7 +1168,7 @@ export function ListingEditor({
                     Costruisci una scheda chiara, affidabile e semplice da contattare.
                   </h2>
                   <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-muted)] sm:text-base">
-                    Mantieni il focus su informazioni essenziali, localita precisa e una galleria
+                    Mantieni il focus su informazioni essenziali, località precisa e una galleria
                     leggibile. Completa una sezione per volta e salva quando hai un blocco pronto.
                   </p>
                 </div>
@@ -1039,7 +1184,7 @@ export function ListingEditor({
                 <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
                   {isEditMode
                     ? 'Stai lavorando su una scheda esistente. Aggiorna contenuti e foto senza cambiare flusso.'
-                    : 'La prima conferma crea la bozza, poi potrai completare il resto con piu calma.'}
+                    : 'La prima conferma crea la bozza, poi potrai completare il resto con più calma.'}
                 </p>
                 <div className="mt-5 hidden gap-3 md:grid">
                   <Button
@@ -1084,8 +1229,8 @@ export function ListingEditor({
                 value={descriptionLength > 0 ? `${descriptionLength} caratteri` : 'Da scrivere'}
               />
               <SummaryMetric
-                detail="Serve per filtri geografici, vicinanza e risultati piu pertinenti."
-                label="Localita"
+                detail="Serve per filtri geografici, vicinanza e risultati più pertinenti."
+                label="Località"
                 value={locationComplete ? 'Completa' : 'Da completare'}
               />
               <SummaryMetric
@@ -1127,7 +1272,7 @@ export function ListingEditor({
               </div>
               <div className="rounded-[20px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                  Localita
+                  Località
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
                   {locationComplete ? 'Completa' : 'Da completare'}
@@ -1144,7 +1289,10 @@ export function ListingEditor({
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <label className={cn(mobileQuickActionClassName, 'cursor-pointer')} htmlFor={fileInputId}>
+              <label
+                className={cn(mobileQuickActionClassName, 'cursor-pointer')}
+                htmlFor={fileInputId}
+              >
                 <ImagePlus className="h-4 w-4 text-[var(--color-primary)]" />
                 Aggiungi foto
               </label>
@@ -1164,6 +1312,10 @@ export function ListingEditor({
               className={cn(
                 'scroll-mt-[calc(var(--shell-header-height)+1.5rem)] overflow-hidden',
                 sectionCardClassName,
+                (invalidField === 'title' ||
+                  invalidField === 'description' ||
+                  invalidField === 'price') &&
+                  'border-[var(--color-danger-border)]',
               )}
               id="listing-data"
             >
@@ -1178,7 +1330,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-title">Titolo</FieldLabel>
                     <Input
-                      className={fieldClassName}
+                      aria-invalid={invalidField === 'title'}
+                      className={cn(
+                        fieldClassName,
+                        invalidField === 'title' && invalidFieldClassName,
+                      )}
                       id="listing-title"
                       maxLength={160}
                       onChange={handleFieldChange('title')}
@@ -1210,7 +1366,11 @@ export function ListingEditor({
                 <div className="space-y-2">
                   <FieldLabel htmlFor="listing-description">Descrizione</FieldLabel>
                   <textarea
-                    className={textareaClassName}
+                    aria-invalid={invalidField === 'description'}
+                    className={cn(
+                      textareaClassName,
+                      invalidField === 'description' && invalidFieldClassName,
+                    )}
                     id="listing-description"
                     maxLength={6000}
                     onChange={handleFieldChange('description')}
@@ -1229,7 +1389,11 @@ export function ListingEditor({
                       Contributo richiesto
                     </FieldLabel>
                     <Input
-                      className={fieldClassName}
+                      aria-invalid={invalidField === 'price'}
+                      className={cn(
+                        fieldClassName,
+                        invalidField === 'price' && invalidFieldClassName,
+                      )}
                       id="listing-price"
                       inputMode="decimal"
                       min="0"
@@ -1243,17 +1407,21 @@ export function ListingEditor({
 
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-currency">Valuta</FieldLabel>
-                    <Input
-                      className={fieldClassName}
+                    <select
+                      aria-readonly="true"
+                      className={selectFieldClassName}
+                      disabled
                       id="listing-currency"
-                      onChange={handleFieldChange('currency')}
                       value={form.currency}
-                    />
+                    >
+                      <option value="EUR">EUR (Euro)</option>
+                    </select>
                   </div>
                 </div>
 
                 <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_66%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                  Prezzo facoltativo. Se lo lasci vuoto verra mostrato come su richiesta.
+                  Prezzo facoltativo. Se lo lasci vuoto verra mostrato come su richiesta. La valuta
+                  supportata e EUR.
                 </div>
               </CardContent>
             </Card>
@@ -1262,12 +1430,13 @@ export function ListingEditor({
               className={cn(
                 'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
                 sectionCardClassName,
+                invalidField === 'age' && 'border-[var(--color-danger-border)]',
               )}
               id="listing-profile"
             >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
-                  description="Profilo essenziale del gatto, coerente con i filtri pubblici e con la gestione dell eta in mesi o anni."
+                  description="Profilo essenziale del gatto, coerente con i filtri pubblici e con la gestione dell'età in mesi o anni."
                   title="Profilo del gatto"
                 />
               </CardHeader>
@@ -1307,13 +1476,17 @@ export function ListingEditor({
                   </div>
 
                   <div className="space-y-2">
-                    <FieldLabel htmlFor="listing-age">Eta</FieldLabel>
+                    <FieldLabel htmlFor="listing-age">Età</FieldLabel>
                     <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                       <Input
-                        className={fieldClassName}
+                        aria-invalid={invalidField === 'age'}
+                        className={cn(
+                          fieldClassName,
+                          invalidField === 'age' && invalidFieldClassName,
+                        )}
                         id="listing-age"
                         inputMode="numeric"
-                        min="0"
+                        min="1"
                         onChange={handleFieldChange('ageValue')}
                         placeholder="Es. 8"
                         step="1"
@@ -1332,6 +1505,92 @@ export function ListingEditor({
                   </div>
                 </div>
 
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-sterilized">Sterilizzato</FieldLabel>
+                    <select
+                      className={selectFieldClassName}
+                      id="listing-sterilized"
+                      onChange={handleFieldChange('isSterilized')}
+                      value={form.isSterilized}
+                    >
+                      {ternaryChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-vaccinated">Vaccinato</FieldLabel>
+                    <select
+                      className={selectFieldClassName}
+                      id="listing-vaccinated"
+                      onChange={handleFieldChange('isVaccinated')}
+                      value={form.isVaccinated}
+                    >
+                      {ternaryChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-microchip">Microchip</FieldLabel>
+                    <select
+                      className={selectFieldClassName}
+                      id="listing-microchip"
+                      onChange={handleFieldChange('hasMicrochip')}
+                      value={form.hasMicrochip}
+                    >
+                      {ternaryChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="listing-compatible-children">
+                      Compatibile con bambini
+                    </FieldLabel>
+                    <select
+                      className={selectFieldClassName}
+                      id="listing-compatible-children"
+                      onChange={handleFieldChange('compatibleWithChildren')}
+                      value={form.compatibleWithChildren}
+                    >
+                      {ternaryChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="listing-compatible-animals">
+                    Compatibile con altri animali
+                  </FieldLabel>
+                  <select
+                    className={selectFieldClassName}
+                    id="listing-compatible-animals"
+                    onChange={handleFieldChange('compatibleWithOtherAnimals')}
+                    value={form.compatibleWithOtherAnimals}
+                  >
+                    {ternaryChoiceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
                   Usa i mesi per i gattini e gli anni per gli adulti. La ricerca pubblica usera
                   questo dato in modo strutturato.
@@ -1343,13 +1602,14 @@ export function ListingEditor({
               className={cn(
                 'scroll-mt-[calc(var(--shell-header-height)+1.5rem)]',
                 sectionCardClassName,
+                invalidField === 'location' && 'border-[var(--color-danger-border)]',
               )}
               id="listing-location"
             >
               <CardHeader className="space-y-4 border-b border-[var(--color-border)]/80 pb-5">
                 <SectionHeading
-                  description="La localita viene salvata con ids strutturati per supportare ricerca, vicinanza e future pagine geolocalizzate."
-                  title="Localita"
+                  description="La località viene salvata con ids strutturati per supportare ricerca, vicinanza e future pagine geolocalizzate."
+                  title="Località"
                 />
               </CardHeader>
               <CardContent className="space-y-5 pt-6">
@@ -1362,7 +1622,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
                     <select
-                      className={selectFieldClassName}
+                      aria-invalid={invalidField === 'location'}
+                      className={cn(
+                        selectFieldClassName,
+                        invalidField === 'location' && invalidFieldClassName,
+                      )}
                       id="listing-region"
                       onChange={handleRegionChange}
                       value={form.regionId}
@@ -1381,7 +1645,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-province">Provincia</FieldLabel>
                     <select
-                      className={selectFieldClassName}
+                      aria-invalid={invalidField === 'location'}
+                      className={cn(
+                        selectFieldClassName,
+                        invalidField === 'location' && invalidFieldClassName,
+                      )}
                       disabled={!form.regionId}
                       id="listing-province"
                       onChange={handleProvinceChange}
@@ -1405,7 +1673,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-comune">Comune</FieldLabel>
                     <select
-                      className={selectFieldClassName}
+                      aria-invalid={invalidField === 'location'}
+                      className={cn(
+                        selectFieldClassName,
+                        invalidField === 'location' && invalidFieldClassName,
+                      )}
                       disabled={!form.provinceId}
                       id="listing-comune"
                       onChange={handleFieldChange('comuneId')}
@@ -1632,8 +1904,8 @@ export function ListingEditor({
                   </div>
                   {queuedMedia.length === 0 ? (
                     <EmptyStateMessage>
-                      Nessuna nuova foto selezionata. Puoi salvare la bozza e tornare qui piu
-                      tardi per completare la galleria.
+                      Nessuna nuova foto selezionata. Puoi salvare la bozza e tornare qui piu tardi
+                      per completare la galleria.
                     </EmptyStateMessage>
                   ) : (
                     <div className="space-y-3">
@@ -1746,7 +2018,7 @@ export function ListingEditor({
                   </div>
                   <div className="rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface-muted)_62%,transparent)] px-4 py-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                      Localita
+                      Località
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
                       {form.comuneId ? 'Completa' : 'Da completare'}
@@ -1815,8 +2087,8 @@ export function ListingEditor({
                     Best practice
                   </p>
                   <p className="mt-1">
-                    Titolo specifico, una copertina nitida e una localita precisa sono i tre
-                    elementi che migliorano di piu la qualita percepita della scheda.
+                    Titolo specifico, una copertina nitida e una località precisa sono i tre
+                    elementi che migliorano di più la qualità percepita della scheda.
                   </p>
                 </div>
               </CardContent>
@@ -1833,9 +2105,26 @@ export function ListingEditor({
               <p className="truncate text-sm font-semibold text-[var(--color-text)]">
                 {completedReadinessCount}/{readinessItems.length} sezioni pronte
               </p>
+              {saveFeedback.status !== 'idle' ? (
+                <p
+                  className={cn(
+                    'mt-1 truncate text-xs',
+                    saveFeedback.status === 'success'
+                      ? 'text-[var(--color-success-fg)]'
+                      : saveFeedback.status === 'error'
+                        ? 'text-[var(--color-danger-fg)]'
+                        : 'text-[var(--color-text-muted)]',
+                  )}
+                >
+                  {saveFeedback.message}
+                </p>
+              ) : null}
             </div>
             <label
-              className={cn(mobileQuickActionClassName, 'h-11 shrink-0 cursor-pointer rounded-full px-4')}
+              className={cn(
+                mobileQuickActionClassName,
+                'h-11 shrink-0 cursor-pointer rounded-full px-4',
+              )}
               htmlFor={fileInputId}
             >
               <ImagePlus className="h-4 w-4 text-[var(--color-primary)]" />

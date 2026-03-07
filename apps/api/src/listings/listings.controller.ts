@@ -219,7 +219,7 @@ const parseOptionalPositiveInteger = (
   return parsed;
 };
 
-const parseOptionalNonNegativeInteger = (
+const parseOptionalAgeMonthsInteger = (
   source: Record<string, unknown>,
   fieldName: string,
 ): number | null | undefined => {
@@ -232,18 +232,38 @@ const parseOptionalNonNegativeInteger = (
     return null;
   }
 
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
     return value;
   }
 
   if (typeof value === 'string') {
     const normalized = value.trim();
-    if (/^\d+$/.test(normalized)) {
+    if (/^[1-9]\d*$/.test(normalized)) {
       return Number.parseInt(normalized, 10);
     }
   }
 
-  throw new BadRequestException(`Field "${fieldName}" must be a non-negative integer.`);
+  throw new BadRequestException(`Field "${fieldName}" must be a positive integer.`);
+};
+
+const parseOptionalNullableBoolean = (
+  source: Record<string, unknown>,
+  fieldName: string,
+): boolean | null | undefined => {
+  if (!(fieldName in source)) {
+    return undefined;
+  }
+
+  const value = source[fieldName];
+  if (value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new BadRequestException(`Field "${fieldName}" must be a boolean or null.`);
+  }
+
+  return value;
 };
 
 const parseOptionalBoolean = (
@@ -620,8 +640,8 @@ export class ListingsController {
     if (hasAgePayload) {
       const ageText = parseOptionalString(source, 'ageText', 80);
       const ageMonths =
-        parseOptionalNonNegativeInteger(source, 'ageMonths') ??
-        parseOptionalNonNegativeInteger(source, 'age_months');
+        parseOptionalAgeMonthsInteger(source, 'ageMonths') ??
+        parseOptionalAgeMonthsInteger(source, 'age_months');
 
       const normalizedAge = normalizeListingAge({
         ageText: ageText ?? undefined,
@@ -650,6 +670,41 @@ export class ListingsController {
       }
 
       payload.breed = canonicalBreed ?? null;
+    }
+
+    if ('isSterilized' in source || 'is_sterilized' in source) {
+      payload.isSterilized =
+        parseOptionalNullableBoolean(source, 'isSterilized') ??
+        parseOptionalNullableBoolean(source, 'is_sterilized') ??
+        null;
+    }
+
+    if ('isVaccinated' in source || 'is_vaccinated' in source) {
+      payload.isVaccinated =
+        parseOptionalNullableBoolean(source, 'isVaccinated') ??
+        parseOptionalNullableBoolean(source, 'is_vaccinated') ??
+        null;
+    }
+
+    if ('hasMicrochip' in source || 'has_microchip' in source) {
+      payload.hasMicrochip =
+        parseOptionalNullableBoolean(source, 'hasMicrochip') ??
+        parseOptionalNullableBoolean(source, 'has_microchip') ??
+        null;
+    }
+
+    if ('compatibleWithChildren' in source || 'compatible_with_children' in source) {
+      payload.compatibleWithChildren =
+        parseOptionalNullableBoolean(source, 'compatibleWithChildren') ??
+        parseOptionalNullableBoolean(source, 'compatible_with_children') ??
+        null;
+    }
+
+    if ('compatibleWithOtherAnimals' in source || 'compatible_with_other_animals' in source) {
+      payload.compatibleWithOtherAnimals =
+        parseOptionalNullableBoolean(source, 'compatibleWithOtherAnimals') ??
+        parseOptionalNullableBoolean(source, 'compatible_with_other_animals') ??
+        null;
     }
 
     const hasRegion = 'regionId' in source;

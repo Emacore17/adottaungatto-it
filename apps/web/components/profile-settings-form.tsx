@@ -2,7 +2,9 @@
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Toast } from '@adottaungatto/ui';
 import { LoaderCircle, UserRound, UserRoundPen } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 import type { UserProfile } from '../lib/users';
 
 type ToastState = {
@@ -20,8 +22,10 @@ type ProfileFormState = {
   city: string;
   province: string;
   bio: string;
-  avatarStorageKey: string;
 };
+
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const toInputValue = (value: string | null | undefined) => value ?? '';
 
@@ -38,8 +42,34 @@ const toProfileFormState = (profile: UserProfile): ProfileFormState => ({
   city: toInputValue(profile.city),
   province: toInputValue(profile.province),
   bio: toInputValue(profile.bio),
-  avatarStorageKey: toInputValue(profile.avatarStorageKey),
 });
+
+const toAvatarPreviewSrc = (avatarObjectUrl: string | null): string => {
+  if (!avatarObjectUrl) {
+    return '/mock-media/gattino-1.jpg';
+  }
+
+  const params = new URLSearchParams({
+    src: avatarObjectUrl,
+    fallbackFile: 'gattino-1.jpg',
+  });
+  return `/api/listings/media-proxy?${params.toString()}`;
+};
+
+const readFileAsDataUrl = async (file: File): Promise<string> =>
+  await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string' || !reader.result) {
+        reject(new Error('Impossibile leggere il file selezionato.'));
+        return;
+      }
+
+      resolve(reader.result);
+    };
+    reader.onerror = () => reject(new Error('Impossibile leggere il file selezionato.'));
+    reader.readAsDataURL(file);
+  });
 
 export function ProfileSettingsForm({
   email,
@@ -48,20 +78,56 @@ export function ProfileSettingsForm({
   email: string;
   initialProfile: UserProfile;
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ProfileFormState>(() => toProfileFormState(initialProfile));
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarStorageKey, setAvatarStorageKey] = useState<string | null>(
+    initialProfile.avatarStorageKey,
+  );
+  const [avatarObjectUrl, setAvatarObjectUrl] = useState<string | null>(
+    initialProfile.avatarObjectUrl,
+  );
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [selectedAvatarPreviewUrl, setSelectedAvatarPreviewUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>({
     open: false,
     title: '',
     variant: 'info',
   });
 
+  useEffect(
+    () => () => {
+      if (selectedAvatarPreviewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(selectedAvatarPreviewUrl);
+      }
+    },
+    [selectedAvatarPreviewUrl],
+  );
+
   const onFieldChange = (fieldName: keyof ProfileFormState, value: string) => {
     setForm((currentValue) => ({
       ...currentValue,
       [fieldName]: value,
     }));
+  };
+
+  const replaceSelectedAvatarPreviewUrl = (nextValue: string | null) => {
+    setSelectedAvatarPreviewUrl((currentValue) => {
+      if (currentValue?.startsWith('blob:')) {
+        URL.revokeObjectURL(currentValue);
+      }
+
+      return nextValue;
+    });
+  };
+
+  const clearSelectedAvatar = () => {
+    setSelectedAvatarFile(null);
+    replaceSelectedAvatarPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const profilePayload = useMemo(
@@ -80,7 +146,7 @@ export function ProfileSettingsForm({
   const saveProfile = async () => {
     setSavingProfile(true);
     try {
-      const response = await fetch('/api/users/me/profile', {
+      const response = await fetchWithAuthRefresh('/api/users/me/profile', {
         method: 'PATCH',
         headers: {
           'content-type': 'application/json',
@@ -93,6 +159,9 @@ export function ProfileSettingsForm({
       } | null;
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(payload?.message ?? 'Impossibile salvare il profilo.');
       }
 
@@ -114,13 +183,44 @@ export function ProfileSettingsForm({
     }
   };
 
-  const saveAvatarStorageKey = async () => {
-    const avatarStorageKey = normalizeNullableString(form.avatarStorageKey);
-    if (!avatarStorageKey) {
+  const onAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+
+    if (!AVATAR_ALLOWED_MIME_TYPES.has(file.type.toLowerCase())) {
+      clearSelectedAvatar();
       setToast({
         open: true,
-        title: 'Avatar non valido',
-        description: 'Inserisci una chiave avatar valida prima di salvare.',
+        title: 'Formato non supportato',
+        description: 'Usa un file JPEG, PNG oppure WebP.',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    if (file.size > AVATAR_MAX_BYTES) {
+      clearSelectedAvatar();
+      setToast({
+        open: true,
+        title: 'File troppo grande',
+        description: 'La dimensione massima consentita per l avatar e 2 MB.',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    setSelectedAvatarFile(file);
+    replaceSelectedAvatarPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const saveAvatar = async () => {
+    if (!selectedAvatarFile) {
+      setToast({
+        open: true,
+        title: 'Nessun file selezionato',
+        description: 'Seleziona un immagine prima di caricare l avatar.',
         variant: 'warning',
       });
       return;
@@ -128,35 +228,49 @@ export function ProfileSettingsForm({
 
     setSavingAvatar(true);
     try {
-      const response = await fetch('/api/users/me/avatar', {
+      const contentBase64 = await readFileAsDataUrl(selectedAvatarFile);
+      const response = await fetchWithAuthRefresh('/api/users/me/avatar', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          avatarStorageKey,
+          mimeType: selectedAvatarFile.type.toLowerCase(),
+          contentBase64,
+          fileName: selectedAvatarFile.name,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as {
         message?: string;
+        profile?: {
+          avatarStorageKey?: string | null;
+          avatarObjectUrl?: string | null;
+        };
       } | null;
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? 'Impossibile aggiornare avatar.');
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
+        throw new Error(payload?.message ?? 'Impossibile caricare avatar.');
       }
+
+      setAvatarStorageKey(payload?.profile?.avatarStorageKey ?? null);
+      setAvatarObjectUrl(payload?.profile?.avatarObjectUrl ?? null);
+      clearSelectedAvatar();
 
       setToast({
         open: true,
         title: 'Avatar aggiornato',
-        description: 'La chiave avatar e stata salvata correttamente.',
+        description: 'Il nuovo avatar e stato caricato correttamente.',
         variant: 'success',
       });
     } catch (error) {
       setToast({
         open: true,
-        title: 'Avatar non aggiornato',
-        description: error instanceof Error ? error.message : 'Impossibile aggiornare avatar.',
+        title: 'Upload non riuscito',
+        description: error instanceof Error ? error.message : 'Impossibile caricare avatar.',
         variant: 'danger',
       });
     } finally {
@@ -164,10 +278,31 @@ export function ProfileSettingsForm({
     }
   };
 
-  const removeAvatarStorageKey = async () => {
+  const removeAvatar = async () => {
+    if (!avatarStorageKey) {
+      if (selectedAvatarFile) {
+        clearSelectedAvatar();
+        setToast({
+          open: true,
+          title: 'Selezione rimossa',
+          description: 'Il file selezionato e stato rimosso.',
+          variant: 'info',
+        });
+      } else {
+        setToast({
+          open: true,
+          title: 'Nessun avatar presente',
+          description: 'Non ci sono avatar caricati da rimuovere.',
+          variant: 'warning',
+        });
+      }
+
+      return;
+    }
+
     setSavingAvatar(true);
     try {
-      const response = await fetch('/api/users/me/avatar', {
+      const response = await fetchWithAuthRefresh('/api/users/me/avatar', {
         method: 'DELETE',
       });
 
@@ -176,18 +311,20 @@ export function ProfileSettingsForm({
       } | null;
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(payload?.message ?? 'Impossibile rimuovere avatar.');
       }
 
-      setForm((currentValue) => ({
-        ...currentValue,
-        avatarStorageKey: '',
-      }));
+      setAvatarStorageKey(null);
+      setAvatarObjectUrl(null);
+      clearSelectedAvatar();
 
       setToast({
         open: true,
         title: 'Avatar rimosso',
-        description: 'La chiave avatar e stata rimossa dal profilo.',
+        description: 'L avatar e stato rimosso dal profilo.',
         variant: 'success',
       });
     } catch (error) {
@@ -201,6 +338,8 @@ export function ProfileSettingsForm({
       setSavingAvatar(false);
     }
   };
+
+  const avatarPreviewSrc = selectedAvatarPreviewUrl ?? toAvatarPreviewSrc(avatarObjectUrl);
 
   return (
     <>
@@ -256,19 +395,22 @@ export function ProfileSettingsForm({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="phoneE164">
-                Telefono (E.164)
+                Telefono
               </label>
               <Input
                 id="phoneE164"
                 onChange={(event) => onFieldChange('phoneE164', event.target.value)}
-                placeholder="+393331112233"
+                placeholder="+39 333 1234567"
                 value={form.phoneE164}
               />
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Formato internazionale consigliato, ad esempio +39 333 1234567.
+              </p>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="city">
-                Citta
+                Città
               </label>
               <Input
                 id="city"
@@ -332,21 +474,45 @@ export function ProfileSettingsForm({
             <UserRound className="h-4 w-4 text-[var(--color-primary)]" />
             Avatar
           </div>
-          <CardTitle>Chiave avatar profilo</CardTitle>
+          <CardTitle>Avatar profilo</CardTitle>
           <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-            Campo tecnico predisposto per integrazione upload media dedicata.
+            Carica un immagine JPEG, PNG o WebP fino a 2 MB. Il file precedente viene sostituito
+            automaticamente.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <img
+              alt="Anteprima avatar"
+              className="h-24 w-24 rounded-full border border-[var(--color-border)] object-cover"
+              src={avatarPreviewSrc}
+            />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-[var(--color-text)]">
+                {selectedAvatarFile
+                  ? `File selezionato: ${selectedAvatarFile.name}`
+                  : avatarStorageKey
+                    ? 'Avatar attuale salvato'
+                    : 'Nessun avatar caricato'}
+              </p>
+              <p className="text-xs text-[var(--color-text-muted)]">JPEG, PNG o WebP · max 2 MB</p>
+              {avatarStorageKey ? (
+                <p className="text-xs text-[var(--color-text-muted)]">Chiave: {avatarStorageKey}</p>
+              ) : null}
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="avatarStorageKey">
-              Avatar storage key
+            <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="avatarFile">
+              Seleziona immagine
             </label>
-            <Input
-              id="avatarStorageKey"
-              onChange={(event) => onFieldChange('avatarStorageKey', event.target.value)}
-              placeholder="avatars/user-123/avatar.webp"
-              value={form.avatarStorageKey}
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              className="block w-full rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--color-primary)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:opacity-95"
+              id="avatarFile"
+              onChange={onAvatarFileChange}
+              ref={fileInputRef}
+              type="file"
             />
           </div>
 
@@ -354,23 +520,23 @@ export function ProfileSettingsForm({
             <Button
               aria-busy={savingAvatar}
               className="h-11 rounded-full px-5"
-              disabled={savingAvatar}
-              onClick={() => void saveAvatarStorageKey()}
+              disabled={savingAvatar || !selectedAvatarFile}
+              onClick={() => void saveAvatar()}
               type="button"
             >
               {savingAvatar ? (
                 <>
                   <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                  Salvataggio...
+                  Upload...
                 </>
               ) : (
-                'Salva avatar'
+                'Carica avatar'
               )}
             </Button>
             <Button
               className="h-11 rounded-full px-5"
               disabled={savingAvatar}
-              onClick={() => void removeAvatarStorageKey()}
+              onClick={() => void removeAvatar()}
               type="button"
               variant="secondary"
             >

@@ -14,12 +14,13 @@ export const assertSafeApiRuntimeConfig = (env: ApiEnv): void => {
     );
   }
 
+  const largestUploadPayloadBytes = Math.max(env.MEDIA_UPLOAD_MAX_BYTES, env.AVATAR_UPLOAD_MAX_BYTES);
   const minimumBodyLimitBytes =
-    Math.ceil(env.MEDIA_UPLOAD_MAX_BYTES * base64InflationMultiplier) +
+    Math.ceil(largestUploadPayloadBytes * base64InflationMultiplier) +
     uploadJsonEnvelopeHeadroomBytes;
   if (env.API_BODY_LIMIT_BYTES < minimumBodyLimitBytes) {
     throw new Error(
-      `API_BODY_LIMIT_BYTES must be >= ${minimumBodyLimitBytes.toString()} when MEDIA_UPLOAD_MAX_BYTES=${env.MEDIA_UPLOAD_MAX_BYTES.toString()}.`,
+      `API_BODY_LIMIT_BYTES must be >= ${minimumBodyLimitBytes.toString()} when max upload payload is ${largestUploadPayloadBytes.toString()} bytes.`,
     );
   }
 };

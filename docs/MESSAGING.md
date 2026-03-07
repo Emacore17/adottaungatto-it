@@ -156,4 +156,4 @@ Verifiche:
 - nessuna DLQ applicativa oltre alle righe `failed` nell'outbox
 - il worker resta vivo anche se Redis, MinIO o OpenSearch non sono raggiungibili: utile in locale, non sufficiente per prod
 - niente delete del singolo messaggio
-- niente supporto multi-device stateful sui preferiti, che restano fuori dal dominio messaging
+- i preferiti sono persistiti lato utente ma restano fuori dal dominio messaging

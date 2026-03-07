@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 import { LinkButton } from './link-button';
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -12,11 +13,14 @@ export function LiveMessagesLink({ initialUnreadCount }: { initialUnreadCount: n
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
 
   const refreshUnreadCount = useEffectEvent(async () => {
-    const response = await fetch('/api/messages/threads?limit=1&offset=0', {
+    const response = await fetchWithAuthRefresh('/api/messages/threads?limit=1&offset=0', {
       cache: 'no-store',
     });
     const payload = asRecord(await response.json().catch(() => null));
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error(SESSION_EXPIRED_MESSAGE);
+      }
       throw new Error(String(payload.message ?? 'Impossibile aggiornare i messaggi.'));
     }
 

@@ -25,6 +25,21 @@ type UploadListingMediaResult = {
   objectUrl: string;
 };
 
+type UploadUserAvatarInput = {
+  userStorageId: string;
+  mimeType: string;
+  payload: Buffer;
+  originalFileName: string | null;
+};
+
+type UploadUserAvatarResult = {
+  bucket: string;
+  storageKey: string;
+  fileSize: number;
+  mimeType: string;
+  objectUrl: string;
+};
+
 const extensionByMimeType: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -34,10 +49,13 @@ const extensionByMimeType: Record<string, string> = {
 @Injectable()
 export class MinioStorageService {
   private readonly env = loadApiEnv();
-  private readonly bucketName = this.env.MINIO_BUCKET_LISTING_ORIGINALS;
+  private readonly listingBucketName = this.env.MINIO_BUCKET_LISTING_ORIGINALS;
   private readonly thumbsBucketName = this.env.MINIO_BUCKET_LISTING_THUMBS;
-  private readonly maxUploadBytes = this.env.MEDIA_UPLOAD_MAX_BYTES;
-  private readonly allowedMimeTypes = new Set(this.env.MEDIA_ALLOWED_MIME_TYPES);
+  private readonly userAvatarBucketName = this.env.MINIO_BUCKET_USER_AVATARS;
+  private readonly mediaUploadMaxBytes = this.env.MEDIA_UPLOAD_MAX_BYTES;
+  private readonly mediaAllowedMimeTypes = new Set(this.env.MEDIA_ALLOWED_MIME_TYPES);
+  private readonly avatarUploadMaxBytes = this.env.AVATAR_UPLOAD_MAX_BYTES;
+  private readonly avatarAllowedMimeTypes = new Set(this.env.AVATAR_ALLOWED_MIME_TYPES);
   private readonly endpointUrl = new URL(this.env.MINIO_ENDPOINT);
 
   private readonly s3 = new S3Client({
@@ -53,50 +71,40 @@ export class MinioStorageService {
   private readonly ensuredBuckets = new Set<string>();
 
   async uploadListingMedia(input: UploadListingMediaInput): Promise<UploadListingMediaResult> {
-    this.validateMimeType(input.mimeType);
-    this.validateFileSize(input.payload.length);
-    await this.ensureBucketExists(this.bucketName);
-
-    const storageKey = this.buildStorageKey(
-      input.listingId,
-      input.mimeType,
-      input.originalFileName,
-    );
-
-    try {
-      await this.s3.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: storageKey,
-          Body: input.payload,
-          ContentType: input.mimeType,
-        }),
-      );
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to upload media to MinIO: ${(error as Error).message}`,
-      );
-    }
-
-    return {
-      bucket: this.bucketName,
-      storageKey,
-      fileSize: input.payload.length,
+    return this.uploadImageObject({
+      bucketName: this.listingBucketName,
+      keyPrefix: `listings/${input.listingId}`,
       mimeType: input.mimeType,
-      objectUrl: this.buildObjectUrl(storageKey),
-    };
+      payload: input.payload,
+      originalFileName: input.originalFileName,
+      maxUploadBytes: this.mediaUploadMaxBytes,
+      allowedMimeTypes: this.mediaAllowedMimeTypes,
+    });
+  }
+
+  async uploadUserAvatar(input: UploadUserAvatarInput): Promise<UploadUserAvatarResult> {
+    return this.uploadImageObject({
+      bucketName: this.userAvatarBucketName,
+      keyPrefix: `avatars/${input.userStorageId}`,
+      mimeType: input.mimeType,
+      payload: input.payload,
+      originalFileName: input.originalFileName,
+      maxUploadBytes: this.avatarUploadMaxBytes,
+      allowedMimeTypes: this.avatarAllowedMimeTypes,
+    });
   }
 
   async ensureRequiredBuckets(): Promise<void> {
-    await this.ensureBucketExists(this.bucketName);
+    await this.ensureBucketExists(this.listingBucketName);
     await this.ensureBucketExists(this.thumbsBucketName);
+    await this.ensureBucketExists(this.userAvatarBucketName);
   }
 
   async objectExists(storageKey: string): Promise<boolean> {
     try {
       await this.s3.send(
         new HeadObjectCommand({
-          Bucket: this.bucketName,
+          Bucket: this.listingBucketName,
           Key: storageKey,
         }),
       );
@@ -107,20 +115,32 @@ export class MinioStorageService {
   }
 
   async deleteMediaObject(storageKey: string): Promise<void> {
+    await this.deleteObjectInBucket(this.listingBucketName, storageKey);
+  }
+
+  async deleteUserAvatarObject(storageKey: string): Promise<void> {
+    await this.deleteObjectInBucket(this.userAvatarBucketName, storageKey);
+  }
+
+  getUserAvatarObjectUrl(storageKey: string): string {
+    return this.buildObjectUrl(this.userAvatarBucketName, storageKey);
+  }
+
+  getListingMediaObjectUrl(storageKey: string): string {
+    return this.buildObjectUrl(this.listingBucketName, storageKey);
+  }
+
+  private async deleteObjectInBucket(bucketName: string, storageKey: string): Promise<void> {
     try {
       await this.s3.send(
         new DeleteObjectCommand({
-          Bucket: this.bucketName,
+          Bucket: bucketName,
           Key: storageKey,
         }),
       );
     } catch {
       // Best effort cleanup to avoid masking the original error path.
     }
-  }
-
-  getListingMediaObjectUrl(storageKey: string): string {
-    return this.buildObjectUrl(storageKey);
   }
 
   private async ensureBucketExists(bucketName: string): Promise<void> {
@@ -151,29 +171,29 @@ export class MinioStorageService {
     this.ensuredBuckets.add(bucketName);
   }
 
-  private validateMimeType(mimeType: string): void {
+  private validateMimeType(mimeType: string, allowedMimeTypes: Set<string>): void {
     const normalized = mimeType.trim().toLowerCase();
-    if (!this.allowedMimeTypes.has(normalized)) {
+    if (!allowedMimeTypes.has(normalized)) {
       throw new BadRequestException(
-        `Unsupported mime type "${mimeType}". Allowed: ${Array.from(this.allowedMimeTypes).join(', ')}.`,
+        `Unsupported mime type "${mimeType}". Allowed: ${Array.from(allowedMimeTypes).join(', ')}.`,
       );
     }
   }
 
-  private validateFileSize(fileSize: number): void {
+  private validateFileSize(fileSize: number, maxUploadBytes: number): void {
     if (fileSize <= 0) {
       throw new BadRequestException('Uploaded media payload is empty.');
     }
 
-    if (fileSize > this.maxUploadBytes) {
+    if (fileSize > maxUploadBytes) {
       throw new BadRequestException(
-        `Uploaded media exceeds max size (${this.maxUploadBytes} bytes).`,
+        `Uploaded media exceeds max size (${maxUploadBytes} bytes).`,
       );
     }
   }
 
   private buildStorageKey(
-    listingId: string,
+    keyPrefix: string,
     mimeType: string,
     originalFileName: string | null,
   ): string {
@@ -187,11 +207,56 @@ export class MinioStorageService {
         .replace(/^-|-$/g, '')
         .slice(0, 48) ?? 'upload';
 
-    return `listings/${listingId}/${Date.now()}-${slugPart}-${randomUUID()}.${extension}`;
+    return `${keyPrefix}/${Date.now()}-${slugPart}-${randomUUID()}.${extension}`;
   }
 
-  private buildObjectUrl(storageKey: string): string {
-    return `${this.endpointUrl.origin}/${this.bucketName}/${storageKey}`;
+  private buildObjectUrl(bucketName: string, storageKey: string): string {
+    return `${this.endpointUrl.origin}/${bucketName}/${storageKey}`;
+  }
+
+  private async uploadImageObject(input: {
+    bucketName: string;
+    keyPrefix: string;
+    mimeType: string;
+    payload: Buffer;
+    originalFileName: string | null;
+    maxUploadBytes: number;
+    allowedMimeTypes: Set<string>;
+  }): Promise<{
+    bucket: string;
+    storageKey: string;
+    fileSize: number;
+    mimeType: string;
+    objectUrl: string;
+  }> {
+    this.validateMimeType(input.mimeType, input.allowedMimeTypes);
+    this.validateFileSize(input.payload.length, input.maxUploadBytes);
+    await this.ensureBucketExists(input.bucketName);
+
+    const storageKey = this.buildStorageKey(input.keyPrefix, input.mimeType, input.originalFileName);
+
+    try {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: input.bucketName,
+          Key: storageKey,
+          Body: input.payload,
+          ContentType: input.mimeType,
+        }),
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Failed to upload media to MinIO: ${(error as Error).message}`,
+      );
+    }
+
+    return {
+      bucket: input.bucketName,
+      storageKey,
+      fileSize: input.payload.length,
+      mimeType: input.mimeType,
+      objectUrl: this.buildObjectUrl(input.bucketName, storageKey),
+    };
   }
 
   private isBucketMissingError(error: unknown): boolean {

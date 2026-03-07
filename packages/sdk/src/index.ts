@@ -1,4 +1,10 @@
 import type { HealthResponse } from '@adottaungatto/types';
+export * from './openapi-client';
+export type {
+  components as OpenApiComponents,
+  operations as OpenApiOperations,
+  paths as OpenApiPaths,
+} from './generated/openapi';
 
 export const getApiHealth = async (baseUrl: string): Promise<HealthResponse> => {
   const response = await fetch(`${baseUrl}/health`);

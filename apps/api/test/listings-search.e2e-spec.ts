@@ -250,6 +250,34 @@ describe('Listings search endpoint', () => {
     });
   });
 
+  it('accepts profile boolean filters and applies SQL search path', async () => {
+    const response = await request(app.getHttpServer()).get(
+      '/v1/listings/search?isSterilized=true&isVaccinated=false&hasMicrochip=true&compatibleWithChildren=true&compatibleWithOtherAnimals=false&sort=newest',
+    );
+
+    expect(response.status).toBe(200);
+    expect(searchPublished).not.toHaveBeenCalled();
+    expect(searchPublishedFallback).toHaveBeenCalledWith({
+      queryText: null,
+      locationIntent: null,
+      referencePoint: null,
+      listingType: null,
+      priceMin: null,
+      priceMax: null,
+      ageText: null,
+      sex: null,
+      breed: null,
+      isSterilized: true,
+      isVaccinated: false,
+      hasMicrochip: true,
+      compatibleWithChildren: true,
+      compatibleWithOtherAnimals: false,
+      sort: 'newest',
+      limit: 24,
+      offset: 0,
+    });
+  });
+
   it('applies fallback from comune to provincia when exact area returns zero results', async () => {
     searchPublished
       .mockResolvedValueOnce({

@@ -40,7 +40,7 @@ export const invalidJsonResponse = () =>
 
 interface ForwardApiRequestOptions {
   pathname: string;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   token: string;
   body?: unknown;
 }

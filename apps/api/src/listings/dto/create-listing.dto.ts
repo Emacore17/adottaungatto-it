@@ -67,7 +67,7 @@ const currencyCode = z.preprocess(
     .optional(),
 );
 
-const optionalNonNegativeInteger = (fieldName: string, maxValue: number) =>
+const optionalPositiveInteger = (fieldName: string, maxValue: number) =>
   z.preprocess(
     (value) => {
       if (value === undefined || value === null || value === '') {
@@ -98,8 +98,29 @@ const optionalNonNegativeInteger = (fieldName: string, maxValue: number) =>
         invalid_type_error: `Field "${fieldName}" must be an integer.`,
       })
       .int(`Field "${fieldName}" must be an integer.`)
-      .min(0, `Field "${fieldName}" must be >= 0.`)
+      .min(1, `Field "${fieldName}" must be >= 1.`)
       .max(maxValue, `Field "${fieldName}" must be <= ${maxValue}.`)
+      .optional(),
+  );
+
+const optionalNullableBoolean = (fieldName: string) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+
+      if (typeof value === 'boolean') {
+        return value;
+      }
+
+      return value;
+    },
+    z
+      .boolean({
+        invalid_type_error: `Field "${fieldName}" must be a boolean or null.`,
+      })
+      .nullable()
       .optional(),
   );
 
@@ -134,9 +155,14 @@ const createListingBodySchema = z
       .optional(),
     currency: currencyCode,
     ageText: optionalAgeText,
-    ageMonths: optionalNonNegativeInteger('ageMonths', MAX_LISTING_AGE_MONTHS),
+    ageMonths: optionalPositiveInteger('ageMonths', MAX_LISTING_AGE_MONTHS),
     sex: trimmedString(20, 'sex'),
     breed: optionalTrimmedNullableString(120, 'breed'),
+    isSterilized: optionalNullableBoolean('isSterilized'),
+    isVaccinated: optionalNullableBoolean('isVaccinated'),
+    hasMicrochip: optionalNullableBoolean('hasMicrochip'),
+    compatibleWithChildren: optionalNullableBoolean('compatibleWithChildren'),
+    compatibleWithOtherAnimals: optionalNullableBoolean('compatibleWithOtherAnimals'),
     regionId: positiveIntegerAsString('regionId'),
     provinceId: positiveIntegerAsString('provinceId'),
     comuneId: positiveIntegerAsString('comuneId'),
@@ -215,6 +241,11 @@ const createListingBodySchema = z
       ageMonths: normalizedAge.ageMonths,
       sex: value.sex,
       breed: normalizeCatBreedLabel(value.breed) ?? null,
+      isSterilized: value.isSterilized ?? null,
+      isVaccinated: value.isVaccinated ?? null,
+      hasMicrochip: value.hasMicrochip ?? null,
+      compatibleWithChildren: value.compatibleWithChildren ?? null,
+      compatibleWithOtherAnimals: value.compatibleWithOtherAnimals ?? null,
       regionId: value.regionId,
       provinceId: value.provinceId,
       comuneId: value.comuneId,

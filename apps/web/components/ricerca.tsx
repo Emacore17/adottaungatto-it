@@ -12,11 +12,22 @@ import {
 } from '@adottaungatto/ui';
 import { ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   AGE_FILTER_OPTIONS,
+  BOOLEAN_FILTER_OPTIONS,
   BREEDS,
+  booleanOrNull,
+  booleanToFilterValue,
   type FilterOption,
   LISTING_TYPES,
   PRICE_FILTER_OPTIONS,
@@ -43,6 +54,11 @@ interface SearchState {
   breed: string;
   listingType: string;
   sex: string;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   ageMinValue: string;
   ageMinUnit: AgeUnit;
   ageMaxValue: string;
@@ -80,6 +96,11 @@ const initialState: SearchState = {
   breed: '',
   listingType: '',
   sex: '',
+  isSterilized: null,
+  isVaccinated: null,
+  hasMicrochip: null,
+  compatibleWithChildren: null,
+  compatibleWithOtherAnimals: null,
   ageMinValue: '',
   ageMinUnit: 'months',
   ageMaxValue: '',
@@ -135,7 +156,7 @@ const buildAgeLabel = (search: SearchState) => {
   const maxLabel = formatAgeValue(search.ageMaxValue, search.ageMaxUnit);
 
   if (!minLabel && !maxLabel) {
-    return 'Qualsiasi eta';
+    return 'Qualsiasi età';
   }
 
   if (minLabel && maxLabel) {
@@ -516,7 +537,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       } catch {
         if (!cancelled) {
           setLocationSuggestions([]);
-          setLocationError('Impossibile recuperare suggerimenti localita.');
+          setLocationError('Impossibile recuperare suggerimenti località.');
         }
       } finally {
         if (!cancelled) {
@@ -597,6 +618,11 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
         listingType: search.listingType,
         sex: search.sex,
         breed: search.breed,
+        isSterilized: search.isSterilized,
+        isVaccinated: search.isVaccinated,
+        hasMicrochip: search.hasMicrochip,
+        compatibleWithChildren: search.compatibleWithChildren,
+        compatibleWithOtherAnimals: search.compatibleWithOtherAnimals,
         ageMinMonths: toAgeMonths(search.ageMinValue, search.ageMinUnit),
         ageMaxMonths: toAgeMonths(search.ageMaxValue, search.ageMaxUnit),
         priceMin: search.priceMin,
@@ -783,6 +809,11 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       listingType: effectiveSearch.listingType,
       sex: effectiveSearch.sex,
       breed: effectiveSearch.breed,
+      isSterilized: effectiveSearch.isSterilized,
+      isVaccinated: effectiveSearch.isVaccinated,
+      hasMicrochip: effectiveSearch.hasMicrochip,
+      compatibleWithChildren: effectiveSearch.compatibleWithChildren,
+      compatibleWithOtherAnimals: effectiveSearch.compatibleWithOtherAnimals,
       ageMinMonths,
       ageMaxMonths,
       priceMin: effectiveSearch.priceMin,
@@ -796,6 +827,11 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     });
 
     router.push(buildListingsHref(listingsFilters, { page: 1 }));
+  };
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void runSearch();
   };
 
   const onFieldButtonClick = (key: PopoverKey) => {
@@ -832,7 +868,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
     <div className={cn('location-popover', compact ? 'location-popover-mobile' : '')}>
       {compact ? (
         <label className="filter-field-group" htmlFor={`${locationInputId}-sheet`}>
-          <span className="location-label">Localita</span>
+          <span className="location-label">Località</span>
           <input
             className="location-input"
             id={`${locationInputId}-sheet`}
@@ -844,13 +880,13 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                 void runSearch();
               }
             }}
-            placeholder="Citta, provincia o regione"
+            placeholder="Città, provincia o regione"
             type="text"
             value={locationQuery}
           />
         </label>
       ) : (
-        <p className="location-label">Suggerimenti localita</p>
+        <p className="location-label">Suggerimenti località</p>
       )}
       {locationLoading ? <p className="location-meta">Cerco suggerimenti...</p> : null}
       {locationError ? <p className="location-meta location-meta-error">{locationError}</p> : null}
@@ -970,15 +1006,15 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
       <div className="filter-grid">
         <div className="filter-field-group">
           {isCompactSearchLayout ? (
-            <span className="location-label">Eta minima</span>
+            <span className="location-label">Età minima</span>
           ) : (
             <label className="location-label" htmlFor={ageMinInputId}>
-              Eta minima
+              Età minima
             </label>
           )}
           {isCompactSearchLayout ? (
             <MobileFilterSelect
-              ariaLabel="Eta minima"
+              ariaLabel="Età minima"
               className="w-full"
               onChange={(nextValue) => setAgeBoundary('min', nextValue)}
               options={AGE_FILTER_OPTIONS.map((option) => ({
@@ -1009,15 +1045,15 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
 
         <div className="filter-field-group">
           {isCompactSearchLayout ? (
-            <span className="location-label">Eta massima</span>
+            <span className="location-label">Età massima</span>
           ) : (
             <label className="location-label" htmlFor={ageMaxInputId}>
-              Eta massima
+              Età massima
             </label>
           )}
           {isCompactSearchLayout ? (
             <MobileFilterSelect
-              ariaLabel="Eta massima"
+              ariaLabel="Età massima"
               className="w-full"
               onChange={(nextValue) => setAgeBoundary('max', nextValue)}
               options={AGE_FILTER_OPTIONS.map((option) => ({
@@ -1064,11 +1100,11 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
               <Badge variant="outline">Ricerca avanzata</Badge>
             </div>
             <h1>Trova il prossimo gatto da accogliere.</h1>
-            <p>Filtra per localita, tipologia, prezzo ed eta.</p>
+            <p>Filtra per località, tipologia, prezzo ed età.</p>
           </div>
         ) : null}
 
-        <div className={`search-row ${expanded ? 'expanded' : ''}`}>
+        <form className={`search-row ${expanded ? 'expanded' : ''}`} onSubmit={handleSearchSubmit}>
           <div className={`search-bar-wrapper ${expanded ? 'expanded' : ''}`}>
             <div className="search-bar">
               <label className="search-field" htmlFor={qInputId}>
@@ -1078,12 +1114,6 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   id={qInputId}
                   onChange={(event) => setField('q', event.target.value)}
                   onFocus={() => setOpenPopover(null)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      void runSearch();
-                    }
-                  }}
                   placeholder="Es. Milano, cucciolo, stallo..."
                   type="text"
                   value={search.q}
@@ -1116,7 +1146,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                       hasLocationValue ? '' : 'search-field-value-placeholder',
                     )}
                   >
-                    {hasLocationValue ? locationDisplayValue : 'Citta, provincia o regione'}
+                    {hasLocationValue ? locationDisplayValue : 'Città, provincia o regione'}
                   </span>
                 </button>
               ) : (
@@ -1135,16 +1165,11 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                     }}
                     onFocus={openLocationPopover}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void runSearch();
-                      }
-
                       if (event.key === 'Escape') {
                         setOpenPopover(null);
                       }
                     }}
-                    placeholder="Citta, provincia o regione"
+                    placeholder="Città, provincia o regione"
                     type="text"
                     value={locationQuery}
                   />
@@ -1223,6 +1248,139 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   </div>
                 ) : null}
 
+                <div className="search-field advanced-field advanced-select-field">
+                  <span className="search-field-label">Sterilizzato</span>
+                  {isCompactSearchLayout ? (
+                    <MobileFilterSelect
+                      ariaLabel="Sterilizzato"
+                      className="w-full"
+                      onChange={(nextValue) => setField('isSterilized', booleanOrNull(nextValue))}
+                      options={BOOLEAN_FILTER_OPTIONS}
+                      value={booleanToFilterValue(search.isSterilized)}
+                    />
+                  ) : (
+                    <select
+                      className="platform-select"
+                      onChange={(event) => setField('isSterilized', booleanOrNull(event.target.value))}
+                      value={booleanToFilterValue(search.isSterilized)}
+                    >
+                      {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                        <option key={`sterilized-${option.value || 'any'}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="search-field advanced-field advanced-select-field">
+                  <span className="search-field-label">Vaccinato</span>
+                  {isCompactSearchLayout ? (
+                    <MobileFilterSelect
+                      ariaLabel="Vaccinato"
+                      className="w-full"
+                      onChange={(nextValue) => setField('isVaccinated', booleanOrNull(nextValue))}
+                      options={BOOLEAN_FILTER_OPTIONS}
+                      value={booleanToFilterValue(search.isVaccinated)}
+                    />
+                  ) : (
+                    <select
+                      className="platform-select"
+                      onChange={(event) => setField('isVaccinated', booleanOrNull(event.target.value))}
+                      value={booleanToFilterValue(search.isVaccinated)}
+                    >
+                      {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                        <option key={`vaccinated-${option.value || 'any'}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="search-field advanced-field advanced-select-field">
+                  <span className="search-field-label">Microchip</span>
+                  {isCompactSearchLayout ? (
+                    <MobileFilterSelect
+                      ariaLabel="Microchip"
+                      className="w-full"
+                      onChange={(nextValue) => setField('hasMicrochip', booleanOrNull(nextValue))}
+                      options={BOOLEAN_FILTER_OPTIONS}
+                      value={booleanToFilterValue(search.hasMicrochip)}
+                    />
+                  ) : (
+                    <select
+                      className="platform-select"
+                      onChange={(event) => setField('hasMicrochip', booleanOrNull(event.target.value))}
+                      value={booleanToFilterValue(search.hasMicrochip)}
+                    >
+                      {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                        <option key={`microchip-${option.value || 'any'}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="search-field advanced-field advanced-select-field">
+                  <span className="search-field-label">Compatibile bambini</span>
+                  {isCompactSearchLayout ? (
+                    <MobileFilterSelect
+                      ariaLabel="Compatibile con bambini"
+                      className="w-full"
+                      onChange={(nextValue) =>
+                        setField('compatibleWithChildren', booleanOrNull(nextValue))
+                      }
+                      options={BOOLEAN_FILTER_OPTIONS}
+                      value={booleanToFilterValue(search.compatibleWithChildren)}
+                    />
+                  ) : (
+                    <select
+                      className="platform-select"
+                      onChange={(event) =>
+                        setField('compatibleWithChildren', booleanOrNull(event.target.value))
+                      }
+                      value={booleanToFilterValue(search.compatibleWithChildren)}
+                    >
+                      {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                        <option key={`children-${option.value || 'any'}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="search-field advanced-field advanced-select-field">
+                  <span className="search-field-label">Compatibile altri animali</span>
+                  {isCompactSearchLayout ? (
+                    <MobileFilterSelect
+                      ariaLabel="Compatibile con altri animali"
+                      className="w-full"
+                      onChange={(nextValue) =>
+                        setField('compatibleWithOtherAnimals', booleanOrNull(nextValue))
+                      }
+                      options={BOOLEAN_FILTER_OPTIONS}
+                      value={booleanToFilterValue(search.compatibleWithOtherAnimals)}
+                    />
+                  ) : (
+                    <select
+                      className="platform-select"
+                      onChange={(event) =>
+                        setField('compatibleWithOtherAnimals', booleanOrNull(event.target.value))
+                      }
+                      value={booleanToFilterValue(search.compatibleWithOtherAnimals)}
+                    >
+                      {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                        <option key={`animals-${option.value || 'any'}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
                 <button
                   className={`search-field search-field-button advanced-field advanced-field-price ${openPopover === 'prezzo' ? 'active' : ''}`}
                   onClick={() => onFieldButtonClick('prezzo')}
@@ -1239,7 +1397,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   ref={ageRef}
                   type="button"
                 >
-                  <span className="search-field-label">Eta del gatto</span>
+                  <span className="search-field-label">Età del gatto</span>
                   <span className="search-field-value">{ageLabel}</span>
                 </button>
 
@@ -1317,12 +1475,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
               ) : null}
             </button>
 
-            <button
-              aria-label="Cerca"
-              className="search-button"
-              onClick={() => void runSearch()}
-              type="button"
-            >
+            <button aria-label="Cerca" className="search-button" type="submit">
               <svg fill="currentColor" height="16" viewBox="0 0 16 16" width="16">
                 <title>Cerca</title>
                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
@@ -1330,7 +1483,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
               <span className="search-action-label">Cerca</span>
             </button>
           </div>
-        </div>
+        </form>
 
         {validationError ? <p className="error-message">{validationError}</p> : null}
       </div>
@@ -1448,7 +1601,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
           description={ageLabel}
           onClose={() => closeMobileSheet('eta')}
           open={openPopover === 'eta'}
-          title="Eta del gatto"
+          title="Età del gatto"
         >
           {renderAgeFilters()}
         </MobileSheet>
@@ -1469,7 +1622,7 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
 
       {isCompactSearchLayout ? (
         <MobileSheet
-          description={search.locationIntent?.label ?? 'Seleziona la localita dai suggerimenti.'}
+          description={search.locationIntent?.label ?? 'Seleziona la località dai suggerimenti.'}
           onClose={() => closeMobileSheet('comune')}
           open={openPopover === 'comune'}
           title="Dove"

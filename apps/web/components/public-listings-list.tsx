@@ -9,6 +9,7 @@ import { ListingMediaPreview } from './listing-media-preview';
 import { ListingSponsoredBadge } from './listing-sponsored-badge';
 
 interface PublicListingsListProps {
+  backToListingsHref?: string | null;
   emptyDescription?: string;
   emptyTitle?: string;
   listings: PublicListingSummary[];
@@ -29,6 +30,7 @@ const formatDistanceLabel = (value: number | null) => {
 };
 
 export function PublicListingsList({
+  backToListingsHref = null,
   emptyDescription = 'Prova a modificare i filtri oppure amplia la ricerca.',
   emptyTitle = 'Nessun annuncio trovato.',
   listings,
@@ -51,7 +53,12 @@ export function PublicListingsList({
         const descriptionLabel =
           listing.description.trim() || "Apri l'annuncio per leggere tutti i dettagli.";
         const breedLabel = listing.breed?.trim() ?? '';
-        const sexLabel = listing.sex.trim();
+        const normalizedSex = listing.sex.trim().toLowerCase();
+        const sexLabel = normalizedSex
+          ? `${normalizedSex.charAt(0).toUpperCase()}${normalizedSex.slice(1)}`
+          : '';
+        const catCount = Math.max(1, listing.catCount);
+        const catCountLabel = `${catCount} ${catCount === 1 ? 'gatto' : 'gatti'}`;
         const ageLabel = listing.ageText.trim();
         const listingTypeValue = listing.listingType.trim();
         const listingTypeLabel = formatListingTypeLabel(listingTypeValue);
@@ -73,6 +80,9 @@ export function PublicListingsList({
             : listing.primaryMedia
               ? [listing.primaryMedia]
               : [];
+        const listingDetailHref = backToListingsHref
+          ? `/annunci/${listing.id}?backTo=${encodeURIComponent(backToListingsHref)}`
+          : `/annunci/${listing.id}`;
 
         return (
           <article
@@ -90,7 +100,7 @@ export function PublicListingsList({
             <div className="grid grid-cols-1 md:min-h-[232px] md:grid-cols-[minmax(250px,30%)_minmax(0,1fr)]">
               <Link
                 className="relative isolate block h-full overflow-hidden rounded-t-[29px] border-b border-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 md:rounded-l-[29px] md:rounded-t-none md:border-b-0 md:border-r"
-                href={`/annunci/${listing.id}`}
+                href={listingDetailHref}
               >
                 <ListingMediaPreview
                   listingId={listing.id}
@@ -106,7 +116,7 @@ export function PublicListingsList({
                     <h3 className="line-clamp-2 text-[1.12rem] font-semibold tracking-[-0.03em] text-[var(--color-text)] sm:text-[1.25rem] md:text-[1.45rem]">
                       <Link
                         className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
-                        href={`/annunci/${listing.id}`}
+                        href={listingDetailHref}
                       >
                         {titleLabel}
                       </Link>
@@ -137,6 +147,9 @@ export function PublicListingsList({
                 <div className="flex flex-wrap gap-2">
                   <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
                     {listingTypeLabel}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
+                    {catCountLabel}
                   </span>
                   {breedLabel ? (
                     <span className="inline-flex items-center rounded-full border border-[var(--color-chip-border)] bg-[var(--color-chip)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-text)]">
@@ -173,7 +186,7 @@ export function PublicListingsList({
                   <div className="flex w-full items-center gap-3 sm:w-auto">
                     <LinkButton
                       className="h-11 w-full justify-center rounded-full px-5 sm:w-auto"
-                      href={`/annunci/${listing.id}`}
+                      href={listingDetailHref}
                     >
                       Vedi annuncio
                       <ChevronRight aria-hidden="true" className="ml-1 h-4 w-4" />

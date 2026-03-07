@@ -80,6 +80,23 @@ const parseNonNegativeInteger = (value: string | string[] | undefined): number |
   return Math.trunc(parsed);
 };
 
+const parseNullableBoolean = (value: string | string[] | undefined): boolean | null => {
+  const normalized = normalizeOptionalString(value)?.toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (['true', '1', 'yes', 'si'].includes(normalized)) {
+    return true;
+  }
+
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+};
+
 const parseBoundedNumber = (
   value: string | string[] | undefined,
   minValue: number,
@@ -125,6 +142,11 @@ const parseListingsPageState = (
   const priceMax = parseNonNegativeNumber(params?.priceMax);
   const ageMinMonths = parseNonNegativeInteger(params?.ageMinMonths);
   const ageMaxMonths = parseNonNegativeInteger(params?.ageMaxMonths);
+  const isSterilized = parseNullableBoolean(params?.isSterilized);
+  const isVaccinated = parseNullableBoolean(params?.isVaccinated);
+  const hasMicrochip = parseNullableBoolean(params?.hasMicrochip);
+  const compatibleWithChildren = parseNullableBoolean(params?.compatibleWithChildren);
+  const compatibleWithOtherAnimals = parseNullableBoolean(params?.compatibleWithOtherAnimals);
   const referenceLat = parseBoundedNumber(params?.referenceLat, -90, 90);
   const referenceLon = parseBoundedNumber(params?.referenceLon, -180, 180);
   const [effectivePriceMin, effectivePriceMax] =
@@ -150,6 +172,11 @@ const parseListingsPageState = (
     listingType: normalizeOptionalString(params?.listingType) ?? '',
     sex: normalizeOptionalString(params?.sex) ?? '',
     breed: normalizeOptionalString(params?.breed) ?? '',
+    isSterilized,
+    isVaccinated,
+    hasMicrochip,
+    compatibleWithChildren,
+    compatibleWithOtherAnimals,
     ageMinMonths: effectiveAgeMinMonths,
     ageMaxMonths: effectiveAgeMaxMonths,
     priceMin: effectivePriceMin,
@@ -174,6 +201,11 @@ const parseListingsPageState = (
       listingType: filters.listingType || null,
       sex: filters.sex || null,
       breed: filters.breed || null,
+      isSterilized: filters.isSterilized,
+      isVaccinated: filters.isVaccinated,
+      hasMicrochip: filters.hasMicrochip,
+      compatibleWithChildren: filters.compatibleWithChildren,
+      compatibleWithOtherAnimals: filters.compatibleWithOtherAnimals,
       ageMinMonths: filters.ageMinMonths,
       ageMaxMonths: filters.ageMaxMonths,
       priceMin: filters.priceMin,
@@ -221,6 +253,11 @@ const hasIndexBlockingFilters = (filters: ListingsFilterValues) => {
   if (filters.listingType) return true;
   if (filters.sex) return true;
   if (filters.breed) return true;
+  if (filters.isSterilized !== null) return true;
+  if (filters.isVaccinated !== null) return true;
+  if (filters.hasMicrochip !== null) return true;
+  if (filters.compatibleWithChildren !== null) return true;
+  if (filters.compatibleWithOtherAnimals !== null) return true;
   if (filters.ageMinMonths !== null || filters.ageMaxMonths !== null) return true;
   if (filters.priceMin !== null || filters.priceMax !== null) return true;
   if (filters.locationScope || filters.regionId || filters.provinceId || filters.comuneId)
@@ -253,9 +290,31 @@ const buildActiveFilterLabels = (filters: ListingsFilterValues) => {
     labels.push(`Razza: ${filters.breed}`);
   }
 
+  if (filters.isSterilized !== null) {
+    labels.push(`Sterilizzato: ${filters.isSterilized ? 'Si' : 'No'}`);
+  }
+
+  if (filters.isVaccinated !== null) {
+    labels.push(`Vaccinato: ${filters.isVaccinated ? 'Si' : 'No'}`);
+  }
+
+  if (filters.hasMicrochip !== null) {
+    labels.push(`Microchip: ${filters.hasMicrochip ? 'Si' : 'No'}`);
+  }
+
+  if (filters.compatibleWithChildren !== null) {
+    labels.push(`Compatibile con bambini: ${filters.compatibleWithChildren ? 'Si' : 'No'}`);
+  }
+
+  if (filters.compatibleWithOtherAnimals !== null) {
+    labels.push(
+      `Compatibile con altri animali: ${filters.compatibleWithOtherAnimals ? 'Si' : 'No'}`,
+    );
+  }
+
   const ageLabel = buildAgeFilterLabel(filters);
   if (ageLabel) {
-    labels.push(`Eta: ${ageLabel}`);
+    labels.push(`Età: ${ageLabel}`);
   }
 
   if (filters.priceMin !== null) {
@@ -269,7 +328,7 @@ const buildActiveFilterLabels = (filters: ListingsFilterValues) => {
   if (filters.referenceLat !== null && filters.referenceLon !== null) {
     labels.push('Vicino a te');
   } else if (filters.locationLabel) {
-    labels.push(`Localita: ${filters.locationLabel}`);
+    labels.push(`Località: ${filters.locationLabel}`);
   }
 
   return labels;
@@ -293,10 +352,10 @@ const buildPageDescription = (filters: ListingsFilterValues) => {
   }
 
   if (filters.locationLabel) {
-    return `Scopri gli annunci di gatti disponibili in ${filters.locationLabel}, con filtri per razza, sesso, eta e prezzo.`;
+    return `Scopri gli annunci di gatti disponibili in ${filters.locationLabel}, con filtri per razza, sesso, età e prezzo.`;
   }
 
-  return 'Sfoglia annunci di gatti in adozione, stallo e segnalazione in tutta Italia con filtri per localita, eta, prezzo e preferenze.';
+  return 'Sfoglia annunci di gatti in adozione, stallo e segnalazione in tutta Italia con filtri per località, età, prezzo e preferenze.';
 };
 
 export async function generateMetadata({ searchParams }: ListingsPageProps): Promise<Metadata> {
@@ -350,12 +409,13 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   const activeFilterLabels = buildActiveFilterLabels(filters);
   const pageTitle = buildPageTitle(filters);
   const pageDescription = buildPageDescription(filters);
+  const currentListingsHref = buildListingsHref(filters, { page });
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: pageTitle,
     description: pageDescription,
-    url: new URL(buildListingsHref(filters, { page }), env.NEXT_PUBLIC_WEB_URL).toString(),
+    url: new URL(currentListingsHref, env.NEXT_PUBLIC_WEB_URL).toString(),
     mainEntity: {
       '@type': 'ItemList',
       numberOfItems: searchResult.items.length,
@@ -455,7 +515,10 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
           <SectionReveal delay={0.08}>
             {searchResult.items.length > 0 ? (
-              <PublicListingsList listings={searchResult.items} />
+              <PublicListingsList
+                backToListingsHref={currentListingsHref}
+                listings={searchResult.items}
+              />
             ) : (
               <Card>
                 <CardHeader className="space-y-4">

@@ -1,6 +1,16 @@
 # API_CONTRACT.md
 
-Contratto API corrente da trattare come canonico finche non esiste OpenAPI generata.
+Contratto API corrente (human-readable) allineato alla sorgente OpenAPI versionata in `packages/sdk/openapi/openapi.v1.json`.
+
+Comandi OpenAPI/SDK:
+
+- `pnpm openapi:generate` rigenera i tipi SDK da OpenAPI (`packages/sdk/src/generated/openapi.ts`)
+- `pnpm openapi:check` verifica drift tra sorgente OpenAPI e tipi generati (usato anche in CI)
+
+Copertura OpenAPI corrente:
+
+- health e dominio users/account (`/health*`, `/v1/users/me*`)
+- gli altri domini restano descritti in questo documento e verranno aggiunti progressivamente alla sorgente OpenAPI
 
 ## Convenzioni generali
 
@@ -26,6 +36,16 @@ Contratto API corrente da trattare come canonico finche non esiste OpenAPI gener
 - `PATCH /v1/users/me/profile`
 - `POST /v1/users/me/avatar`
 - `DELETE /v1/users/me/avatar`
+- `GET /v1/users/me/consents`
+- `PATCH /v1/users/me/consents`
+- `GET /v1/users/me/favorites`
+- `PUT /v1/users/me/favorites/:listingId`
+- `DELETE /v1/users/me/favorites/:listingId`
+- `GET /v1/users/me/linked-identities`
+- `POST /v1/users/me/linked-identities/:provider/start`
+- `DELETE /v1/users/me/linked-identities/:provider`
+- `GET /v1/users/me/sessions`
+- `DELETE /v1/users/me/sessions/:sessionId`
 - `GET /v1/users/moderation-space`
 - `GET /v1/users/admin-space`
 
@@ -55,12 +75,24 @@ Note:
 ### Web same-origin proxy (BFF)
 
 - `GET /api/geography/search?q=<text>&limit=<1..50>`
+- `GET /api/users/me/consents`
+- `PATCH /api/users/me/consents`
+- `GET /api/users/me/favorites`
+- `PUT /api/users/me/favorites/:listingId`
+- `DELETE /api/users/me/favorites/:listingId`
+- `GET /api/users/me/linked-identities`
+- `POST /api/users/me/linked-identities/:provider/start`
+- `DELETE /api/users/me/linked-identities/:provider`
+- `GET /api/users/me/sessions`
+- `DELETE /api/users/me/sessions/:sessionId`
+- `GET /api/favorites/listings?id=<listingId>&id=<listingId>...`
 
 Note:
 
 - route handler: `apps/web/app/api/geography/search/route.ts`
 - il frontend web deve usare questo endpoint same-origin al posto di chiamare direttamente `NEXT_PUBLIC_API_URL` dal browser
 - il proxy mantiene status code e payload upstream (`/v1/geography/search`) e ritorna `502` se l'API non e raggiungibile
+- i proxy utente (`/api/users/me/consents*`, `/api/users/me/favorites*`, `/api/users/me/linked-identities*`, `/api/users/me/sessions*`) richiedono sessione attiva; senza sessione ritornano `401`
 
 ### Web auth BFF (`apps/web/app/api/auth/**`)
 
@@ -108,6 +140,7 @@ Note:
   - `confirm_failed`
 - `next` viene sanitizzato: sono ammessi solo path relativi che iniziano con `/` (niente URL esterni o `//`)
 - `:provider` e valido solo se presente in allow-list env (`KEYCLOAK_SOCIAL_PROVIDERS`), altrimenti redirect con errore `social_provider_unavailable`
+- anche con allow-list valida, il provider deve essere configurato in Keycloak (es. IdP Google tramite `pnpm auth:seed` con env dedicati) per completare il login social end-to-end
 
 ### Admin auth BFF (`apps/admin/app/api/auth/**`)
 
@@ -219,11 +252,152 @@ Vincoli `POST /v1/analytics/events`:
 }
 ```
 
+## `GET|PUT|DELETE /v1/users/me/favorites` shape
+
+Response:
+
+```json
+{
+  "favorites": [
+    {
+      "listingId": "123",
+      "addedAt": "2026-03-07T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+Note:
+
+- `PUT /v1/users/me/favorites/:listingId` aggiunge in modo idempotente
+- `DELETE /v1/users/me/favorites/:listingId` rimuove in modo idempotente
+- gli ID invalidi rispondono `400`; `PUT` su listing inesistente risponde `404`
+- `PUT` accetta solo annunci pubblicati (`status=published`) e non soft-deleted
+
+## `GET|PATCH /v1/users/me/consents` shape
+
+Response:
+
+```json
+{
+  "consents": [
+    {
+      "type": "privacy",
+      "granted": true,
+      "version": "privacy-2026-03",
+      "grantedAt": "2026-03-07T12:30:00.000Z",
+      "source": "account_settings"
+    },
+    {
+      "type": "terms",
+      "granted": true,
+      "version": "terms-2026-03",
+      "grantedAt": "2026-03-07T12:30:00.000Z",
+      "source": "account_settings"
+    },
+    {
+      "type": "marketing",
+      "granted": false,
+      "version": null,
+      "grantedAt": null,
+      "source": null
+    }
+  ]
+}
+```
+
+Request `PATCH`:
+
+```json
+{
+  "consents": [
+    {
+      "type": "marketing",
+      "granted": true,
+      "version": "marketing-2026-03",
+      "source": "account_settings"
+    }
+  ]
+}
+```
+
+Note:
+
+- `PATCH` richiede `consents` array non vuoto (max 3 entry, una per tipo)
+- tipi supportati: `privacy`, `terms`, `marketing`
+- ogni write e append-only su storico `user_consents`; `GET` ritorna lo stato piu recente per tipo
+
 Note identita:
 
 - `providerSubject` e il subject esterno stabile
 - `user.id` e oggi allineato al subject pubblico stabile
 - `app_users.id` resta interno e non va esposto come ID pubblico canonico
+
+## `GET|POST|DELETE /v1/users/me/linked-identities` shape
+
+Response `GET`:
+
+```json
+{
+  "linkedIdentities": [
+    {
+      "provider": "keycloak",
+      "providerSubject": "keycloak-user-id",
+      "emailAtLink": "utente.demo@adottaungatto.local",
+      "linkedAt": "2026-03-07T13:00:00.000Z",
+      "lastSeenAt": "2026-03-07T13:05:00.000Z",
+      "isPrimary": true
+    },
+    {
+      "provider": "google",
+      "providerSubject": "google-subject",
+      "emailAtLink": "utente.demo@adottaungatto.local",
+      "linkedAt": "2026-03-07T13:01:00.000Z",
+      "lastSeenAt": "2026-03-07T13:04:00.000Z",
+      "isPrimary": false
+    }
+  ]
+}
+```
+
+Response `POST /start`:
+
+```json
+{
+  "provider": "google",
+  "redirectUrl": "http://localhost:3000/api/auth/login/google?next=%2Faccount%2Fsicurezza%3FlinkedIdentity%3Dstarted%26provider%3Dgoogle"
+}
+```
+
+Note:
+
+- `POST /start` valida allow-list `KEYCLOAK_SOCIAL_PROVIDERS` e ritorna URL di avvio linking
+- `DELETE /v1/users/me/linked-identities/:provider` non permette provider primario (`keycloak`/`dev-header`)
+- con account `keycloak`, la lista viene sincronizzata best-effort dalle federated identities Keycloak
+
+## `GET|DELETE /v1/users/me/sessions` shape
+
+Response `GET`:
+
+```json
+{
+  "sessions": [
+    {
+      "sessionId": "42f1f7a3-...",
+      "clientId": "adottaungatto-web",
+      "ipAddress": "127.0.0.1",
+      "startedAt": "2026-03-07T13:00:00.000Z",
+      "lastSeenAt": "2026-03-07T13:05:00.000Z",
+      "isCurrent": true
+    }
+  ]
+}
+```
+
+Note:
+
+- endpoint disponibili solo per account `keycloak`; su altri provider la lista e vuota
+- `DELETE /v1/users/me/sessions/:sessionId` revoca la sessione su Keycloak e ritorna la lista aggiornata
 
 ## `POST /v1/auth/password-recovery` shape
 
@@ -361,11 +535,47 @@ Response:
     "province": "MI",
     "bio": "Volontario in stallo.",
     "avatarStorageKey": "avatars/user-123/avatar.webp",
+    "avatarObjectUrl": "http://localhost:9000/user-avatars/avatars/user-123/avatar.webp",
     "createdAt": "2026-03-05T12:00:00.000Z",
     "updatedAt": "2026-03-05T12:00:00.000Z"
   }
 }
 ```
+
+## `POST|DELETE /v1/users/me/avatar` shape
+
+Request `POST`:
+
+```json
+{
+  "mimeType": "image/png",
+  "contentBase64": "data:image/png;base64,iVBORw0KGgoAAA...",
+  "fileName": "avatar.png"
+}
+```
+
+Note request:
+
+- `contentBase64` accetta sia base64 raw che data URL
+- limiti e mime type ammessi configurati via env:
+  - `AVATAR_UPLOAD_MAX_BYTES`
+  - `AVATAR_ALLOWED_MIME_TYPES`
+
+Response `POST`/`DELETE`:
+
+```json
+{
+  "profile": {
+    "avatarStorageKey": "avatars/501/1710000000000-avatar-a1b2c3.webp",
+    "avatarObjectUrl": "http://localhost:9000/user-avatars/avatars/501/1710000000000-avatar-a1b2c3.webp"
+  }
+}
+```
+
+Note:
+
+- `POST` sostituisce avatar precedente e tenta cleanup object old-key
+- `DELETE` azzera `avatarStorageKey`/`avatarObjectUrl` e tenta cleanup object esistente
 
 ## Search listings: contratto chiave
 

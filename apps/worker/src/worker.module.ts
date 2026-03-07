@@ -4,15 +4,14 @@ import { DatabaseModule } from './database/database.module';
 import { MessagingEmailDeliveryService } from './messaging-email-delivery.service';
 import { MessagingNotificationOutboxRepository } from './messaging-notification-outbox.repository';
 import { MessagingNotificationWorkerService } from './messaging-notification-worker.service';
-import { PromotionsLifecycleRepository } from './promotions-lifecycle.repository';
 import { PromotionsLifecycleWorkerService } from './promotions-lifecycle-worker.service';
-import { RetentionCleanupRepository } from './retention-cleanup.repository';
+import { PromotionsLifecycleRepository } from './promotions-lifecycle.repository';
 import { RetentionCleanupWorkerService } from './retention-cleanup-worker.service';
-import {
-  SEARCH_INDEX_ADMIN_CLIENT,
-  createSearchIndexAdminClient,
-} from './search-index-admin';
+import { RetentionCleanupRepository } from './retention-cleanup.repository';
+import { SEARCH_INDEX_ADMIN_CLIENT, createSearchIndexAdminClient } from './search-index-admin';
 import { SearchIndexCleanupWorkerService } from './search-index-cleanup-worker.service';
+import { UserIdentityReconciliationWorkerService } from './user-identity-reconciliation-worker.service';
+import { UserIdentityReconciliationRepository } from './user-identity-reconciliation.repository';
 import { WorkerDistributedLockService } from './worker-distributed-lock.service';
 
 @Module({
@@ -30,6 +29,8 @@ import { WorkerDistributedLockService } from './worker-distributed-lock.service'
     RetentionCleanupRepository,
     RetentionCleanupWorkerService,
     SearchIndexCleanupWorkerService,
+    UserIdentityReconciliationRepository,
+    UserIdentityReconciliationWorkerService,
     WorkerDistributedLockService,
   ],
 })

@@ -27,9 +27,15 @@ export const SEX_OPTIONS = [
   { value: 'femmina', label: 'Femmina' },
 ] as const;
 
+export const BOOLEAN_FILTER_OPTIONS = [
+  { value: '', label: 'Indifferente' },
+  { value: 'true', label: 'Si' },
+  { value: 'false', label: 'No' },
+] as const;
+
 export const SORT_OPTIONS: ReadonlyArray<{ value: SearchSort; label: string }> = [
-  { value: 'relevance', label: 'Piu pertinenti' },
-  { value: 'newest', label: 'Piu recenti' },
+  { value: 'relevance', label: 'Più pertinenti' },
+  { value: 'newest', label: 'Più recenti' },
   { value: 'price_asc', label: 'Prezzo crescente' },
   { value: 'price_desc', label: 'Prezzo decrescente' },
 ];
@@ -73,6 +79,30 @@ export const numberOrNull = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+export const booleanOrNull = (value: string) => {
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  return null;
+};
+
+export const booleanToFilterValue = (value: boolean | null) => {
+  if (value === true) {
+    return 'true';
+  }
+
+  if (value === false) {
+    return 'false';
+  }
+
+  return '';
+};
+
 export const optionLabel = (options: ReadonlyArray<FilterOption>, value: string) =>
   options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
 
@@ -87,7 +117,7 @@ export const formatAgeMonthsLabel = (months: number) => {
 
 export const buildAgeRangeLabel = (ageMinMonths: number | null, ageMaxMonths: number | null) => {
   if (ageMinMonths === null && ageMaxMonths === null) {
-    return 'Qualsiasi eta';
+    return 'Qualsiasi età';
   }
 
   if (ageMinMonths !== null && ageMaxMonths !== null) {

@@ -2,7 +2,7 @@
 
 Guida operativa per coding agent AI su registrazione, onboarding account, profilo utente e hardening auth.
 
-Stato audit: 2026-03-06.
+Stato audit: 2026-03-07.
 
 ## Obiettivo
 
@@ -22,14 +22,14 @@ Portare il dominio auth/account a uno stato completo e prod-ready:
 | Area richiesta | Stato | Evidenze principali | Note |
 | --- | --- | --- | --- |
 | Registrarsi al sito | `PARZIALE` | `apps/web/app/registrati/page.tsx`, `apps/web/app/api/auth/register/route.ts` | Flow reale via redirect OIDC Keycloak; dipende dalla configurazione realm. |
-| Inserimento dati personali | `PARZIALE` | `apps/web/components/profile-settings-form.tsx`, `apps/api/src/users/users.controller.ts` (`/v1/users/me/profile`) | Profilo persistito; avatar e solo `avatarStorageKey`, non upload file reale. |
+| Inserimento dati personali | `PARZIALE` | `apps/web/components/profile-settings-form.tsx`, `apps/api/src/users/users.controller.ts` (`/v1/users/me/profile`, `/v1/users/me/avatar`) | Profilo persistito; upload avatar reale attivo, restano rifiniture UX/smoke dedicati. |
 | Recupero password/credenziali | `PARZIALE` | `apps/web/app/password-dimenticata/page.tsx`, `apps/web/app/api/auth/password-recovery/route.ts`, `apps/api/src/auth/auth.controller.ts` | Endpoint anti-enumeration presente; dipende da Keycloak + SMTP per email reali. |
 | Verifica email | `PARZIALE` | `apps/web/app/verifica-account/page.tsx`, `apps/web/app/api/auth/email-verification/resend/route.ts`, `apps/api/src/auth/auth.controller.ts` | Resend disponibile; enforcement `emailVerified` su listing owner mutativi e messaging. |
 | Verifica telefono | `PARZIALE` | `apps/api/src/auth/auth.controller.ts`, `apps/api/src/auth/services/auth-phone-verification-delivery.service.ts`, `apps/web/app/api/auth/phone-verification/*`, `apps/web/app/account/sicurezza/page.tsx`, migration `0018` | Flow API+BFF+UI base attivo; delivery OTP configurabile (`console`/`webhook`/`twilio`) con `devCode` solo non-prod. Restano hardening UX/security e onboarding provider SMS reale in produzione. |
-| Accesso account terzi (Google ecc.) | `PARZIALE` | `apps/web/app/api/auth/login/[provider]/route.ts`, `register/[provider]`, `KEYCLOAK_SOCIAL_PROVIDERS` | Route provider-aware pronte; IdP Google non configurato nel realm file. |
-| Sincronizzazione utenti | `PARZIALE` | `apps/api/src/users/upsert-app-user-by-identity.ts` | Upsert runtime + dedup su email verificata; manca sync periodica e gestione link multi-provider esplicita. |
-| Area personale, impostazioni, foto profilo | `PARZIALE` | `apps/web/app/account/*`, `apps/web/components/profile-settings-form.tsx` | Dashboard/impostazioni/sicurezza presenti; manca sicurezza avanzata (sessioni, account linked reali, upload avatar reale). |
-| Sicurezza/privacy | `PARZIALE` | PKCE/state/nonce, CSRF BFF, guard email verificata, audit security events, rate-limit auth dedicato | Mancano consensi versionati, runbook operativita SMS prod e session management completo. |
+| Accesso account terzi (Google ecc.) | `PARZIALE` | `apps/web/app/api/auth/login/[provider]/route.ts`, `register/[provider]`, `KEYCLOAK_SOCIAL_PROVIDERS`, `apps/api/scripts/keycloak-seed-demo-users.ts`, `infra/keycloak/adottaungatto-realm.json` | Route provider-aware + fallback attivi; template IdP Google presente e provisioning env-gated in `auth:seed`. Restano credenziali reali in stage/prod. |
+| Sincronizzazione utenti | `PARZIALE` | `apps/api/src/users/upsert-app-user-by-identity.ts`, `apps/worker/src/user-identity-reconciliation-worker.service.ts` | Upsert runtime + dedup su email verificata + sync periodica Keycloak->DB; restano drift avanzati (role changes/audit mismatch). |
+| Area personale, impostazioni, foto profilo | `PARZIALE` | `apps/web/app/account/*`, `apps/web/components/profile-settings-form.tsx`, `apps/web/components/account-security-session-controls.tsx` | Dashboard/impostazioni/sicurezza presenti; upload avatar reale + linked identities + sessioni attive con azioni unlink/revoke. Restano rifiniture UX e runbook operativi. |
+| Sicurezza/privacy | `PARZIALE` | PKCE/state/nonce, CSRF BFF, guard email verificata, audit security events, rate-limit auth dedicato, consensi versionati (`/v1/users/me/consents`), linked identities/session revoke (`/v1/users/me/linked-identities*`, `/v1/users/me/sessions*`), job periodico worker Keycloak->DB | Restano runbook operativita SMS prod e audit eventi sensibili account esteso. |
 | Login/registrazione nuovi, animati, accattivanti | `PARZIALE` | `apps/web/app/login/page.tsx`, `registrati/page.tsx`, `PageShell`, `PageTransition`, `SectionReveal` | UI gia moderna con motion base; serve redesign auth-first piu distintivo e funnel onboarding completo. |
 
 ## Verifica richiesta utente (check operativo)
@@ -43,12 +43,12 @@ Questa sezione traduce la richiesta funzionale in controlli rapidi per coding ag
 | Recupero password/credenziali | `PARZIALE` | `/password-dimenticata` -> `POST /v1/auth/password-recovery` (risposta neutra) | scenario e2e con email reale consegnata |
 | Verifica email | `PARZIALE` | `/verifica-account` + `POST /v1/auth/email-verification/resend` | flusso auto-verifica testato end-to-end |
 | Verifica telefono | `PARZIALE` | API + BFF + form in `/account/sicurezza` (stati pending + validazione inline), provider delivery `console|webhook|twilio` | completare integrazione provider SMS in produzione e rifinire UX |
-| Accesso con account terzi (Google) | `PARZIALE` | route provider-aware presenti, Google non nel realm | configurare IdP Google e smoke dedicato |
-| Sincronizzazione utenti | `PARZIALE` | upsert runtime su login/authenticated request | tabella linked identities + job di riconciliazione |
-| Area personale (UI/settings/avatar/profilazione) | `PARZIALE` | pagine account esistenti + profile API | upload avatar reale + sezioni security/consensi |
+| Accesso con account terzi (Google) | `PARZIALE` | route provider-aware + smoke Playwright dedicata (`social-auth-smoke.spec.ts`) + provisioning IdP in `auth:seed` | impostare credenziali Google reali in stage/prod e validare callback end-to-end |
+| Sincronizzazione utenti | `PARZIALE` | upsert runtime su login/authenticated request + sync linked identities best-effort da Keycloak su endpoint utenti + job periodico `UserIdentityReconciliationWorkerService` | completare gestione drift avanzata (role changes/audit mismatch) |
+| Area personale (UI/settings/avatar/profilazione) | `PARZIALE` | pagine account esistenti + profile API + consensi account + upload avatar + pannello sicurezza linked identities/sessioni | rifiniture UX e gestione provider multipli avanzata |
 | Modifiche interfaccia da fare | `PARZIALE` | vedere sezione `Gap da chiudere (interfaccia)` | implementare funnel completo auth-first |
-| Modifiche dati/backend da fare | `PARZIALE` | vedere sezione `Gap da chiudere (backend/dati)` | migrations + API nuove (telefono/consensi/link) |
-| Sicurezza/privacy | `PARZIALE` | PKCE/state/nonce, CSRF, anti-enumeration, guard email, rate-limit auth | tuning threshold + policy consensi versionata |
+| Modifiche dati/backend da fare | `PARZIALE` | vedere sezione `Gap da chiudere (backend/dati)` | linked identities/sessioni + upload avatar reale |
+| Sicurezza/privacy | `PARZIALE` | PKCE/state/nonce, CSRF, anti-enumeration, guard email, rate-limit auth, consensi versionati | tuning threshold + session management e audit account |
 | Nuova pagina login/registrazione | `PARZIALE` | UI attuale moderna, ma non ancora design target finale | redesign UI auth con acceptance mobile/desktop |
 
 ## Stato tecnico corrente (as-is)
@@ -74,6 +74,7 @@ Questa sezione traduce la richiesta funzionale in controlli rapidi per coding ag
   - `PATCH /v1/users/me/preferences`
   - `GET/PATCH /v1/users/me/profile`
   - `POST/DELETE /v1/users/me/avatar`
+  - `GET/PATCH /v1/users/me/consents`
 - endpoint auth telefono:
   - `POST /v1/auth/phone-verification/request`
   - `POST /v1/auth/phone-verification/confirm`
@@ -112,8 +113,8 @@ File target:
 
 ### Area personale e sicurezza
 
-- in `/account/impostazioni` aggiungere sezioni mancanti:
-  - consensi privacy/termini/versione
+- in `/account/impostazioni` mantenere e rifinire sezioni:
+  - consensi privacy/termini/marketing con versioni policy aggiornate
   - controllo preferenze profilazione (quando backend disponibile)
 - in `/account/sicurezza` aggiungere:
   - stato email/telefono
@@ -121,7 +122,7 @@ File target:
   - provider collegati (Google/email-password)
   - azioni revoca/disconnessione account linked
 - avatar:
-  - passare da campo `avatarStorageKey` a upload reale con preview
+  - upload reale con preview implementato; restano miglioramenti E2E/smoke dedicati
 
 File target:
 
@@ -141,7 +142,7 @@ Migration suggerite (ordine):
 - campi: `provider`, `provider_subject`, `email_at_link`, `linked_at`, `last_seen_at`
 - unique `(provider, provider_subject)`
 
-2. `user_consents`:
+2. `user_consents` (`IMPLEMENTATO` in `0020`):
 - `user_id`, `consent_type`, `version`, `granted`, `granted_at`, `source`, `ip`, `user_agent`
 - storico append-only (no update distruttivo)
 
@@ -159,15 +160,13 @@ Migration suggerite (ordine):
   - delivery OTP disponibile (`PHONE_VERIFICATION_DELIVERY_PROVIDER=console|webhook|twilio`)
   - residuo: runbook monitoraggio errori provider e fallback operativo cross-provider
 - Users:
-  - `GET /v1/users/me/consents`
-  - `PATCH /v1/users/me/consents`
-  - `GET /v1/users/me/linked-identities`
-  - `POST /v1/users/me/linked-identities/:provider/start`
-  - `DELETE /v1/users/me/linked-identities/:provider`
-  - `GET /v1/users/me/sessions`
-  - `DELETE /v1/users/me/sessions/:sessionId`
+  - `GET /v1/users/me/linked-identities` (`COMPLETATO`)
+  - `POST /v1/users/me/linked-identities/:provider/start` (`COMPLETATO`)
+  - `DELETE /v1/users/me/linked-identities/:provider` (`COMPLETATO`)
+  - `GET /v1/users/me/sessions` (`COMPLETATO`)
+  - `DELETE /v1/users/me/sessions/:sessionId` (`COMPLETATO`)
 - Avatar:
-  - endpoint upload reale (multipart o upload token + storage flow)
+  - valutare evoluzione futura a multipart/token upload (attuale: payload base64 validato)
 
 ### Sincronizzazione utenti
 
@@ -212,7 +211,7 @@ Da completare:
 - data minimization:
   - non loggare PII in chiaro
   - retention definita per dati auth sensibili
-- policy consensi versionata e tracciabile
+- audit eventi account sensibili (profilo/consensi/sessioni) completo
 
 ## UX/UI target per login/registrazione (nuova versione)
 
@@ -267,6 +266,10 @@ Note runtime:
   - `PHONE_VERIFICATION_DELIVERY_PROVIDER=console` per vedere OTP nei log API e `devCode` in UI
   - opzionale `PHONE_VERIFICATION_DELIVERY_PROVIDER=webhook` con `PHONE_VERIFICATION_DELIVERY_WEBHOOK_URL` per integrare un gateway SMS reale
   - opzionale `PHONE_VERIFICATION_DELIVERY_PROVIDER=twilio` con credenziali Twilio (`ACCOUNT_SID`, `AUTH_TOKEN`, `FROM_NUMBER` o `MESSAGING_SERVICE_SID`)
+- social login Google locale:
+  - impostare `KEYCLOAK_SOCIAL_PROVIDERS=google` in `apps/web/.env.local`
+  - impostare `KEYCLOAK_GOOGLE_IDP_ENABLED=true`, `KEYCLOAK_GOOGLE_CLIENT_ID`, `KEYCLOAK_GOOGLE_CLIENT_SECRET` in `apps/api/.env.local`
+  - eseguire `pnpm auth:seed` per creare/aggiornare IdP `google` nel realm
 
 ### Produzione (minimo richiesto)
 
@@ -288,20 +291,21 @@ Note runtime:
 - consolidare test web auth Playwright come gate minimo
 
 2. Social login reale:
-- configurazione IdP Google in realm
-- smoke E2E condizionale ma stabile
+- completato lato codice locale (template realm + provisioning `auth:seed` + smoke condizionale)
+- pending: credenziali Google reali e validazione callback in stage/prod
 
 3. Profilo completo:
-- upload avatar reale
+- rifiniture UX/upload avatar + smoke dedicati
 - affinamento UI impostazioni/sicurezza
 
-4. Telefono + consensi:
-- nuove migration + endpoint + BFF + UI
-- audit e rate-limit dedicati
+4. Telefono + hardening sicurezza:
+- completare runbook delivery OTP in produzione e monitoraggio
+- completare audit eventi account sensibili e policy sessioni
 
 5. Sync identita avanzata:
-- tabella linked identities
-- worker/job riconciliazione e runbook operativo
+- tabella linked identities (`COMPLETATO`)
+- worker/job riconciliazione periodica Keycloak -> DB (`COMPLETATO`)
+- runbook operativo e gestione drift avanzata (audit mismatch/role changes) (`PENDING`)
 
 ## Test plan obbligatorio
 

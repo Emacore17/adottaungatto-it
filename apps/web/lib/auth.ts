@@ -1,12 +1,12 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { loadWebEnv } from '@adottaungatto/config';
 import {
+  type OidcTokenResponse,
   buildOidcAuthorizationUrl,
   buildOidcEndSessionUrl,
   exchangeOidcCodeForToken,
   refreshOidcToken,
-  type OidcTokenResponse,
 } from '@adottaungatto/sdk';
-import { createHash, randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -205,6 +205,11 @@ interface WebOidcContextOptions {
   extraParams?: Record<string, string>;
 }
 
+const defaultOidcLocaleParams: Record<string, string> = {
+  ui_locales: 'it',
+  kc_locale: 'it',
+};
+
 const createWebOidcContext = (
   requestUrl: string,
   rawNextPath: string | null,
@@ -227,7 +232,10 @@ const createWebOidcContext = (
     codeChallenge,
     prompt: options?.prompt,
     idpHint: options?.idpHint,
-    extraParams: options?.extraParams,
+    extraParams: {
+      ...defaultOidcLocaleParams,
+      ...(options?.extraParams ?? {}),
+    },
   });
 
   return {
@@ -279,9 +287,7 @@ export const exchangeWebAuthorizationCodeForToken = async (
   });
 };
 
-export const refreshWebSessionToken = async (
-  refreshToken: string,
-): Promise<OidcTokenResponse> => {
+export const refreshWebSessionToken = async (refreshToken: string): Promise<OidcTokenResponse> => {
   return refreshOidcToken({
     keycloakBaseUrl: env.KEYCLOAK_URL,
     realm: env.KEYCLOAK_REALM,
@@ -340,7 +346,9 @@ export const requireWebSession = async (nextPath: string): Promise<SessionPayloa
   const session = await getWebSession();
   if (!session) {
     const encodedNextPath = encodeURIComponent(nextPath);
-    redirect(`/login?next=${encodedNextPath}`);
+    const hasStaleSession = Boolean((await getWebSessionCookiePayload())?.accessToken);
+    const errorQuery = hasStaleSession ? '&error=session_expired' : '';
+    redirect(`/login?next=${encodedNextPath}${errorQuery}`);
   }
 
   return session;

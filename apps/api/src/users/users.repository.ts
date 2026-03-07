@@ -6,6 +6,11 @@ import { UserRole as UserRoleValue } from '../auth/roles.enum';
 import type {
   AppUser,
   IdentityClaims,
+  UserConsent,
+  UserConsentType,
+  UserConsentUpdateInput,
+  UserFavoriteListing,
+  UserLinkedIdentity,
   UserProfile,
   UserProfileUpdateInput,
 } from './models/app-user.model';
@@ -35,6 +40,30 @@ type UserProfileRow = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+
+type UserFavoriteRow = {
+  listingId: string;
+  addedAt: string;
+};
+
+type UserConsentRow = {
+  type: UserConsentType;
+  granted: boolean;
+  version: string;
+  grantedAt: string;
+  source: string;
+};
+
+type UserLinkedIdentityRow = {
+  provider: string;
+  providerSubject: string;
+  emailAtLink: string | null;
+  linkedAt: string;
+  lastSeenAt: string;
+  isPrimary: boolean;
+};
+
+const USER_CONSENT_TYPES: UserConsentType[] = ['privacy', 'terms', 'marketing'];
 
 @Injectable()
 export class UsersRepository {
@@ -161,6 +190,232 @@ export class UsersRepository {
     });
   }
 
+  async getConsentsByIdentityClaims(claims: IdentityClaims): Promise<UserConsent[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    return this.listCurrentConsentsByUserDatabaseId(userDatabaseId);
+  }
+
+  async appendConsentsByIdentityClaims(
+    claims: IdentityClaims,
+    input: {
+      consents: UserConsentUpdateInput[];
+      ip: string | null;
+      userAgent: string | null;
+    },
+  ): Promise<UserConsent[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      for (const consent of input.consents) {
+        await client.query(
+          `
+            INSERT INTO user_consents (
+              user_id,
+              consent_type,
+              consent_version,
+              granted,
+              source,
+              ip,
+              user_agent
+            )
+            VALUES ($1::bigint, $2, $3, $4::boolean, $5, $6::inet, $7);
+          `,
+          [
+            userDatabaseId,
+            consent.type,
+            consent.version,
+            consent.granted,
+            consent.source,
+            input.ip,
+            input.userAgent,
+          ],
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return this.listCurrentConsentsByUserDatabaseId(userDatabaseId);
+  }
+
+  async listFavoritesByIdentityClaims(claims: IdentityClaims): Promise<UserFavoriteListing[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    return this.listFavoritesByUserDatabaseId(userDatabaseId);
+  }
+
+  async addFavoriteByIdentityClaims(
+    claims: IdentityClaims,
+    listingId: string,
+  ): Promise<UserFavoriteListing[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+
+    await this.pool.query(
+      `
+        INSERT INTO user_favorite_listings (user_id, listing_id)
+        VALUES ($1::bigint, $2::bigint)
+        ON CONFLICT (user_id, listing_id)
+        DO NOTHING;
+      `,
+      [userDatabaseId, listingId],
+    );
+
+    return this.listFavoritesByUserDatabaseId(userDatabaseId);
+  }
+
+  async removeFavoriteByIdentityClaims(
+    claims: IdentityClaims,
+    listingId: string,
+  ): Promise<UserFavoriteListing[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+
+    await this.pool.query(
+      `
+        DELETE FROM user_favorite_listings
+        WHERE user_id = $1::bigint
+          AND listing_id = $2::bigint;
+      `,
+      [userDatabaseId, listingId],
+    );
+
+    return this.listFavoritesByUserDatabaseId(userDatabaseId);
+  }
+
+  async upsertLinkedIdentityByIdentityClaims(
+    claims: IdentityClaims,
+    input: {
+      provider: string;
+      providerSubject: string;
+      emailAtLink: string | null;
+    },
+  ): Promise<void> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    await this.pool.query(
+      `
+        INSERT INTO user_linked_identities (
+          user_id,
+          provider,
+          provider_subject,
+          email_at_link
+        )
+        VALUES ($1::bigint, $2, $3, $4)
+        ON CONFLICT (provider, provider_subject)
+        DO UPDATE SET
+          user_id = EXCLUDED.user_id,
+          email_at_link = EXCLUDED.email_at_link,
+          last_seen_at = NOW();
+      `,
+      [userDatabaseId, input.provider, input.providerSubject, input.emailAtLink],
+    );
+  }
+
+  async listLinkedIdentitiesByIdentityClaims(claims: IdentityClaims): Promise<UserLinkedIdentity[]> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    await this.upsertLinkedIdentityByIdentityClaims(claims, {
+      provider: claims.provider,
+      providerSubject: claims.providerSubject,
+      emailAtLink: claims.email,
+    });
+
+    const result = await this.pool.query<UserLinkedIdentityRow>(
+      `
+        SELECT
+          li.provider,
+          li.provider_subject AS "providerSubject",
+          li.email_at_link AS "emailAtLink",
+          li.linked_at::text AS "linkedAt",
+          li.last_seen_at::text AS "lastSeenAt",
+          (li.provider = au.provider AND li.provider_subject = au.provider_subject) AS "isPrimary"
+        FROM user_linked_identities li
+        INNER JOIN app_users au
+          ON au.id = li.user_id
+        WHERE li.user_id = $1::bigint
+        ORDER BY "isPrimary" DESC, li.last_seen_at DESC, li.id DESC;
+      `,
+      [userDatabaseId],
+    );
+
+    return result.rows.map((row) => ({
+      provider: row.provider,
+      providerSubject: row.providerSubject,
+      emailAtLink: row.emailAtLink,
+      linkedAt: row.linkedAt,
+      lastSeenAt: row.lastSeenAt,
+      isPrimary: row.isPrimary === true,
+    }));
+  }
+
+  async deleteLinkedIdentityByProviderByIdentityClaims(
+    claims: IdentityClaims,
+    provider: string,
+  ): Promise<boolean> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+    const result = await this.pool.query<{ id: string }>(
+      `
+        DELETE FROM user_linked_identities
+        WHERE user_id = $1::bigint
+          AND provider = $2
+        RETURNING id::text AS id;
+      `,
+      [userDatabaseId, provider],
+    );
+
+    return (result.rows[0]?.id ?? null) !== null;
+  }
+
+  async pruneLinkedIdentitiesByIdentityClaims(
+    claims: IdentityClaims,
+    keepProviders: string[],
+  ): Promise<void> {
+    const userDatabaseId = await this.ensureUserDatabaseId(claims);
+
+    if (keepProviders.length === 0) {
+      await this.pool.query(
+        `
+          DELETE FROM user_linked_identities
+          WHERE user_id = $1::bigint
+            AND NOT (provider = $2 AND provider_subject = $3);
+        `,
+        [userDatabaseId, claims.provider, claims.providerSubject],
+      );
+      return;
+    }
+
+    await this.pool.query(
+      `
+        DELETE FROM user_linked_identities
+        WHERE user_id = $1::bigint
+          AND NOT (provider = $2 AND provider_subject = $3)
+          AND provider <> ALL($4::text[]);
+      `,
+      [userDatabaseId, claims.provider, claims.providerSubject, keepProviders],
+    );
+  }
+
+  async listingExistsForFavorite(listingId: string): Promise<boolean> {
+    const result = await this.pool.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM listings
+          WHERE id = $1::bigint
+            AND status = 'published'
+            AND deleted_at IS NULL
+        ) AS "exists";
+      `,
+      [listingId],
+    );
+
+    return result.rows[0]?.exists === true;
+  }
+
   private async ensureUserDatabaseId(claims: IdentityClaims): Promise<string> {
     const persistedUser = await this.upsertFromIdentityClaims(claims);
     if (!persistedUser.databaseId) {
@@ -219,6 +474,53 @@ export class UsersRepository {
     }
 
     return this.mapUserProfileRow(row);
+  }
+
+  private async listCurrentConsentsByUserDatabaseId(userDatabaseId: string): Promise<UserConsent[]> {
+    const result = await this.pool.query<UserConsentRow>(
+      `
+        SELECT DISTINCT ON (consent_type)
+          consent_type AS "type",
+          granted,
+          consent_version AS "version",
+          created_at::text AS "grantedAt",
+          source
+        FROM user_consents
+        WHERE user_id = $1::bigint
+        ORDER BY consent_type, created_at DESC, id DESC;
+      `,
+      [userDatabaseId],
+    );
+
+    const rowsByType = new Map<UserConsentType, UserConsentRow>();
+    for (const row of result.rows) {
+      rowsByType.set(row.type, row);
+    }
+
+    return USER_CONSENT_TYPES.map((type) => {
+      const row = rowsByType.get(type);
+      if (!row) {
+        return this.buildEmptyConsent(type);
+      }
+
+      return this.mapUserConsentRow(row);
+    });
+  }
+
+  private async listFavoritesByUserDatabaseId(userDatabaseId: string): Promise<UserFavoriteListing[]> {
+    const result = await this.pool.query<UserFavoriteRow>(
+      `
+        SELECT
+          listing_id::text AS "listingId",
+          created_at::text AS "addedAt"
+        FROM user_favorite_listings
+        WHERE user_id = $1::bigint
+        ORDER BY created_at DESC, listing_id DESC;
+      `,
+      [userDatabaseId],
+    );
+
+    return result.rows.map((row) => this.mapUserFavoriteRow(row));
   }
 
   private async upsertProfileByUserDatabaseId(
@@ -329,6 +631,23 @@ export class UsersRepository {
     };
   }
 
+  private mapUserFavoriteRow(row: UserFavoriteRow): UserFavoriteListing {
+    return {
+      listingId: row.listingId,
+      addedAt: row.addedAt,
+    };
+  }
+
+  private mapUserConsentRow(row: UserConsentRow): UserConsent {
+    return {
+      type: row.type,
+      granted: row.granted === true,
+      version: row.version,
+      grantedAt: row.grantedAt,
+      source: row.source,
+    };
+  }
+
   private buildEmptyProfile(): UserProfile {
     return {
       firstName: null,
@@ -342,6 +661,16 @@ export class UsersRepository {
       avatarStorageKey: null,
       createdAt: null,
       updatedAt: null,
+    };
+  }
+
+  private buildEmptyConsent(type: UserConsentType): UserConsent {
+    return {
+      type,
+      granted: false,
+      version: null,
+      grantedAt: null,
+      source: null,
     };
   }
 }

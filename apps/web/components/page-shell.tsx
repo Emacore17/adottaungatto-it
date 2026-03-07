@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { SectionReveal } from './motion/section-reveal';
 
 interface PageShellProps {
+  breadcrumbs?: ReactNode;
   eyebrow?: string;
   title: string;
   description: string;
@@ -23,6 +24,7 @@ const slugifyTitle = (value: string) => {
 };
 
 export function PageShell({
+  breadcrumbs,
   eyebrow,
   title,
   description,
@@ -41,6 +43,7 @@ export function PageShell({
           className={aside ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]' : 'space-y-4'}
         >
           <header className="space-y-4">
+            {breadcrumbs}
             {eyebrow ? (
               <Badge className="w-fit" variant="secondary">
                 {eyebrow}

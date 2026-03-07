@@ -4,8 +4,8 @@ const normalizedWhitespaceRegex = /\s+/g;
 const normalizedAgeTextRegex = /^(\d+)\s*(mese|mesi|anno|anni)$/;
 
 export const formatListingAgeText = (ageMonths: number): string => {
-  if (!Number.isInteger(ageMonths) || ageMonths < 0) {
-    throw new Error('Age months must be a non-negative integer.');
+  if (!Number.isInteger(ageMonths) || ageMonths <= 0) {
+    throw new Error('Age months must be a positive integer.');
   }
 
   if (ageMonths >= 12 && ageMonths % 12 === 0) {
@@ -29,7 +29,7 @@ export const parseListingAgeTextToMonths = (value: string): number | null => {
   }
 
   const amount = Number.parseInt(match[1] ?? '', 10);
-  if (!Number.isInteger(amount) || amount < 0) {
+  if (!Number.isInteger(amount) || amount <= 0) {
     return null;
   }
 
@@ -56,9 +56,9 @@ export const normalizeListingAge = (input: {
     input.ageMonths !== null && input.ageMonths !== undefined ? Math.trunc(input.ageMonths) : null;
 
   if (normalizedAgeMonths !== null) {
-    if (normalizedAgeMonths < 0 || normalizedAgeMonths > MAX_LISTING_AGE_MONTHS) {
+    if (normalizedAgeMonths < 1 || normalizedAgeMonths > MAX_LISTING_AGE_MONTHS) {
       return {
-        error: `Field "ageMonths" must be between 0 and ${MAX_LISTING_AGE_MONTHS}.`,
+        error: `Field "ageMonths" must be between 1 and ${MAX_LISTING_AGE_MONTHS}.`,
       };
     }
 

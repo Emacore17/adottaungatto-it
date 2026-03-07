@@ -49,6 +49,10 @@ const mapErrorMessage = (code: string | undefined) => {
     return 'Accesso social non disponibile in questo ambiente.';
   }
 
+  if (code === 'session_expired') {
+    return 'La sessione e scaduta. Accedi di nuovo per continuare.';
+  }
+
   return undefined;
 };
 

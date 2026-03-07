@@ -37,6 +37,7 @@ import {
 } from 'react';
 import {
   AGE_FILTER_OPTIONS,
+  BOOLEAN_FILTER_OPTIONS,
   BREEDS,
   type FilterOption,
   LISTING_TYPES,
@@ -44,6 +45,8 @@ import {
   SEX_OPTIONS,
   SORT_OPTIONS,
   buildAgeRangeLabel,
+  booleanOrNull,
+  booleanToFilterValue,
   buildPriceRangeLabel,
   numberOrNull,
   optionLabel,
@@ -276,7 +279,7 @@ function LocationAutocomplete({
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="Citta, provincia o regione"
+            placeholder="Città, provincia o regione"
             type="text"
             value={inputValue}
           />
@@ -306,7 +309,7 @@ function LocationAutocomplete({
             ) : null}
             {!loading && !error && deferredQuery.trim().length >= 2 && suggestions.length === 0 ? (
               <p className="px-3 py-3 text-sm text-[var(--color-text-muted)]">
-                Nessuna localita trovata.
+                Nessuna località trovata.
               </p>
             ) : null}
             {!loading && !error
@@ -630,7 +633,7 @@ function FiltersForm({
                   Ordinati per distanza
                 </p>
                 <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                  Stai vedendo gli annunci piu vicini alla tua posizione attuale.
+                  Stai vedendo gli annunci più vicini alla tua posizione attuale.
                 </p>
               </div>
               <button
@@ -752,6 +755,91 @@ function FiltersForm({
           </div>
 
           <div className="space-y-2">
+            <span className={labelClassName}>Profilo gatto</span>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <span className={labelClassName}>Sterilizzato</span>
+                <FilterSelect
+                  className="w-full min-h-12"
+                  compact
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      isSterilized: booleanOrNull(value),
+                    }))
+                  }
+                  options={BOOLEAN_FILTER_OPTIONS}
+                  value={booleanToFilterValue(state.isSterilized)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <span className={labelClassName}>Vaccinato</span>
+                <FilterSelect
+                  className="w-full min-h-12"
+                  compact
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      isVaccinated: booleanOrNull(value),
+                    }))
+                  }
+                  options={BOOLEAN_FILTER_OPTIONS}
+                  value={booleanToFilterValue(state.isVaccinated)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <span className={labelClassName}>Microchip</span>
+                <FilterSelect
+                  className="w-full min-h-12"
+                  compact
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      hasMicrochip: booleanOrNull(value),
+                    }))
+                  }
+                  options={BOOLEAN_FILTER_OPTIONS}
+                  value={booleanToFilterValue(state.hasMicrochip)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <span className={labelClassName}>Compatibile bambini</span>
+                <FilterSelect
+                  className="w-full min-h-12"
+                  compact
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      compatibleWithChildren: booleanOrNull(value),
+                    }))
+                  }
+                  options={BOOLEAN_FILTER_OPTIONS}
+                  value={booleanToFilterValue(state.compatibleWithChildren)}
+                />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <span className={labelClassName}>Compatibile altri animali</span>
+                <FilterSelect
+                  className="w-full min-h-12"
+                  compact
+                  onChange={(value) =>
+                    setState((currentState) => ({
+                      ...currentState,
+                      compatibleWithOtherAnimals: booleanOrNull(value),
+                    }))
+                  }
+                  options={BOOLEAN_FILTER_OPTIONS}
+                  value={booleanToFilterValue(state.compatibleWithOtherAnimals)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <p className={labelClassName}>Intervallo prezzo</p>
               {(state.priceMin !== null || state.priceMax !== null) && (
@@ -800,7 +888,7 @@ function FiltersForm({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <p className={labelClassName}>Intervallo eta</p>
+              <p className={labelClassName}>Intervallo età</p>
               {(state.ageMinMonths !== null || state.ageMaxMonths !== null) && (
                 <button
                   className="filter-reset-btn"
@@ -855,7 +943,9 @@ function FiltersForm({
         <div className="sticky bottom-0 z-10 border-t border-[color:color-mix(in_srgb,var(--color-border)_82%,white_18%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_94%,white_6%)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-3 backdrop-blur">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium text-[var(--color-text-muted)]">
-              {activeFiltersCount === 0 ? 'Nessun filtro attivo' : `${activeFiltersCount} filtri attivi`}
+              {activeFiltersCount === 0
+                ? 'Nessun filtro attivo'
+                : `${activeFiltersCount} filtri attivi`}
             </p>
             {activeFiltersCount > 0 ? (
               <Badge className="h-7 rounded-full px-2 text-xs" variant="outline">
@@ -892,7 +982,7 @@ function FiltersForm({
           ) : null}
         </div>
         <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-          Testo, localita, prezzo e caratteristiche principali.
+          Testo, località, prezzo e caratteristiche principali.
         </p>
       </div>
 
@@ -905,7 +995,7 @@ function FiltersForm({
                 Ordinati per distanza
               </p>
               <p className="text-sm leading-6 text-[var(--color-text-muted)]">
-                Stai vedendo gli annunci piu vicini alla tua posizione attuale.
+                Stai vedendo gli annunci più vicini alla tua posizione attuale.
               </p>
             </div>
             <button
@@ -1026,6 +1116,88 @@ function FiltersForm({
         />
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <span className={labelClassName}>Sterilizzato</span>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
+              setState((currentState) => ({
+                ...currentState,
+                isSterilized: booleanOrNull(value),
+              }))
+            }
+            options={BOOLEAN_FILTER_OPTIONS}
+            value={booleanToFilterValue(state.isSterilized)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <span className={labelClassName}>Vaccinato</span>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
+              setState((currentState) => ({
+                ...currentState,
+                isVaccinated: booleanOrNull(value),
+              }))
+            }
+            options={BOOLEAN_FILTER_OPTIONS}
+            value={booleanToFilterValue(state.isVaccinated)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <span className={labelClassName}>Microchip</span>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
+              setState((currentState) => ({
+                ...currentState,
+                hasMicrochip: booleanOrNull(value),
+              }))
+            }
+            options={BOOLEAN_FILTER_OPTIONS}
+            value={booleanToFilterValue(state.hasMicrochip)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <span className={labelClassName}>Compatibile bambini</span>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
+              setState((currentState) => ({
+                ...currentState,
+                compatibleWithChildren: booleanOrNull(value),
+              }))
+            }
+            options={BOOLEAN_FILTER_OPTIONS}
+            value={booleanToFilterValue(state.compatibleWithChildren)}
+          />
+        </div>
+
+        <div className="space-y-2 sm:col-span-2">
+          <span className={labelClassName}>Compatibile altri animali</span>
+          <FilterSelect
+            className={selectClassName}
+            compact={compact}
+            onChange={(value) =>
+              setState((currentState) => ({
+                ...currentState,
+                compatibleWithOtherAnimals: booleanOrNull(value),
+              }))
+            }
+            options={BOOLEAN_FILTER_OPTIONS}
+            value={booleanToFilterValue(state.compatibleWithOtherAnimals)}
+          />
+        </div>
+      </div>
+
       <div className="relative space-y-2" ref={priceFieldRef}>
         <span className={labelClassName}>Prezzo</span>
         <button
@@ -1131,7 +1303,7 @@ function FiltersForm({
       </div>
 
       <div className="relative space-y-2" ref={ageFieldRef}>
-        <span className={labelClassName}>Eta del gatto</span>
+        <span className={labelClassName}>Età del gatto</span>
         <button
           aria-expanded={openCompositePopover === 'age'}
           aria-haspopup="true"
@@ -1177,7 +1349,7 @@ function FiltersForm({
           >
             <div className="filter-grid">
               <div className="filter-field-group">
-                <span className="location-label">Eta minima</span>
+                <span className="location-label">Età minima</span>
                 <FilterSelect
                   className={selectClassName}
                   compact={compact}
@@ -1196,7 +1368,7 @@ function FiltersForm({
               </div>
 
               <div className="filter-field-group">
-                <span className="location-label">Eta massima</span>
+                <span className="location-label">Età massima</span>
                 <FilterSelect
                   className={selectClassName}
                   compact={compact}
@@ -1290,7 +1462,7 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
     }
 
     if (normalizedQuery.length < 2) {
-      setValidationError('Inserisci almeno 2 lettere per la localita oppure svuota il campo.');
+      setValidationError('Inserisci almeno 2 lettere per la località oppure svuota il campo.');
       return null;
     }
 
@@ -1298,13 +1470,13 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
       const suggestions = await fetchLocationSuggestions(normalizedQuery, 1);
       const bestMatch = suggestions[0];
       if (!bestMatch) {
-        setValidationError('Seleziona una localita valida dai suggerimenti.');
+        setValidationError('Seleziona una località valida dai suggerimenti.');
         return null;
       }
 
       return applyLocationSuggestion(currentState, bestMatch);
     } catch {
-      setValidationError('Impossibile verificare la localita in questo momento.');
+      setValidationError('Impossibile verificare la località in questo momento.');
       return null;
     }
   };
@@ -1407,7 +1579,9 @@ export function ListingsResultsToolbar({
   const closeMobileFilters = () => {
     setMobileFiltersOpen(false);
     window.requestAnimationFrame(() => {
-      document.querySelector<HTMLButtonElement>('button[data-mobile-filters-trigger="true"]')?.focus();
+      document
+        .querySelector<HTMLButtonElement>('button[data-mobile-filters-trigger="true"]')
+        ?.focus();
     });
   };
 
@@ -1466,7 +1640,6 @@ export function ListingsResultsToolbar({
             </div>
           </div>
         </div>
-
       </div>
 
       <MobileFiltersSheet

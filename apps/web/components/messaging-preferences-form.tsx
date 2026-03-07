@@ -3,6 +3,7 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Toast } from '@adottaungatto/ui';
 import { LoaderCircle, Mail, ShieldCheck } from 'lucide-react';
 import { useId, useState } from 'react';
+import { SESSION_EXPIRED_MESSAGE, fetchWithAuthRefresh } from '../lib/client-auth-fetch';
 
 type ToastState = {
   open: boolean;
@@ -34,7 +35,7 @@ export function MessagingPreferencesForm({
   const savePreferences = async () => {
     setSaving(true);
     try {
-      const response = await fetch('/api/users/me/preferences', {
+      const response = await fetchWithAuthRefresh('/api/users/me/preferences', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -49,6 +50,9 @@ export function MessagingPreferencesForm({
       } | null;
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
         throw new Error(payload?.message ?? 'Impossibile salvare le preferenze.');
       }
 

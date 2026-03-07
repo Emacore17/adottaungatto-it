@@ -21,7 +21,8 @@
       "**/playwright-report/**",
       "**/test-results/**",
       "**/data/geography/istat-current.json",
-      "**/next-env.d.ts"
+      "**/next-env.d.ts",
+      "**/src/generated/openapi.ts"
     ]
   },
   "javascript": {

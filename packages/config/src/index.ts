@@ -153,6 +153,11 @@ const apiSchema = baseSchema.extend({
     .min(1, 'MINIO_BUCKET_LISTING_THUMBS is required')
     .optional()
     .default('listing-thumbs'),
+  MINIO_BUCKET_USER_AVATARS: z
+    .string()
+    .min(1, 'MINIO_BUCKET_USER_AVATARS is required')
+    .optional()
+    .default('user-avatars'),
   MEDIA_UPLOAD_MAX_BYTES: z.coerce
     .number()
     .int()
@@ -169,6 +174,22 @@ const apiSchema = baseSchema.extend({
         .map((item) => item.trim().toLowerCase())
         .filter((item) => item.length > 0),
     ),
+  AVATAR_UPLOAD_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .optional()
+    .default(2 * 1024 * 1024),
+  AVATAR_ALLOWED_MIME_TYPES: z
+    .string()
+    .optional()
+    .default('image/jpeg,image/png,image/webp')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => item.length > 0),
+    ),
   KEYCLOAK_URL: z.string().url('KEYCLOAK_URL must be a valid URL'),
   KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required'),
   KEYCLOAK_CLIENT_ID_WEB: z
@@ -176,6 +197,13 @@ const apiSchema = baseSchema.extend({
     .min(1, 'KEYCLOAK_CLIENT_ID_WEB is required')
     .optional()
     .default('adottaungatto-web'),
+  KEYCLOAK_SOCIAL_PROVIDERS: z
+    .string()
+    .optional()
+    .default('')
+    .transform((value, ctx) =>
+      parseProviderAliasList(value, 'KEYCLOAK_SOCIAL_PROVIDERS', ctx),
+    ),
   KEYCLOAK_CLIENT_ID_ADMIN: z
     .string()
     .min(1, 'KEYCLOAK_CLIENT_ID_ADMIN is required')
@@ -186,6 +214,18 @@ const apiSchema = baseSchema.extend({
     .min(1, 'KEYCLOAK_CLIENT_ID_MOBILE is required')
     .optional()
     .default('adottaungatto-mobile'),
+  KEYCLOAK_GOOGLE_IDP_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
+  KEYCLOAK_GOOGLE_CLIENT_ID: z.string().optional().default(''),
+  KEYCLOAK_GOOGLE_CLIENT_SECRET: z.string().optional().default(''),
+  KEYCLOAK_GOOGLE_HOSTED_DOMAIN: z.string().optional().default(''),
+  KEYCLOAK_GOOGLE_DEFAULT_SCOPES: z
+    .string()
+    .optional()
+    .default('openid profile email'),
   KEYCLOAK_ADMIN_REALM: z
     .string()
     .min(1, 'KEYCLOAK_ADMIN_REALM is required')
@@ -491,6 +531,28 @@ const workerSchema = baseSchema.extend({
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
   REDIS_URL: z.string().url('REDIS_URL must be a valid URL'),
   OPENSEARCH_URL: z.string().url('OPENSEARCH_URL must be a valid URL'),
+  KEYCLOAK_URL: z
+    .string()
+    .url('KEYCLOAK_URL must be a valid URL')
+    .optional()
+    .default('http://localhost:8080'),
+  KEYCLOAK_REALM: z.string().min(1, 'KEYCLOAK_REALM is required').optional().default('adottaungatto'),
+  KEYCLOAK_ADMIN_REALM: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_REALM is required')
+    .optional()
+    .default('master'),
+  KEYCLOAK_ADMIN_CLIENT_ID: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_CLIENT_ID is required')
+    .optional()
+    .default('admin-cli'),
+  KEYCLOAK_ADMIN: z.string().min(1, 'KEYCLOAK_ADMIN is required').optional().default('admin'),
+  KEYCLOAK_ADMIN_PASSWORD: z
+    .string()
+    .min(1, 'KEYCLOAK_ADMIN_PASSWORD is required')
+    .optional()
+    .default('admin'),
   MINIO_ENDPOINT: z
     .string()
     .url('MINIO_ENDPOINT must be a valid URL')
@@ -665,6 +727,68 @@ const workerSchema = baseSchema.extend({
     .max(3_650)
     .optional()
     .default(120),
+  USER_IDENTITY_RECONCILIATION_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('true')
+    .transform((value) => value === 'true'),
+  USER_IDENTITY_RECONCILIATION_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .optional()
+    .default(900_000),
+  USER_IDENTITY_RECONCILIATION_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000)
+    .optional()
+    .default(100),
+  USER_IDENTITY_RECONCILIATION_MAX_BATCHES_PER_CYCLE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .default(10),
+  OPS_ALERT_OUTBOX_PENDING_WARN: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000_000)
+    .optional()
+    .default(200),
+  OPS_ALERT_OUTBOX_PROCESSING_STALE_CRITICAL: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000_000)
+    .optional()
+    .default(10),
+  OPS_ALERT_OUTBOX_FAILED_LAST_HOUR_WARN: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000_000)
+    .optional()
+    .default(20),
+  OPS_ALERT_OUTBOX_OLDEST_PENDING_SECONDS_WARN: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400_000)
+    .optional()
+    .default(900),
+  OPS_ALERT_PROMOTIONS_DUE_WARN: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000_000)
+    .optional()
+    .default(50),
+  OPS_ALERT_FAIL_ON: z.enum(['warning', 'critical']).optional().default('critical'),
   WEB_APP_URL: z
     .string()
     .url('WEB_APP_URL must be a valid URL')

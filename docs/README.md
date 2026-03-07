@@ -46,6 +46,7 @@ Leggere solo il minimo necessario per il task corrente:
 - `DEVELOPMENT_ROADMAP`: backlog aperto e ordine di esecuzione per i prossimi sviluppi
 - `AUTH_REGISTRATION_AGENT_GUIDE`: guida esecutiva auth/account (UI + backend + dati + sicurezza)
 - `API_CONTRACT`: endpoint e shape payload realmente supportati
+  - sorgente OpenAPI versionata: `packages/sdk/openapi/openapi.v1.json`
 - `TESTING`: comandi, copertura attuale, gap test e check manuali
 - `MESSAGING`: dettaglio dominio messaggistica
 - `DATA_GEO_ITALIA`: snapshot ISTAT e pipeline sync/seed geografia

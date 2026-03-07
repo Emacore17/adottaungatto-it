@@ -28,6 +28,11 @@ export interface ListingRecord {
   ageText: string;
   sex: string;
   breed: string | null;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   status: ListingStatus;
   regionId: string;
   provinceId: string;
@@ -52,6 +57,11 @@ export interface CreateListingInput {
   ageMonths: number;
   sex: string;
   breed: string | null;
+  isSterilized: boolean | null;
+  isVaccinated: boolean | null;
+  hasMicrochip: boolean | null;
+  compatibleWithChildren: boolean | null;
+  compatibleWithOtherAnimals: boolean | null;
   status: ListingStatus;
   regionId: string;
   provinceId: string;
@@ -73,6 +83,11 @@ export interface UpdateListingInput {
   ageMonths?: number;
   sex?: string;
   breed?: string | null;
+  isSterilized?: boolean | null;
+  isVaccinated?: boolean | null;
+  hasMicrochip?: boolean | null;
+  compatibleWithChildren?: boolean | null;
+  compatibleWithOtherAnimals?: boolean | null;
   status?: ListingStatus;
   regionId?: string;
   provinceId?: string;
