@@ -1,8 +1,13 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { LinkButton } from '../../components/link-button';
 import { NativeLinkButton } from '../../components/native-link-button';
 import { PageShell } from '../../components/page-shell';
 import { requireWebSession } from '../../lib/auth';
+
+export const metadata: Metadata = {
+  title: 'Verifica account',
+};
 
 interface VerifyAccountPageProps {
   searchParams?: Promise<{
@@ -68,7 +73,9 @@ export default async function VerifyAccountPage({ searchParams }: VerifyAccountP
             <CardTitle>Verifica completata</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-            <p>Il tuo indirizzo email risulta verificato. Puoi usare tutte le funzioni del workspace.</p>
+            <p>
+              Il tuo indirizzo email risulta verificato. Puoi usare tutte le funzioni del workspace.
+            </p>
             <div className="flex flex-wrap gap-2">
               <LinkButton href="/account">Vai al tuo account</LinkButton>
               <LinkButton href="/pubblica" variant="outline">

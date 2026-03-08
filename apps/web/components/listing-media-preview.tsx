@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PublicListingMedia } from '../lib/listings';
 
 interface ListingMediaPreviewProps {
+  imageAlt: string;
   listingId: string;
   media: PublicListingMedia[];
   mediaCount: number;
-  title: string;
 }
 
 const placeholderMediaFileNames = [
@@ -47,10 +47,10 @@ const resolveCardImageUrl = (imageUrl: string, fallbackFileName: string) => {
 };
 
 export function ListingMediaPreview({
+  imageAlt,
   listingId,
   media,
   mediaCount,
-  title,
 }: ListingMediaPreviewProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -93,26 +93,27 @@ export function ListingMediaPreview({
 
   return (
     <div
-      aria-label={title}
       className="relative h-full min-h-[176px] overflow-hidden rounded-t-[29px] bg-[var(--color-surface-muted)] [clip-path:inset(0_round_29px_29px_0_0)] md:rounded-l-[29px] md:rounded-t-none md:[clip-path:inset(0_round_29px_0_0_29px)]"
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => {
         setIsHovered(false);
         setActiveIndex(0);
       }}
-      role="img"
     >
       {previewUrls.map((imageUrl, index) => (
-        <div
-          className={`absolute inset-0 bg-cover bg-center transform-gpu transition-[opacity,transform,filter] duration-500 ease-out [backface-visibility:hidden] ${
+        <img
+          alt={index === activeIndex ? imageAlt : ''}
+          aria-hidden={index !== activeIndex}
+          className={`absolute inset-0 h-full w-full object-cover object-center transform-gpu transition-[opacity,transform,filter] duration-500 ease-out [backface-visibility:hidden] ${
             index === activeIndex ? 'opacity-100' : 'opacity-0'
           } ${isHovered ? 'scale-[1.04]' : 'scale-100'}`}
           key={imageUrl}
-          style={{
-            backgroundImage: `linear-gradient(180deg, rgba(24,19,21,0.02) 0%, rgba(24,19,21,0.18) 100%), url("${imageUrl}")`,
-          }}
+          loading="lazy"
+          src={imageUrl}
         />
       ))}
+
+      <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] to-black/[0.18]" />
 
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
 

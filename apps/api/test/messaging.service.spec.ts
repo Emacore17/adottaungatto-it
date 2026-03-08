@@ -143,7 +143,9 @@ describe('MessagingService', () => {
 
     await expect(
       service.openListingThreadForUser(baseUser, '101', 'Ciao', 'web_listing'),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toMatchObject({
+      message: 'Non puoi avviare una conversazione sul tuo stesso annuncio.',
+    });
   });
 
   it('rate limits excessive creation of new threads', async () => {

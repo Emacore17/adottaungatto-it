@@ -131,6 +131,13 @@ const fieldClassName =
 const selectFieldClassName = 'platform-select';
 const invalidFieldClassName =
   'border-[var(--color-danger-border)] focus:border-[var(--color-danger-border)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-danger-border)_24%,transparent)]';
+const fieldErrorId: Record<ValidationField, string> = {
+  title: 'error-title',
+  description: 'error-description',
+  location: 'error-location',
+  age: 'error-age',
+  price: 'error-price',
+};
 
 const textareaClassName = cn(fieldClassName, 'min-h-[150px] h-auto resize-y py-3 leading-6');
 const sectionCardClassName =
@@ -540,6 +547,10 @@ export function ListingEditor({
   const completedReadinessCount = readinessItems.filter((item) => item.complete).length;
   const completionPercent = Math.round((completedReadinessCount / readinessItems.length) * 100);
   const saveButtonLabel = isEditMode ? 'Salva modifiche' : 'Crea annuncio';
+  const previewLinkLabel =
+    currentListingStatus.trim().toLowerCase() === 'published'
+      ? 'Anteprima pubblica'
+      : 'Anteprima (non pubblicata)';
   const sectionItems: EditorSectionItem[] = [
     { id: 'listing-data', label: 'Annuncio', icon: Files },
     { id: 'listing-profile', label: 'Profilo', icon: Camera },
@@ -1209,7 +1220,7 @@ export function ListingEditor({
                       className={secondaryActionClassName}
                       href={`/annunci/${currentListingId}`}
                     >
-                      Anteprima pubblica
+                      {previewLinkLabel}
                       <ArrowUpRight className="ml-2 h-4 w-4" />
                     </Link>
                   ) : null}
@@ -1330,6 +1341,9 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-title">Titolo</FieldLabel>
                     <Input
+                      aria-describedby={
+                        invalidField === 'title' && validationError ? fieldErrorId.title : undefined
+                      }
                       aria-invalid={invalidField === 'title'}
                       className={cn(
                         fieldClassName,
@@ -1344,6 +1358,15 @@ export function ListingEditor({
                     <p className="text-xs leading-5 text-[var(--color-text-muted)]">
                       Meglio corto, specifico e subito comprensibile. Ora: {titleLength}/160.
                     </p>
+                    {invalidField === 'title' && validationError ? (
+                      <p
+                        className="text-sm font-medium text-[var(--color-danger-fg)]"
+                        id={fieldErrorId.title}
+                        role="alert"
+                      >
+                        {validationError}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="space-y-2">
@@ -1366,6 +1389,11 @@ export function ListingEditor({
                 <div className="space-y-2">
                   <FieldLabel htmlFor="listing-description">Descrizione</FieldLabel>
                   <textarea
+                    aria-describedby={
+                      invalidField === 'description' && validationError
+                        ? fieldErrorId.description
+                        : undefined
+                    }
                     aria-invalid={invalidField === 'description'}
                     className={cn(
                       textareaClassName,
@@ -1381,6 +1409,15 @@ export function ListingEditor({
                     Parti da carattere, salute, abitudini e tipo di casa ideale. Minimo utile: 40
                     caratteri. Ora: {descriptionLength}.
                   </p>
+                  {invalidField === 'description' && validationError ? (
+                    <p
+                      className="text-sm font-medium text-[var(--color-danger-fg)]"
+                      id={fieldErrorId.description}
+                      role="alert"
+                    >
+                      {validationError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_110px]">
@@ -1389,6 +1426,9 @@ export function ListingEditor({
                       Contributo richiesto
                     </FieldLabel>
                     <Input
+                      aria-describedby={
+                        invalidField === 'price' && validationError ? fieldErrorId.price : undefined
+                      }
                       aria-invalid={invalidField === 'price'}
                       className={cn(
                         fieldClassName,
@@ -1403,6 +1443,15 @@ export function ListingEditor({
                       type="number"
                       value={form.priceAmount}
                     />
+                    {invalidField === 'price' && validationError ? (
+                      <p
+                        className="text-sm font-medium text-[var(--color-danger-fg)]"
+                        id={fieldErrorId.price}
+                        role="alert"
+                      >
+                        {validationError}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="space-y-2">
@@ -1445,6 +1494,7 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-breed">Razza</FieldLabel>
                     <select
+                      aria-label="RAZZA"
                       className={selectFieldClassName}
                       id="listing-breed"
                       onChange={handleFieldChange('breed')}
@@ -1479,6 +1529,9 @@ export function ListingEditor({
                     <FieldLabel htmlFor="listing-age">Età</FieldLabel>
                     <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                       <Input
+                        aria-describedby={
+                          invalidField === 'age' && validationError ? fieldErrorId.age : undefined
+                        }
                         aria-invalid={invalidField === 'age'}
                         className={cn(
                           fieldClassName,
@@ -1494,6 +1547,9 @@ export function ListingEditor({
                         value={form.ageValue}
                       />
                       <select
+                        aria-describedby={
+                          invalidField === 'age' && validationError ? fieldErrorId.age : undefined
+                        }
                         className={selectFieldClassName}
                         onChange={handleFieldChange('ageUnit')}
                         value={form.ageUnit}
@@ -1502,6 +1558,15 @@ export function ListingEditor({
                         <option value="years">Anni</option>
                       </select>
                     </div>
+                    {invalidField === 'age' && validationError ? (
+                      <p
+                        className="text-sm font-medium text-[var(--color-danger-fg)]"
+                        id={fieldErrorId.age}
+                        role="alert"
+                      >
+                        {validationError}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1622,6 +1687,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-region">Regione</FieldLabel>
                     <select
+                      aria-describedby={
+                        invalidField === 'location' && validationError
+                          ? fieldErrorId.location
+                          : undefined
+                      }
                       aria-invalid={invalidField === 'location'}
                       className={cn(
                         selectFieldClassName,
@@ -1645,6 +1715,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-province">Provincia</FieldLabel>
                     <select
+                      aria-describedby={
+                        invalidField === 'location' && validationError
+                          ? fieldErrorId.location
+                          : undefined
+                      }
                       aria-invalid={invalidField === 'location'}
                       className={cn(
                         selectFieldClassName,
@@ -1673,6 +1748,11 @@ export function ListingEditor({
                   <div className="space-y-2">
                     <FieldLabel htmlFor="listing-comune">Comune</FieldLabel>
                     <select
+                      aria-describedby={
+                        invalidField === 'location' && validationError
+                          ? fieldErrorId.location
+                          : undefined
+                      }
                       aria-invalid={invalidField === 'location'}
                       className={cn(
                         selectFieldClassName,
@@ -1698,6 +1778,15 @@ export function ListingEditor({
                     </select>
                   </div>
                 </div>
+                {invalidField === 'location' && validationError ? (
+                  <p
+                    className="text-sm font-medium text-[var(--color-danger-fg)]"
+                    id={fieldErrorId.location}
+                    role="alert"
+                  >
+                    {validationError}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -2026,7 +2115,7 @@ export function ListingEditor({
                   </div>
                 </div>
 
-                {validationError ? (
+                {validationError && !invalidField ? (
                   <div
                     className="rounded-[22px] border border-[color:color-mix(in_srgb,var(--color-danger-border)_85%,transparent)] bg-[color:color-mix(in_srgb,var(--color-danger-bg)_92%,white_8%)] px-4 py-3 text-sm leading-6 text-[var(--color-danger-fg)]"
                     role="alert"
@@ -2074,7 +2163,7 @@ export function ListingEditor({
                         className={secondaryActionClassName}
                         href={`/annunci/${currentListingId}`}
                       >
-                        Anteprima pubblica
+                        {previewLinkLabel}
                         <ArrowUpRight className="ml-2 h-4 w-4" />
                       </Link>
                     ) : null}

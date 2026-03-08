@@ -12,7 +12,15 @@ import { ListingSponsoredBadge } from '../../../components/listing-sponsored-bad
 import { SectionReveal } from '../../../components/motion/section-reveal';
 import { getWebSession } from '../../../lib/auth';
 import { formatCurrencyAmount, formatDate } from '../../../lib/formatters';
-import { fetchPublicListingById } from '../../../lib/listings';
+import { formatListingStatusLabel } from '../../../lib/listing-status';
+import {
+  type MyListing,
+  type MyListingMedia,
+  type PublicListingDetail,
+  fetchMyListingById,
+  fetchMyListingMedia,
+  fetchPublicListingById,
+} from '../../../lib/listings';
 
 interface ListingDetailPageProps {
   params: Promise<{
@@ -52,9 +60,77 @@ const sanitizeBackToListingsHref = (value: string | null | undefined): string | 
   }
 };
 
+type ListingDetailResolution = {
+  listing: PublicListingDetail;
+  ownerPreviewStatus: string | null;
+};
+
+const mapOwnerListingToPreviewDetail = (
+  listing: MyListing,
+  media: MyListingMedia[],
+): PublicListingDetail => {
+  const normalizedMedia = [...media].sort((left, right) => left.position - right.position);
+  const primaryMedia = normalizedMedia.find((item) => item.isPrimary) ?? normalizedMedia[0] ?? null;
+
+  return {
+    id: listing.id,
+    title: listing.title,
+    description: listing.description,
+    listingType: listing.listingType,
+    priceAmount: listing.priceAmount,
+    currency: listing.currency,
+    catCount: 1,
+    ageText: listing.ageText,
+    sex: listing.sex,
+    breed: listing.breed,
+    publishedAt: listing.publishedAt,
+    createdAt: listing.createdAt,
+    regionName: `Regione #${listing.regionId}`,
+    provinceName: `Provincia #${listing.provinceId}`,
+    provinceSigla: '',
+    comuneName: `Comune #${listing.comuneId}`,
+    distanceKm: null,
+    mediaCount: normalizedMedia.length,
+    primaryMedia,
+    previewMedia: normalizedMedia.slice(0, 4),
+    isSponsored: false,
+    contactName: listing.contactName,
+    contactPhone: listing.contactPhone,
+    contactEmail: listing.contactEmail,
+    media: normalizedMedia,
+  };
+};
+
+const resolveListingDetailForViewer = async (
+  listingId: string,
+): Promise<ListingDetailResolution | null> => {
+  const publicListing = await fetchPublicListingById(listingId).catch(() => null);
+  if (publicListing) {
+    return {
+      listing: publicListing,
+      ownerPreviewStatus: null,
+    };
+  }
+
+  const ownerListing = await fetchMyListingById(listingId).catch(() => null);
+  if (!ownerListing) {
+    return null;
+  }
+
+  const ownerMedia = await fetchMyListingMedia(listingId).catch(() => []);
+  return {
+    listing: mapOwnerListingToPreviewDetail(ownerListing, ownerMedia),
+    ownerPreviewStatus: ownerListing.status,
+  };
+};
+
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   const { listingId } = await params;
-  const listing = await fetchPublicListingById(listingId).catch(() => null);
+  const [publicListing, ownerListing] = await Promise.all([
+    fetchPublicListingById(listingId).catch(() => null),
+    fetchMyListingById(listingId).catch(() => null),
+  ]);
+  const listing = publicListing ?? ownerListing;
 
   if (!listing) {
     return {
@@ -78,15 +154,16 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
   const backToListingsHref = sanitizeBackToListingsHref(
     getFirstParamValue(resolvedSearchParams?.backTo),
   );
-  const [listing, session] = await Promise.all([
-    fetchPublicListingById(listingId).catch(() => null),
+  const [resolvedListing, session] = await Promise.all([
+    resolveListingDetailForViewer(listingId),
     getWebSession().catch(() => null),
   ]);
 
-  if (!listing) {
+  if (!resolvedListing) {
     notFound();
   }
 
+  const { listing, ownerPreviewStatus } = resolvedListing;
   const listingTypeNormalized = listing.listingType.trim().toLowerCase();
   const listingTypeLabel = listing.listingType
     .trim()
@@ -134,6 +211,15 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
 
   return (
     <div className="space-y-6">
+      {ownerPreviewStatus ? (
+        <SectionReveal>
+          <section className="rounded-[var(--radius-xl)] border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-text)]">
+            Anteprima privata del tuo annuncio ({formatListingStatusLabel(ownerPreviewStatus)}).
+            Questa pagina e visibile solo a te finche l annuncio non e pubblicato.
+          </section>
+        </SectionReveal>
+      ) : null}
+
       <SectionReveal>
         <Breadcrumbs
           items={[

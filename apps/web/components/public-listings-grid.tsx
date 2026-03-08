@@ -1,6 +1,7 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui';
 import Link from 'next/link';
 import { formatCurrencyAmount, formatDate } from '../lib/formatters';
+import { buildListingImageAlt } from '../lib/listing-image-alt';
 import type { PublicListingSummary } from '../lib/listings';
 import { FavoriteHeartButton } from './favorite-heart-button';
 
@@ -139,9 +140,10 @@ export function PublicListingsGrid({
         const primaryImageUrl = listing.primaryMedia?.objectUrl?.trim() ?? '';
         const placeholderFileName = resolvePlaceholderMediaFileName(listing.id);
         const imageUrl = resolveCardImageUrl(primaryImageUrl, placeholderFileName);
-        const imageStyle = {
-          backgroundImage: `linear-gradient(135deg, var(--color-media-overlay-start) 0%, var(--color-media-overlay-end) 100%), url("${imageUrl}")`,
-        };
+        const imageAlt = buildListingImageAlt({
+          title: imageTitleLabel || titleLabel,
+          breed: breedLabel || null,
+        });
 
         return (
           <article className={`${articleClassName} group relative`} key={listing.id}>
@@ -154,12 +156,14 @@ export function PublicListingsGrid({
               className="relative block basis-3/5 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
               href={`/annunci/${listing.id}`}
             >
-              <div
-                aria-label={imageTitleLabel || titleLabel}
-                className="h-full w-full bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-[1.06] group-hover:brightness-[1.03] group-hover:saturate-[1.06]"
-                role="img"
-                style={imageStyle}
+              <img
+                alt={imageAlt}
+                className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06] group-hover:brightness-[1.03] group-hover:saturate-[1.06]"
+                loading="lazy"
+                src={imageUrl}
               />
+
+              <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-media-overlay-start)] to-[var(--color-media-overlay-end)]" />
 
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-scrim)] via-black/12 to-transparent px-4 pb-4 pt-16">
                 <h3 className="line-clamp-2 text-center text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] sm:text-[20px]">

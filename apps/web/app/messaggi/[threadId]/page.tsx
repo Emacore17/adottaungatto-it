@@ -1,9 +1,14 @@
 import { Badge, CardContent } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { MessageThreadWorkspace } from '../../../components/message-thread-workspace';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { fetchMessageThread, fetchMessageThreads } from '../../../lib/messages';
+
+export const metadata: Metadata = {
+  title: 'Conversazione',
+};
 
 interface MessageThreadPageProps {
   params: Promise<{

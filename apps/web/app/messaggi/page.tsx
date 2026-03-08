@@ -1,8 +1,13 @@
 import { Badge, CardContent } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { MessagesInboxOverview } from '../../components/messages-inbox-overview';
 import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 import { fetchMessageThreads } from '../../lib/messages';
+
+export const metadata: Metadata = {
+  title: 'Messaggi',
+};
 
 export default async function MessagesPage() {
   await requireWebSession('/messaggi');

@@ -1,10 +1,15 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { LinkButton } from '../../../components/link-button';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { formatDate } from '../../../lib/formatters';
 import { formatListingStatusLabel } from '../../../lib/listing-status';
 import { fetchMyListings } from '../../../lib/listings';
+
+export const metadata: Metadata = {
+  title: 'I miei annunci',
+};
 
 export default async function AccountListingsPage() {
   await requireWebSession('/account/annunci');

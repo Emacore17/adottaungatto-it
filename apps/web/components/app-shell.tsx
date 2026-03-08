@@ -59,6 +59,13 @@ export async function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
+      <a
+        className="sr-only z-[120] rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-2 text-sm font-medium text-[var(--color-text)] shadow-[var(--shadow-md)] focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]"
+        href="#main-content"
+      >
+        Salta al contenuto principale
+      </a>
+
       <ScrollAwareHeader>
         <div className="mx-auto flex h-[var(--shell-header-height)] max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4">
           <Link className="flex min-w-0 items-center gap-3 lg:justify-self-start" href="/">
@@ -130,7 +137,11 @@ export async function AppShell({ children }: AppShellProps) {
         </div>
       </ScrollAwareHeader>
 
-      <main className="relative mx-auto w-full max-w-6xl px-4 py-[var(--shell-main-padding)] sm:px-6">
+      <main
+        className="relative mx-auto w-full max-w-6xl px-4 py-[var(--shell-main-padding)] sm:px-6"
+        id="main-content"
+        tabIndex={-1}
+      >
         {children}
       </main>
       <SessionExpiryMonitor

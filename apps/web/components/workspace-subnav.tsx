@@ -87,7 +87,7 @@ export function WorkspaceSubnav({ accountLabel = null }: WorkspaceSubnavProps) {
 
         <nav
           aria-label="Navigazione area riservata"
-          className="flex min-w-0 gap-2 overflow-x-auto pb-1 sm:justify-end"
+          className="flex min-w-0 gap-2 overflow-x-auto pb-1 sm:ml-auto"
         >
           {workspaceItems.map((item) => (
             <ShellNavLink

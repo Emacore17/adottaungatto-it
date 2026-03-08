@@ -44,9 +44,9 @@ import {
   PRICE_FILTER_OPTIONS,
   SEX_OPTIONS,
   SORT_OPTIONS,
-  buildAgeRangeLabel,
   booleanOrNull,
   booleanToFilterValue,
+  buildAgeRangeLabel,
   buildPriceRangeLabel,
   numberOrNull,
   optionLabel,
@@ -63,6 +63,7 @@ import {
 } from '../features/search/listings-query';
 import type { GeographySuggestion } from '../lib/geography';
 import { fetchLocationSuggestions } from '../lib/geography';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 interface LocationAutocompleteProps {
   compact?: boolean;
@@ -364,6 +365,8 @@ function FilterSelect({
   const [menuPlacement, setMenuPlacement] = useState<'bottom' | 'top'>('bottom');
   const selectedLabel = optionLabel(options, value);
 
+  useFocusTrap(rootRef, open);
+
   const estimateMenuHeight = () => {
     const rowHeight = 36;
     const contentHeight = options.length * rowHeight + 16;
@@ -613,6 +616,8 @@ function FiltersForm({
       window.cancelAnimationFrame(raf);
     };
   }, [compact, openCompositePopover]);
+
+  useFocusTrap(compositePopoverRef, openCompositePopover !== null);
 
   const onFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1428,17 +1433,26 @@ function FiltersForm({
 
 function useListingsFilterState(initialValues: ListingsFilterValues) {
   const router = useRouter();
-  const [state, setState] = useState<ListingsFilterValues>(initialValues);
+  const [state, setStateInternal] = useState<ListingsFilterValues>(initialValues);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const stateRef = useRef(state);
+  const stateRef = useRef(initialValues);
+
+  const setState: Dispatch<SetStateAction<ListingsFilterValues>> = (nextState) => {
+    const resolvedState =
+      typeof nextState === 'function'
+        ? (nextState as (currentState: ListingsFilterValues) => ListingsFilterValues)(
+            stateRef.current,
+          )
+        : nextState;
+
+    stateRef.current = resolvedState;
+    setStateInternal(resolvedState);
+  };
 
   useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
-    setState(initialValues);
+    stateRef.current = initialValues;
+    setStateInternal(initialValues);
     setValidationError(null);
     setPending(false);
   }, [initialValues]);
@@ -1520,7 +1534,7 @@ function useListingsFilterState(initialValues: ListingsFilterValues) {
 
   const changeSort = (sort: SearchSort) => {
     const nextState = {
-      ...state,
+      ...stateRef.current,
       sort,
     };
     setState(nextState);

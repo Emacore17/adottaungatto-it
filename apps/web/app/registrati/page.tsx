@@ -1,9 +1,14 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { LinkButton } from '../../components/link-button';
 import { NativeLinkButton } from '../../components/native-link-button';
 import { PageShell } from '../../components/page-shell';
 import { getWebSession, isWebSocialProviderEnabled } from '../../lib/auth';
+
+export const metadata: Metadata = {
+  title: 'Registrati',
+};
 
 interface RegisterPageProps {
   searchParams?: Promise<{
@@ -74,7 +79,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             <CardTitle>Cosa sblocchi con l account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>Le funzioni che richiedono autenticazione sono concentrate nel workspace personale.</p>
+            <p>
+              Le funzioni che richiedono autenticazione sono concentrate nel workspace personale.
+            </p>
             <ul className="space-y-3">
               <li className="flex gap-3">
                 <span
@@ -107,10 +114,12 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-[var(--color-text-muted)]">
             <p>
-              Il flusso si apre sul provider di autenticazione: crea account, verifica email e
-              torna automaticamente su AdottaUnGatto.
+              Il flusso si apre sul provider di autenticazione: crea account, verifica email e torna
+              automaticamente su AdottaUnGatto.
             </p>
-            {errorMessage ? <p className="text-sm text-[var(--color-danger-fg)]">{errorMessage}</p> : null}
+            {errorMessage ? (
+              <p className="text-sm text-[var(--color-danger-fg)]">{errorMessage}</p>
+            ) : null}
             <NativeLinkButton className="w-fit" href={registerHref}>
               Continua con registrazione
             </NativeLinkButton>

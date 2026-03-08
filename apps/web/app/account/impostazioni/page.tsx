@@ -1,4 +1,5 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { ConsentsSettingsForm } from '../../../components/consents-settings-form';
 import { LinkButton } from '../../../components/link-button';
 import { MessagingPreferencesForm } from '../../../components/messaging-preferences-form';
@@ -6,6 +7,10 @@ import { ProfileSettingsForm } from '../../../components/profile-settings-form';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../lib/auth';
 import { fetchMyConsents, fetchMyProfile } from '../../../lib/users';
+
+export const metadata: Metadata = {
+  title: 'Impostazioni account',
+};
 
 export default async function AccountSettingsPage() {
   const session = await requireWebSession('/account/impostazioni');

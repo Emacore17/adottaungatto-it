@@ -8,8 +8,13 @@ import {
   CardTitle,
   Input,
 } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { LinkButton } from '../../components/link-button';
 import { PageShell } from '../../components/page-shell';
+
+export const metadata: Metadata = {
+  title: 'Password dimenticata',
+};
 
 interface ForgotPasswordPageProps {
   searchParams?: Promise<{
@@ -82,7 +87,10 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
           <CardContent className="space-y-4">
             <form action="/api/auth/password-recovery" className="space-y-4" method="post">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--color-text)]" htmlFor="identifier">
+                <label
+                  className="text-sm font-medium text-[var(--color-text)]"
+                  htmlFor="identifier"
+                >
                   Email o username
                 </label>
                 <Input
@@ -129,7 +137,9 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
                   aria-hidden="true"
                   className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]"
                 />
-                <span>Il sistema prova il recupero senza esporre informazioni sull esistenza account.</span>
+                <span>
+                  Il sistema prova il recupero senza esporre informazioni sull esistenza account.
+                </span>
               </li>
               <li className="flex gap-3">
                 <span

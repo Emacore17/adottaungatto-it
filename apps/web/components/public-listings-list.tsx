@@ -2,6 +2,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@adottaungatto/ui'
 import { CalendarDays, ChevronRight, CircleDollarSign, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrencyAmount, formatDate } from '../lib/formatters';
+import { buildListingImageAlt } from '../lib/listing-image-alt';
 import type { PublicListingSummary } from '../lib/listings';
 import { FavoriteHeartButton } from './favorite-heart-button';
 import { LinkButton } from './link-button';
@@ -80,6 +81,7 @@ export function PublicListingsList({
             : listing.primaryMedia
               ? [listing.primaryMedia]
               : [];
+        const imageAlt = buildListingImageAlt({ title: titleLabel, breed: breedLabel || null });
         const listingDetailHref = backToListingsHref
           ? `/annunci/${listing.id}?backTo=${encodeURIComponent(backToListingsHref)}`
           : `/annunci/${listing.id}`;
@@ -103,10 +105,10 @@ export function PublicListingsList({
                 href={listingDetailHref}
               >
                 <ListingMediaPreview
+                  imageAlt={imageAlt}
                   listingId={listing.id}
                   media={previewMedia}
                   mediaCount={listing.mediaCount}
-                  title={titleLabel}
                 />
               </Link>
 

@@ -1,4 +1,5 @@
 import { CardContent } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ListingEditor } from '../../../../components/listing-editor';
 import { WorkspacePageShell } from '../../../../components/workspace-page-shell';
@@ -8,6 +9,10 @@ import {
   fetchMyListingById,
   fetchMyListingMedia,
 } from '../../../../lib/listings';
+
+export const metadata: Metadata = {
+  title: 'Modifica annuncio',
+};
 
 interface EditListingPageProps {
   params: Promise<{

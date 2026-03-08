@@ -1,7 +1,12 @@
 import { Badge, CardContent } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { FavoritesPageContent } from '../../components/favorites-page-content';
 import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
+
+export const metadata: Metadata = {
+  title: 'Preferiti',
+};
 
 export default async function FavoritesPage() {
   await requireWebSession('/preferiti');

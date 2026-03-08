@@ -1,8 +1,13 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { LinkButton } from '../../components/link-button';
 import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 import { fetchMyListings } from '../../lib/listings';
+
+export const metadata: Metadata = {
+  title: 'Il tuo account',
+};
 
 export default async function AccountPage() {
   const session = await requireWebSession('/account');

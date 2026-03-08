@@ -39,6 +39,10 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
   );
 
   const handleSubmit = async () => {
+    if (submitting) {
+      return;
+    }
+
     const normalizedBody = body.trim();
     if (!normalizedBody) {
       setToast({
@@ -114,23 +118,38 @@ export function ListingMessageComposer({ listingId }: { listingId: string }) {
 
   return (
     <>
-      <div className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--color-primary)_22%,var(--color-border)_78%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] p-4">
+      <div
+        aria-busy={submitting}
+        className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--color-primary)_22%,var(--color-border)_78%)] bg-[color:color-mix(in_srgb,var(--color-surface-overlay-strong)_88%,white_12%)] p-4"
+      >
         <div className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
           <MessageCircleMore className="h-4 w-4 text-[var(--color-primary)]" />
           Contatta l’inserzionista in chat
         </div>
         <div className="space-y-3">
           <textarea
+            aria-busy={submitting}
             className="min-h-[130px] w-full rounded-[22px] border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--color-surface)_92%,white_8%)] px-4 py-3 text-sm leading-6 text-[var(--color-text)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-border-strong)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_14%,transparent)]"
+            disabled={submitting}
             maxLength={2000}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Presentati e spiega in poche righe perche sei interessato a questo gatto."
             value={body}
           />
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-[var(--color-text-muted)]">
-              {body.trim().length}/2000 caratteri
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-[var(--color-text-muted)]">
+                {body.trim().length}/2000 caratteri
+              </p>
+              {submitting ? (
+                <p
+                  aria-live="polite"
+                  className="text-xs font-medium text-[var(--color-text-muted)]"
+                >
+                  Invio del messaggio in corso...
+                </p>
+              ) : null}
+            </div>
             <Button
               className="h-11 rounded-full px-5"
               disabled={submitting}

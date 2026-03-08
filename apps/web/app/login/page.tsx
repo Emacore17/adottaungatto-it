@@ -7,11 +7,20 @@ import {
   CardHeader,
   CardTitle,
 } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { LinkButton } from '../../components/link-button';
 import { NativeLinkButton } from '../../components/native-link-button';
 import { PageShell } from '../../components/page-shell';
-import { getWebSession, isWebSocialProviderEnabled } from '../../lib/auth';
+import {
+  getWebSession,
+  isWebSocialProviderEnabled,
+  resolveWebRedirectAfterLogin,
+} from '../../lib/auth';
+
+export const metadata: Metadata = {
+  title: 'Accedi',
+};
 
 interface LoginPageProps {
   searchParams?: Promise<{
@@ -57,13 +66,14 @@ const mapErrorMessage = (code: string | undefined) => {
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const nextPath = resolveWebRedirectAfterLogin(getFirstParamValue(resolvedSearchParams?.next));
+
   const session = await getWebSession().catch(() => null);
   if (session) {
-    redirect(session.user.emailVerified === true ? '/account' : '/verifica-account');
+    redirect(session.user.emailVerified === true ? nextPath : '/verifica-account');
   }
 
-  const resolvedSearchParams = await searchParams;
-  const nextPath = getFirstParamValue(resolvedSearchParams?.next) ?? '/account';
   const errorMessage = mapErrorMessage(getFirstParamValue(resolvedSearchParams?.error));
   const googleSocialEnabled = isWebSocialProviderEnabled('google');
   const loginHref = `/api/auth/login?next=${encodeURIComponent(nextPath)}`;
@@ -123,7 +133,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <CardTitle>Accessi utili</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-[var(--color-text-muted)]">
-            <p>Se non ricordi la password, puoi avviare il recupero oppure aprire la registrazione.</p>
+            <p>
+              Se non ricordi la password, puoi avviare il recupero oppure aprire la registrazione.
+            </p>
             <div className="flex flex-wrap gap-2">
               <LinkButton href="/registrati" variant="outline">
                 Registrati

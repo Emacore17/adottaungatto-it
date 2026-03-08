@@ -277,11 +277,7 @@ export class ListingsService {
       return null;
     }
 
-    const updatedListing = await this.listingsRepository.updateMine(
-      ownerUserId,
-      listingId,
-      input,
-    );
+    const updatedListing = await this.listingsRepository.updateMine(ownerUserId, listingId, input);
     if (!updatedListing) {
       return null;
     }
@@ -531,21 +527,28 @@ export class ListingsService {
 
   private toPublicDetail(listing: PublicListingDetailRecord): PublicListingDetail {
     const summary = this.toPublicSummary(listing);
+    const normalizedMedia = listing.media.map((media) => ({
+      id: media.id,
+      mimeType: media.mimeType,
+      width: media.width,
+      height: media.height,
+      position: media.position,
+      isPrimary: media.isPrimary,
+      objectUrl: this.minioStorageService.getListingMediaObjectUrl(media.storageKey),
+    }));
+    const media =
+      normalizedMedia.length > 0
+        ? normalizedMedia
+        : summary.primaryMedia
+          ? [summary.primaryMedia]
+          : [];
 
     return {
       ...summary,
       contactName: listing.contactName,
       contactPhone: listing.contactPhone,
       contactEmail: listing.contactEmail,
-      media: listing.media.map((media) => ({
-        id: media.id,
-        mimeType: media.mimeType,
-        width: media.width,
-        height: media.height,
-        position: media.position,
-        isPrimary: media.isPrimary,
-        objectUrl: this.minioStorageService.getListingMediaObjectUrl(media.storageKey),
-      })),
+      media,
     };
   }
 

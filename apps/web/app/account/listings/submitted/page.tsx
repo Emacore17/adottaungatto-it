@@ -1,7 +1,12 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { LinkButton } from '../../../../components/link-button';
 import { WorkspacePageShell } from '../../../../components/workspace-page-shell';
 import { requireWebSession } from '../../../../lib/auth';
+
+export const metadata: Metadata = {
+  title: 'Annuncio inviato',
+};
 
 export default async function ListingSubmittedPage() {
   await requireWebSession('/account/listings/submitted');
@@ -30,7 +35,10 @@ export default async function ListingSubmittedPage() {
             <CardTitle>Cosa fare ora</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>Apri I miei annunci per verificare lo stato corrente e rientrare rapidamente nella scheda che hai appena aggiornato.</p>
+            <p>
+              Apri I miei annunci per verificare lo stato corrente e rientrare rapidamente nella
+              scheda che hai appena aggiornato.
+            </p>
           </CardContent>
         </Card>
 
@@ -39,7 +47,10 @@ export default async function ListingSubmittedPage() {
             <CardTitle>Perfeziona il profilo</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>Foto, descrizione, localita e recapiti ben ordinati aiutano a ricevere contatti piu pertinenti e meno dispersivi.</p>
+            <p>
+              Foto, descrizione, localita e recapiti ben ordinati aiutano a ricevere contatti piu
+              pertinenti e meno dispersivi.
+            </p>
           </CardContent>
         </Card>
 
@@ -48,7 +59,10 @@ export default async function ListingSubmittedPage() {
             <CardTitle>Prossimo passo rapido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>Se devi continuare a pubblicare, puoi aprire subito un nuovo annuncio senza uscire dal workspace.</p>
+            <p>
+              Se devi continuare a pubblicare, puoi aprire subito un nuovo annuncio senza uscire dal
+              workspace.
+            </p>
           </CardContent>
         </Card>
       </div>

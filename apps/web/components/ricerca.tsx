@@ -26,13 +26,13 @@ import {
   AGE_FILTER_OPTIONS,
   BOOLEAN_FILTER_OPTIONS,
   BREEDS,
-  booleanOrNull,
-  booleanToFilterValue,
   type FilterOption,
   LISTING_TYPES,
   PRICE_FILTER_OPTIONS,
   SEX_OPTIONS,
   SORT_OPTIONS,
+  booleanOrNull,
+  booleanToFilterValue,
   buildPriceRangeLabel,
   optionLabel,
 } from '../features/search/filter-options';
@@ -45,6 +45,7 @@ import {
 } from '../features/search/listings-query';
 import type { GeographySuggestion } from '../lib/geography';
 import { fetchLocationSuggestions } from '../lib/geography';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 type AgeUnit = 'months' | 'years';
 type PopoverKey = 'breed' | 'comune' | 'listingType' | 'sex' | 'sort' | 'prezzo' | 'eta';
@@ -184,6 +185,8 @@ function Popover({
     width: null as number | null,
     maxAllowedWidth: maxWidth,
   });
+
+  useFocusTrap(popoverRef, open);
 
   useEffect(() => {
     setMounted(true);
@@ -356,6 +359,8 @@ function MobileFilterSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const selectedLabel = optionLabel(options, value);
+
+  useFocusTrap(rootRef, open);
 
   useEffect(() => {
     if (!open) {
@@ -1261,7 +1266,9 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   ) : (
                     <select
                       className="platform-select"
-                      onChange={(event) => setField('isSterilized', booleanOrNull(event.target.value))}
+                      onChange={(event) =>
+                        setField('isSterilized', booleanOrNull(event.target.value))
+                      }
                       value={booleanToFilterValue(search.isSterilized)}
                     >
                       {BOOLEAN_FILTER_OPTIONS.map((option) => (
@@ -1286,7 +1293,9 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   ) : (
                     <select
                       className="platform-select"
-                      onChange={(event) => setField('isVaccinated', booleanOrNull(event.target.value))}
+                      onChange={(event) =>
+                        setField('isVaccinated', booleanOrNull(event.target.value))
+                      }
                       value={booleanToFilterValue(search.isVaccinated)}
                     >
                       {BOOLEAN_FILTER_OPTIONS.map((option) => (
@@ -1311,7 +1320,9 @@ export default function Ricerca({ showHeader = true }: RicercaProps) {
                   ) : (
                     <select
                       className="platform-select"
-                      onChange={(event) => setField('hasMicrochip', booleanOrNull(event.target.value))}
+                      onChange={(event) =>
+                        setField('hasMicrochip', booleanOrNull(event.target.value))
+                      }
                       value={booleanToFilterValue(search.hasMicrochip)}
                     >
                       {BOOLEAN_FILTER_OPTIONS.map((option) => (

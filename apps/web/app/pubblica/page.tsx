@@ -1,8 +1,13 @@
 import { CardContent } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { ListingEditor } from '../../components/listing-editor';
 import { WorkspacePageShell } from '../../components/workspace-page-shell';
 import { requireWebSession } from '../../lib/auth';
 import { fetchListingBreeds } from '../../lib/listings';
+
+export const metadata: Metadata = {
+  title: 'Pubblica annuncio',
+};
 
 export default async function PublishPage() {
   await requireWebSession('/pubblica');

@@ -1,7 +1,10 @@
 import type { RequestUser } from '../src/auth/interfaces/request-user.interface';
 import { UserRole } from '../src/auth/roles.enum';
 import type { SearchListingsQueryDto } from '../src/listings/dto/search-listings-query.dto';
-import type { PublicListingSummaryRecord } from '../src/listings/listings.repository';
+import type {
+  PublicListingDetailRecord,
+  PublicListingSummaryRecord,
+} from '../src/listings/listings.repository';
 import { ListingsService } from '../src/listings/listings.service';
 import type { UploadListingMediaInput } from '../src/listings/models/listing-media.model';
 import type {
@@ -85,6 +88,27 @@ const buildSearchSummaryRecord = (
   ...overrides,
 });
 
+const buildPublishedDetailRecord = (
+  overrides: Partial<PublicListingDetailRecord> = {},
+): PublicListingDetailRecord => ({
+  ...buildSearchSummaryRecord(),
+  contactName: 'Gattile Demo',
+  contactPhone: '+390111234567',
+  contactEmail: 'contatti@gattile.demo',
+  media: [
+    {
+      id: 'media-2001',
+      mimeType: 'image/jpeg',
+      width: 1200,
+      height: 900,
+      position: 1,
+      isPrimary: true,
+      storageKey: 'listings/2001/media-2001.jpg',
+    },
+  ],
+  ...overrides,
+});
+
 describe('ListingsService', () => {
   const listingsRepositoryMock = {
     upsertOwnerUser: vi.fn(async () => '10'),
@@ -96,6 +120,8 @@ describe('ListingsService', () => {
       }),
     ),
     listMine: vi.fn(async () => [buildListingRecord()]),
+    listPublished: vi.fn(async () => [buildSearchSummaryRecord()]),
+    findPublishedById: vi.fn(async () => buildPublishedDetailRecord()),
     resolveLocationCentroid: vi.fn(
       async (locationIntent: SearchListingsQueryDto['locationIntent']) =>
         locationIntent
@@ -357,6 +383,42 @@ describe('ListingsService', () => {
     expect(listingsRepositoryMock.upsertOwnerUser).toHaveBeenCalledWith(baseUser);
     expect(listingsRepositoryMock.listMine).toHaveBeenCalledWith('10');
     expect(listings).toHaveLength(1);
+  });
+
+  it('returns public listing detail with media from the detail payload', async () => {
+    const detail = await service.getPublishedById('2001');
+
+    expect(listingsRepositoryMock.findPublishedById).toHaveBeenCalledWith('2001');
+    expect(detail?.media).toHaveLength(1);
+    expect(detail?.media[0]?.id).toBe('media-2001');
+    expect(detail?.media[0]?.objectUrl).toContain(
+      '/listing-originals/listings/2001/media-2001.jpg',
+    );
+  });
+
+  it('falls back to primary media when detail media collection is empty', async () => {
+    listingsRepositoryMock.findPublishedById.mockResolvedValueOnce(
+      buildPublishedDetailRecord({
+        primaryMedia: {
+          id: 'cover-2001',
+          mimeType: 'image/jpeg',
+          width: 900,
+          height: 700,
+          position: 1,
+          isPrimary: true,
+          storageKey: 'listings/2001/cover-2001.jpg',
+        },
+        media: [],
+      }),
+    );
+
+    const detail = await service.getPublishedById('2001');
+
+    expect(detail?.media).toHaveLength(1);
+    expect(detail?.media[0]?.id).toBe('cover-2001');
+    expect(detail?.media[0]?.objectUrl).toContain(
+      '/listing-originals/listings/2001/cover-2001.jpg',
+    );
   });
 
   it('searches public listings through OpenSearch first', async () => {

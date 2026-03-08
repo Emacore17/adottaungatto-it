@@ -51,7 +51,7 @@ export class MessagingService {
       listing.ownerProviderSubject === user.providerSubject ||
       listing.ownerUserId === actorUserId
     ) {
-      throw new BadRequestException('You cannot start a conversation on your own listing.');
+      throw new BadRequestException('Non puoi avviare una conversazione sul tuo stesso annuncio.');
     }
 
     const normalizedBody = this.normalizeMessageBody(body);
@@ -301,7 +301,8 @@ export class MessagingService {
       return null;
     }
 
-    const participantUserIds = await this.messagingRepository.listThreadParticipantUserIds(threadId);
+    const participantUserIds =
+      await this.messagingRepository.listThreadParticipantUserIds(threadId);
     const deletedAt = new Date().toISOString();
     const deleted = await this.messagingRepository.deleteThreadForEveryone(threadId, actorUserId);
     if (!deleted) {
@@ -327,7 +328,8 @@ export class MessagingService {
       return null;
     }
 
-    const participantUserIds = await this.messagingRepository.listThreadParticipantUserIds(threadId);
+    const participantUserIds =
+      await this.messagingRepository.listThreadParticipantUserIds(threadId);
     await this.messagingEventsService.publishTypingChanged(
       participantUserIds.filter((userId) => userId !== actorUserId),
       {
@@ -399,8 +401,7 @@ export class MessagingService {
       const latestMessageCreatedAt =
         await this.messagingRepository.findLatestMessageCreatedAtBySender(threadId, senderUserId);
       if (latestMessageCreatedAt) {
-        const elapsedSeconds =
-          (Date.now() - new Date(latestMessageCreatedAt).getTime()) / 1000;
+        const elapsedSeconds = (Date.now() - new Date(latestMessageCreatedAt).getTime()) / 1000;
         if (elapsedSeconds < this.env.MESSAGE_THREAD_SLOWMODE_SECONDS) {
           throw new HttpException(
             `Please wait ${this.env.MESSAGE_THREAD_SLOWMODE_SECONDS.toString()} seconds before sending another message in the same conversation.`,

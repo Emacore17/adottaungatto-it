@@ -1,210 +1,147 @@
-BUG REPORT — adottaungatto.it
-Analisi completa e step di correzione
-Data: 07 marzo 2026 | Tester: Analisi automatizzata
+# Bug Report — adottaungatto.it
 
-RIEPILOGO ESECUTIVO
-
-Sono state analizzate tutte le pagine e funzionalita raggiungibili del sito adottaungatto.it, sia come utente anonimo che come utente autenticato (utente.demo / demo1234). Di seguito sono elencati tutti i bug, le anomalie e i miglioramenti necessari, organizzati per area e priorita.
-
-Pagine testate:
-- / (Homepage)
-- /annunci (Catalogo)
-- /annunci/[id] (Dettaglio annuncio)
-- /annunci/[id]/modifica (Modifica annuncio)
-- /pubblica (Nuovo annuncio)
-- /login
-- /account (Dashboard utente)
-- /account/annunci (I miei annunci)
-- /account/annunci/[id] (Dettaglio personale)
-- /messaggi (Chat/Inbox)
-- /preferiti (Preferiti)
-- /account/impostazioni (Impostazioni)
-- /privacy, /termini, /contatti, /faq (Footer pages)
-- /annunci/9999 (Test 404)
-
-====================================================
-STEP 1 - BUG CRITICI (Alta Priorita)
-====================================================
-
-[BUG-01] PAGINA MODIFICA ANNUNCIO: REDIRECT ERRATO AL PRIMO CLIC
-Pagina: /account/annunci/[id] -> bottone "Modifica annuncio"
-Comportamento atteso: Click su "Modifica annuncio" dovrebbe navigare a /annunci/[id]/modifica
-Comportamento riscontrato: Al primo clic, la pagina carica brevemente /annunci/[id]/modifica poi redireziona automaticamente a /account. L'utente deve navigare direttamente via URL per accedere all'editor.
-Riproduzione: Login -> Account -> I miei annunci -> Apri dettaglio -> Modifica annuncio
-Fix: Rimuovere il redirect indesiderato in /annunci/[id]/modifica. Verificare la logica di autenticazione/redirect nella pagina di modifica che causa il ritorno a /account.
-
-[BUG-02] MESSAGGIO DI ERRORE IN INGLESE NELLA CHAT
-Pagina: /annunci/[id] (dettaglio annuncio del proprio annuncio)
-Comportamento atteso: Tutti i messaggi di errore devono essere in italiano
-Comportamento riscontrato: Quando un utente tenta di inviare un messaggio al proprio annuncio, appare il toast "You cannot start a conversation on your own listing." in inglese invece che in italiano.
-Fix: Tradurre il messaggio in italiano: "Non puoi avviare una conversazione sul tuo stesso annuncio."
-
-[BUG-03] ANNUNCIO IN ATTESA DI REVISIONE NON ACCESSIBILE DALL'ANTEPRIMA
-Pagina: /annunci/93/modifica -> bottone "Anteprima pubblica"
-Comportamento atteso: Il proprietario dell'annuncio dovrebbe poter vedere un'anteprima del proprio annuncio anche se in stato "In attesa di revisione"
-Comportamento riscontrato: Navigando a /annunci/93 (annuncio in attesa di revisione) si ottiene una pagina 404. Il link "Anteprima pubblica" nell'editor porta quindi a un 404.
-Fix: Permettere al proprietario autenticato di accedere all'anteprima del proprio annuncio in qualsiasi stato. Oppure sostituire "Anteprima pubblica" con "Anteprima (non pubblicata)" e mostrare una versione preview riservata al proprietario.
-
-[BUG-04] FOTO DELL'ANNUNCIO: DISCREPANZA TRA LISTA E DETTAGLIO
-Pagina: /annunci (lista) vs /annunci/33 (dettaglio)
-Comportamento atteso: Se un annuncio ha una foto, deve essere visibile sia nella lista che nel dettaglio
-Comportamento riscontrato: L'annuncio #33 (TEST adweq) mostra una foto di copertina nella lista degli annunci, ma nella pagina di dettaglio mostra "Nessuna foto disponibile".
-Fix: Verificare che il campo immagine di copertina venga correttamente letto e visualizzato nella pagina di dettaglio. Potrebbe essere un problema di mapping del campo cover o di caricamento delle foto nell'API del dettaglio.
-
-====================================================
-STEP 2 - BUG MEDI (Media Priorita)
-====================================================
-
-[BUG-05] CARICAMENTO LENTO DELLE PAGINE (BLANK SCREEN)
-Pagine: Tutte le pagine dell'applicazione
-Comportamento atteso: Le pagine dovrebbero caricarsi con uno skeleton/loading state visibile e poi mostrare il contenuto
-Comportamento riscontrato: Molte pagine mostrano uno schermo completamente bianco per 2-3 secondi prima di renderizzare il contenuto. Non e presente un indicatore di caricamento o skeleton coerente durante la fase di idratazione SSR.
-Pagine colpite: /account, /messaggi, /preferiti, /account/impostazioni, /pubblica, /annunci/[id]/modifica
-Fix: Implementare skeleton loaders visibili durante il caricamento. Verificare la configurazione SSR/SSG per ridurre i tempi di TTFB. Assicurarsi che il contenuto critico venga renderizzato server-side.
-
-[BUG-06] FILTRO TIPOLOGIA NELLA URL NON VIENE APPLICATO
-Pagina: /annunci?tipo=adozione (URL diretta con parametro tipo)
-Comportamento atteso: Il parametro URL "tipo" dovrebbe pre-selezionare il filtro tipologia e mostrare solo gli annunci di quel tipo
-Comportamento riscontrato: Navigando a /annunci?tipo=adozione, il filtro tipologia rimane su "Tutti i tipi" e il filtro non viene riconosciuto come attivo nel badge "filtri attivi". I risultati mostrano 19 annunci (con solo il filtro testo "test" attivo).
-Fix: Allineare il nome del parametro URL al nome usato internamente dal componente filtri. Verificare che tutti i parametri URL vengano letti correttamente al mount del componente.
-
-[BUG-07] MODULO PUBBLICA: TITLE DEL BROWSER MANCANTE / GENERICO
-Pagina: /pubblica, /login, /account e molte pagine area riservata
-Comportamento atteso: Il tag <title> di ogni pagina dovrebbe essere descrittivo e specifico
-Comportamento riscontrato: Il title della tab del browser mostra "adottaungatto-it" generico per molte pagine dell'area riservata (/login, /account, /pubblica etc.) invece di titoli specifici come "Accedi | adottaungatto.it", "Il tuo account | adottaungatto.it", "Pubblica annuncio | adottaungatto.it".
-Fix: Aggiungere metadata <title> appropriati per ciascuna pagina dell'area riservata.
-
-[BUG-08] RAZZA MANCANTE NELLA SELECT DEL MODULO PUBBLICA/MODIFICA
-Pagina: /pubblica e /annunci/[id]/modifica - sezione Profilo del gatto
-Comportamento atteso: La select RAZZA dovrebbe avere un'etichetta aria-label per l'accessibilita
-Comportamento riscontrato: La select RAZZA nel form di creazione/modifica annuncio non ha aria-label nel DOM, a differenza di SESSO, ETA e gli altri campi che ce l'hanno.
-Fix: Aggiungere aria-label="RAZZA" alla select della razza.
-
-[BUG-09] LINK "NORAMICA" NEL WORKSPACE NON HA NAVIGAZIONE CHIARA
-Pagina: /account e tutte le pagine workspace
-Comportamento atteso: Il tab "noramica" (che sembra essere il nome utente o "panoramica") dovrebbe avere un tooltip o label chiaro
-Comportamento riscontrato: Il tab "noramica" nel menu workspace e visibile ma il testo e troncato. Non e chiaro che si tratti della panoramica dell'account. Il testo completo dovrebbe essere "panoramica" ma viene mostrato solo "noramica" (la 'pa' iniziale sembra tagliata).
-Fix: Verificare il render del tab di panoramica. Il testo dovrebbe essere "Panoramica" con la P maiuscola. Assicurarsi che il testo non venga troncato.
-
-
+**Data analisi:** 08/03/2026  
+**Tester:** Analisi automatica completa (utente: utente.demo / demo1234)  
+**Pagine analizzate:** Home, Annunci, Annuncio dettaglio, Pubblica, Account, I miei annunci, Messaggi, Preferiti, Impostazioni, Modifica annuncio, Privacy, Termini, Contatti, FAQ, 404  
 
 ---
-STEP 3: MIGLIORAMENTI E BUG MINORI (Bassa Priorità)
 
-[BUG-10] FILTRO RICERCA: PARAMETRI URL NON AGGIORNATI CORRETTAMENTE
-Pagina: /annunci
-Comportamento atteso: I filtri applicati dovrebbero riflettersi nell'URL per permettere la condivisione della ricerca
-Comportamento riscontrato: Alcune combinazioni di filtri non aggiornano correttamente i parametri URL, rendendo impossibile condividere o salvare una ricerca specifica
-Fix: Assicurarsi che ogni modifica ai filtri aggiorni i query params nell'URL in modo sincrono.
+## BUG 01 — Skeleton loading prolungato su tutte le pagine
 
-[BUG-11] PAGINAZIONE: STATO DEI FILTRI NON PERSISTITO TRA LE PAGINE
-Pagina: /annunci?page=2 e successive
-Comportamento atteso: I filtri selezionati dovrebbero persistere durante la navigazione tra le pagine dei risultati
-Comportamento riscontrato: Navigando alla pagina 2 o successive, i filtri precedentemente applicati potrebbero non essere mantenuti correttamente
-Fix: Includere tutti i parametri dei filtri attivi nei link di paginazione.
-
-[BUG-12] FORM CONTATTA PROPRIETARIO: NESSUN FEEDBACK VISIVO DI CARICAMENTO
-Pagina: /annunci/[id] - form messaggi
-Comportamento atteso: Dopo aver cliccato "Invia messaggio", dovrebbe apparire un indicatore di caricamento mentre il messaggio viene inviato
-Comportamento riscontrato: Non c'e feedback visivo durante l'invio del messaggio
-Fix: Aggiungere uno stato di loading al bottone "Invia messaggio" durante la richiesta API.
-
-[BUG-13] PREFERITI: AGGIUNTA/RIMOZIONE SENZA CONFERMA
-Pagina: /annunci/[id] e /preferiti
-Comportamento atteso: L'azione di rimozione dai preferiti dovrebbe avere almeno un feedback visivo chiaro (cambio colore/icona)
-Comportamento riscontrato: Il bottone "Aggiungi ai preferiti" non mostra chiaramente lo stato attuale (aggiunto/non aggiunto) quando si ritorna sulla pagina
-Fix: Sincronizzare lo stato del bottone preferiti con i dati del server al caricamento della pagina.
-
-[BUG-14] PAGINA /account/annunci/[id]: NAVIGAZIONE DA LISTA AI MIEI ANNUNCI
-Pagina: /account/annunci e /account/annunci/[id]
-Comportamento atteso: Dal dettaglio di un proprio annuncio nel workspace, dovrebbe esserci un link "Torna ai miei annunci"
-Comportamento riscontrato: Non e presente una navigazione chiara per tornare alla lista dei propri annunci
-Fix: Aggiungere un breadcrumb o un link "< Torna ai miei annunci" nella pagina di dettaglio del workspace.
+**Pagine:** Tutte (/, /annunci, /annunci/:id, /privacy, /termini, /contatti, /faq, /account, /account/annunci, /account/impostazioni, /preferiti, /messaggi, /pubblica)  
+**Descrizione:** Al caricamento di ogni pagina, il contenuto principale non è visibile per 2–4 secondi: la pagina appare completamente bianca o con contenuto al 20% di opacità (skeleton). L'utente vede una pagina vuota prima che i dati vengano renderizzati.  
+**Comportamento atteso:** Il contenuto dovrebbe essere visibile immediatamente tramite SSR (Server-Side Rendering) o SSG (Static Site Generation), oppure mostrare un skeleton esplicito e riconoscibile invece di una pagina bianca.  
+**Da correggere:** Convertire le pagine da Client-Side Rendering a SSR/SSG con Next.js (`getServerSideProps` / `generateStaticParams`), oppure implementare un skeleton loader visualmente coerente invece di ridurre l'opacità dei contenuti reali.
 
 ---
-STEP 4: PROBLEMI DI ACCESSIBILITA E SEO
 
-[BUG-15] IMMAGINI SENZA ATTRIBUTO ALT
-Pagina: Homepage e /annunci (lista)
-Comportamento atteso: Tutte le immagini dovrebbero avere un attributo alt descrittivo per accessibilita e SEO
-Comportamento riscontrato: Le foto dei gatti nella lista annunci e nella homepage potrebbero non avere alt text descrittivo
-Fix: Aggiungere alt="[Nome gatto] - [razza] - disponibile per adozione" a ogni immagine degli annunci.
+## BUG 02 — Titolo del tab del browser errato su pagine footer e 404 generica
 
-[BUG-16] SKIP NAVIGATION LINK MANCANTE
-Pagina: Tutte le pagine
-Comportamento atteso: Dovrebbe esserci un link "Salta al contenuto principale" visibile al focus per utenti che navigano con tastiera
-Comportamento riscontrato: Non e presente nessun skip link
-Fix: Aggiungere un link nascosto "Salta al contenuto" come primo elemento del DOM, visibile solo al focus.
-
-[BUG-17] FORM /pubblica: MESSAGGI DI ERRORE NON ASSOCIATI AI CAMPI
-Pagina: /pubblica
-Comportamento atteso: I messaggi di errore di validazione dovrebbero essere associati ai rispettivi campi tramite aria-describedby
-Comportamento riscontrato: Gli errori di validazione appaiono ma potrebbero non essere correttamente collegati ai campi tramite attributi ARIA
-Fix: Aggiungere aria-describedby="error-[fieldname]" ai campi con errore e id corrispondente al messaggio di errore.
-
-[BUG-18] FOCUS TRAP NEI MODALI/DROPDOWN
-Pagina: Tutte le pagine con dropdown o modali
-Comportamento atteso: Il focus della tastiera dovrebbe rimanere all'interno di modali e dropdown quando aperti
-Comportamento riscontrato: Non verificato se il focus trap e implementato correttamente nei componenti interattivi
-Fix: Implementare focus trap per tutti i componenti overlay (modali, menu dropdown, drawer).
+**Pagine:** /privacy, /termini, /contatti, /faq, /pagina-inesistente (404 generica)  
+**Descrizione:** Il `<title>` della pagina mostrato nella tab del browser è sempre `"adottaungatto-it"` invece di contenere il nome specifico della pagina.  
+**Comportamento atteso:**
+- `/privacy` → `"Privacy | adottaungatto-it"`  
+- `/termini` → `"Termini d'uso | adottaungatto-it"`  
+- `/contatti` → `"Contatti | adottaungatto-it"`  
+- `/faq` → `"FAQ | adottaungatto-it"`  
+- 404 generica → `"404 – Pagina non trovata | adottaungatto-it"`  
+**Da correggere:** Aggiungere il metadata `title` corretto in ciascuna pagina tramite `export const metadata = { title: '...' }` in Next.js App Router.
 
 ---
-STEP 5: CASI DI TEST PER REGRESSIONE
 
-I seguenti scenari devono essere testati dopo ogni deploy:
+## BUG 03 — Filtri nella sidebar /annunci non funzionano
 
-1. AUTENTICAZIONE
-   - Login con credenziali corrette -> redirect a /account
-   - Login con credenziali errate -> messaggio di errore
-   - Logout -> redirect a homepage, sessione eliminata
-   - Accesso a pagine protette senza login -> redirect a /login
-
-2. ANNUNCI - CREAZIONE
-   - Creazione annuncio con tutti i campi obbligatori -> successo
-   - Creazione annuncio senza foto -> messaggio di errore appropriato
-   - Creazione annuncio con tutti i campi -> annuncio visibile in /account/annunci con stato "in attesa di revisione"
-
-3. ANNUNCI - RICERCA E FILTRI
-   - Ricerca per testo -> risultati filtrati
-   - Filtro per tipo (adozione/smarrito/trovato) -> risultati corretti
-   - Azzera filtri -> tutti i risultati ripristinati
-   - Paginazione -> navigazione corretta tra le pagine
-
-4. MESSAGGISTICA
-   - Invio messaggio a proprietario annuncio -> messaggio ricevuto in /messaggi
-   - Tentativo di messaggiare se stessi -> errore appropriato in italiano
-
-5. PREFERITI
-   - Aggiunta annuncio ai preferiti -> visibile in /preferiti
-   - Rimozione dai preferiti -> rimosso da /preferiti
-
-6. WORKSPACE
-   - Modifica annuncio -> dati aggiornati correttamente
-   - Anteprima annuncio in tutti gli stati -> accessibile
-   - Impostazioni profilo -> salvataggio corretto
+**Pagina:** /annunci  
+**Descrizione:** Selezionando un filtro dalla sidebar (es. TIPOLOGIA = "Adozione") e cliccando "Applica filtri", i risultati **non cambiano** e mostrano ancora tutti i 24 annunci inclusi quelli di tipologia diversa (es. "Stallo"). Anche l'URL non viene aggiornato con i parametri di ricerca.  
+**Comportamento atteso:** Cliccando "Applica filtri" l'URL dovrebbe aggiornarsi (es. `/annunci?tipologia=adozione`) e i risultati dovrebbero essere filtrati correttamente.  
+**Da correggere:** Il form dei filtri deve navigare aggiornando i query params nell'URL. Il componente deve leggere i `searchParams` dalla URL e passarli alla query API/backend.
 
 ---
-RIEPILOGO PRIORITA
 
-CRITICALE (da correggere immediatamente):
-- BUG-01: Redirect errato pagina modifica
-- BUG-02: Messaggio di errore in inglese
-- BUG-03: Anteprima annuncio in attesa non accessibile
-- BUG-04: Discrepanza foto lista/dettaglio
+## BUG 04 — I filtri nella sidebar non si pre-popolano dai query params URL
 
-ALTA PRIORITA:
-- BUG-05: Schermate bianche al caricamento
-- BUG-06: Filtri URL non funzionanti
-- BUG-07: Meta title mancanti per le pagine
-
-MEDIA PRIORITA:
-- BUG-08: Aria-label mancante su select RAZZA
-- BUG-09: Tab "noramica" troncato
-- BUG-10 a BUG-14: Miglioramenti UX
-
-BASSOA PRIORITA:
-- BUG-15 a BUG-18: Accessibilita e SEO
+**Pagina:** /annunci  
+**Descrizione:** Visitando `/annunci?cerca=gatto&tipologia=adozione&sesso=maschio` direttamente, i controlli della sidebar (dropdown TIPOLOGIA, SESSO, campo CERCA) non rispecchiano i valori presenti nell'URL. Visivamente i filtri appaiono tutti azzerati anche se l'URL contiene parametri.  
+**Comportamento atteso:** I filtri della sidebar devono essere inizializzati dai query params presenti nell'URL al momento del caricamento della pagina.  
+**Da correggere:** Al mount del componente filtri, leggere i `searchParams` e impostare i valori nei relativi `useState` / form controls.
 
 ---
-Note: Questa analisi e stata condotta in data 07 marzo 2026 su ambiente di sviluppo locale (localhost:3000). Si raccomanda di eseguire nuovamente i test su ambiente di staging/produzione dopo l'implementazione delle correzioni.
 
+## BUG 05 — Homepage: il carosello "In evidenza" mostra slide duplicate
+
+**Pagina:** /  
+**Descrizione:** Il carosello degli annunci in evidenza mostra gli stessi 3 annunci due volte (6 slide totali per 3 annunci reali). I punti di navigazione inferiori mostrano 6 dot ma in realtà i contenuti si ripetono ogni 3 slide.  
+**Comportamento atteso:** Ogni annuncio deve apparire una sola volta nel carosello. Se il numero di annunci è inferiore alle slide previste, il carosello non deve duplicare il contenuto.  
+**Da correggere:** Rimuovere la duplicazione nel rendering delle slide del carosello (probabile doppio `.map()` o `slides.concat(slides)` nel codice).
+
+---
+
+## BUG 06 — Homepage: sezione "Vicino a te" non richiede la geolocalizzazione
+
+**Pagina:** /  
+**Descrizione:** La sezione "Annunci più vicini a te" mostra solo il messaggio "Sto preparando gli annunci più vicini..." senza mai richiedere il permesso di geolocalizzazione all'utente, né mostrare un pulsante per attivarlo.  
+**Comportamento atteso:** La sezione dovrebbe mostrare un pulsante "Usa la mia posizione" che, al click, richiede il permesso di geolocalizzazione. Se il permesso viene negato, deve mostrare un messaggio esplicativo. In alternativa, non mostrare affatto questa sezione se la geolocalizzazione non è supportata.  
+**Da correggere:** Aggiungere un trigger esplicito per richiedere `navigator.geolocation.getCurrentPosition()` solo su azione dell'utente, non in modo automatico/silenzioso.
+
+---
+
+## BUG 07 — Pagina dettaglio annuncio: RAZZA mostra "Non specificata" invece di "Non di razza"
+
+**Pagina:** /annunci/33 (e probabilmente altri annunci con razza = "Non di razza")  
+**Descrizione:** Nel dettaglio dell'annuncio, il campo RAZZA mostra "Non specificata" mentre nella lista annunci lo stesso annuncio mostra "Non di razza". La denominazione è incoerente tra le due visualizzazioni.  
+**Comportamento atteso:** Il valore della razza deve essere consistente ovunque nel sito. Se il valore salvato è "Non di razza / non specificata", dovrebbe essere visualizzato uniformemente.  
+**Da correggere:** Unificare la logica di formattazione del campo razza. Definire un mapping centralizzato (es. `formatRazza(value)`) usato sia nella card lista che nella pagina dettaglio.
+
+---
+
+## BUG 08 — Pagina dettaglio annuncio: mancano le card STERILIZZATO, VACCINATO, MICROCHIP, COMPATIBILE BAMBINI, COMPATIBILE ANIMALI
+
+**Pagina:** /annunci/:id  
+**Descrizione:** Nel dettaglio dell'annuncio (es. /annunci/33), la sidebar informazioni mostra solo: PREZZO, NUMERO GATTI, RAZZA, SESSO, ETÀ. I campi STERILIZZATO, VACCINATO, MICROCHIP, COMPATIBILE CON BAMBINI, COMPATIBILE CON ALTRI ANIMALI sono completamente assenti dall'interfaccia pubblica.  
+**Comportamento atteso:** Tutti i campi compilati dell'annuncio dovrebbero essere visibili nella pagina di dettaglio. Se il campo è "Non specificato" si può omettere, ma se ha un valore (Sì/No) deve essere mostrato.  
+**Da correggere:** Aggiungere le card informative mancanti nel componente della sidebar del dettaglio annuncio. Mostrare il campo solo se il valore non è "Non specificato".
+
+---
+
+## BUG 09 — Pagina dettaglio annuncio: il modulo chat è visibile al proprietario dell'annuncio
+
+**Pagina:** /annunci/33 (annuncio dell'utente loggato)  
+**Descrizione:** Quando l'utente visualizza il proprio annuncio, la sezione "Contatta l'inserzionista in chat" con il campo di testo e il pulsante "Invia messaggio" è comunque visibile e interattiva. Il blocco dell'invio avviene solo lato server (errore "Non puoi avviare una conversazione sul tuo stesso annuncio"), ma la UI permette di digitare e tentare l'invio.  
+**Comportamento atteso:** Se l'utente è il proprietario dell'annuncio, la sezione chat deve essere sostituita con un blocco "Gestisci annuncio" contenente link a Modifica e link a I miei annunci.  
+**Da correggere:** Nel componente del dettaglio annuncio, confrontare `listing.owner_id` con l'`userId` della sessione corrente. Se coincidono, nascondere il form chat e mostrare i controlli di gestione.
+
+---
+
+## BUG 10 — Icona del toggle tema chiaro/scuro non rappresenta lo stato corrente
+
+**Pagine:** Tutte (navbar)  
+**Descrizione:** Il bottone per cambiare tema (chiaro/scuro) nella navbar mostra sempre un piccolo cerchio "o" come icona, indipendentemente dal tema attivo. L'icona non cambia tra sole (☀️) e luna (🌙) al toggle del tema.  
+**Comportamento atteso:** In modalità chiara il bottone deve mostrare un'icona luna (per passare al tema scuro). In modalità scura deve mostrare un'icona sole (per tornare al tema chiaro). L'icona deve essere visivamente riconoscibile.  
+**Da correggere:** Verificare che il componente Lucide/React-icons corretto sia importato. L'icona probabilmente non viene renderizzata perché il font delle icone non è caricato o il componente non viene trovato. Assicurarsi che `SunIcon` / `MoonIcon` siano correttamente importati e che il rendering condizionale funzioni.
+
+---
+
+## BUG 11 — Pagina 404 generica priva di link di navigazione
+
+**Pagina:** Qualsiasi URL inesistente (es. /pagina-che-non-esiste)  
+**Descrizione:** La pagina 404 generica (per rotte non esistenti del sito) mostra solo il testo "404 – Pagina non trovata" senza alcun link o bottone per tornare alla home o agli annunci.  
+**Comportamento atteso:** La pagina 404 deve includere almeno due CTA: "Torna alla home" e "Vai agli annunci" (come correttamente implementato nella 404 specifica per annunci non trovati).  
+**Da correggere:** Aggiungere i bottoni di navigazione nel componente `not-found.tsx` globale (la 404 per annunci non trovati funziona già correttamente — usarla come riferimento).
+
+---
+
+## BUG 12 — Il form di login non mostra i campi username/password direttamente
+
+**Pagina:** /login  
+**Descrizione:** La pagina di login non mostra un form con i campi username e password. Mostra solo un link "Continua con account" che redirige a Keycloak (Identity Provider esterno). L'utente non sa che deve inserire le credenziali su un dominio diverso (`localhost:8080`).  
+**Comportamento atteso:** La pagina di login dovrebbe spiegare chiaramente il flusso di autenticazione, specificare che si verrà reindirizzati a una pagina esterna, oppure (preferibilmente) incorporare il form di login Keycloak nella pagina stessa tramite OIDC implicit grant.  
+**Da correggere:** Aggiungere una descrizione informativa sul redirect a Keycloak nella pagina `/login`. In alternativa, valutare l'embedding del form Keycloak tramite Keycloak JS Adapter per un'esperienza seamless.
+
+---
+
+## BUG 13 — Pagina /account/annunci: "I miei annunci" conta 2 ma mostra il conteggio nella dashboard in modo non aggiornato
+
+**Pagina:** /account  
+**Descrizione:** La card "Annunci" nella dashboard account mostra il numero 2. Se un annuncio viene eliminato o aggiunto, questo numero potrebbe non aggiornarsi in tempo reale senza reload della pagina.  
+**Comportamento atteso:** Il conteggio degli annunci deve essere sempre sincronizzato con i dati reali.  
+**Da correggere:** Il dato del conteggio deve essere fetchato dinamicamente con SWR o `revalidatePath` di Next.js ogni volta che cambia il numero di annunci.
+
+---
+
+## BUG 14 — Form modifica annuncio: TIPOLOGIA mostra valore errato (Adozione) invece di Stallo per annuncio #33
+
+**Pagina:** /annunci/33/modifica  
+**Descrizione:** Il form di modifica dell'annuncio #33 ha TIPOLOGIA impostata su "Adozione", ma nella lista e nel dettaglio pubblico l'annuncio mostra il badge "Stallo". C'è un disallineamento tra il dato salvato nel DB e quello mostrato nel form di modifica.  
+**Comportamento atteso:** Il form di modifica deve pre-popolare TIPOLOGIA con il valore effettivamente salvato nel database ("Stallo").  
+**Da correggere:** Verificare che il fetch dei dati dell'annuncio nel form di modifica recuperi il campo `tipo` corretto e che il mapping tra il valore API e le opzioni del select sia consistente.
+
+---
+
+## BUG 15 — Impostazioni account: toggle "Informativa privacy" e "Termini" OBBLIGATORI appaiono come toggle interattivi
+
+**Pagina:** /account/impostazioni  
+**Descrizione:** I consensi obbligatori (Informativa privacy e Termini di servizio) vengono visualizzati come toggle/checkbox con aspetto identico al consenso opzionale "Comunicazioni marketing", ma sono disabilitati. Questo può confondere l'utente che potrebbe tentare di disattivarli senza capire perché non rispondono al click.  
+**Comportamento atteso:** I consensi obbligatori devono essere visivamente distinti da quelli facoltativi. Dovrebbero essere mostrati come badge/etichette statiche "Attivo e obbligatorio" senza il componente toggle interattivo.  
+**Da correggere:** Sostituire il toggle `disabled` per i consensi obbligatori con un elemento statico (es. badge verde "Attivo") che non suggerisca interattività.
+
+---

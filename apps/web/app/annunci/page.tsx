@@ -167,10 +167,12 @@ const parseListingsPageState = (
     sortCandidate && searchSortValues.has(sortCandidate as SearchSort)
       ? (sortCandidate as SearchSort)
       : defaultSort;
+  const listingType =
+    normalizeOptionalString(params?.listingType) ?? normalizeOptionalString(params?.tipo) ?? '';
 
   const filters: ListingsFilterValues = {
     q: normalizeOptionalString(params?.q) ?? '',
-    listingType: normalizeOptionalString(params?.listingType) ?? '',
+    listingType,
     sex: normalizeOptionalString(params?.sex) ?? '',
     breed: normalizeOptionalString(params?.breed) ?? '',
     isSterilized,
@@ -222,6 +224,41 @@ const parseListingsPageState = (
       referenceLon: filters.referenceLon,
     },
   };
+};
+
+const buildPaginationHrefFromSearchParams = (
+  params: Record<string, string | string[] | undefined> | undefined,
+  targetPage: number,
+) => {
+  const nextParams = new URLSearchParams();
+
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (key === 'page') {
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === 'string') {
+            nextParams.append(key, item);
+          }
+        }
+        continue;
+      }
+
+      if (typeof value === 'string') {
+        nextParams.set(key, value);
+      }
+    }
+  }
+
+  if (targetPage > 1) {
+    nextParams.set('page', String(targetPage));
+  }
+
+  const queryString = nextParams.toString();
+  return queryString ? `/annunci?${queryString}` : '/annunci';
 };
 
 const formatAgeMonthsLabel = (value: number) => {
@@ -409,7 +446,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   const totalPages = Math.max(1, Math.ceil(totalCount / listingsPerPage));
 
   if (page > totalPages) {
-    redirect(buildListingsHref(filters, { page: totalPages }));
+    redirect(buildPaginationHrefFromSearchParams(resolvedSearchParams, totalPages));
   }
 
   const activeFilterLabels = buildActiveFilterLabels(filters);
@@ -550,7 +587,9 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
           <SectionReveal delay={0.12}>
             <ListingsPagination
-              buildPageHref={(targetPage) => buildListingsHref(filters, { page: targetPage })}
+              buildPageHref={(targetPage) =>
+                buildPaginationHrefFromSearchParams(resolvedSearchParams, targetPage)
+              }
               currentPage={page}
               totalPages={totalPages}
             />

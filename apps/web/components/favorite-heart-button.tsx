@@ -37,36 +37,62 @@ export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
   );
 
   useEffect(() => {
-    const favoriteIds = new Set(readFavoriteIds());
-    setIsFavorite(favoriteIds.has(listingId));
+    let active = true;
 
-    void syncFavoriteIdsFromApi()
-      .then((syncedFavoriteIds) => {
-        setIsFavorite(syncedFavoriteIds.includes(listingId));
-      })
-      .catch(() => {
-        // Ignore transient sync errors: current local state remains usable.
-      });
+    const applyFavoriteIds = (favoriteIds: string[]) => {
+      if (!active) {
+        return;
+      }
+
+      setIsFavorite(favoriteIds.includes(listingId));
+    };
+
+    const syncFromApi = () => {
+      void syncFavoriteIdsFromApi()
+        .then((syncedFavoriteIds) => {
+          applyFavoriteIds(syncedFavoriteIds);
+        })
+        .catch(() => {
+          // Ignore transient sync errors: current local state remains usable.
+        });
+    };
+
+    applyFavoriteIds(readFavoriteIds());
+    syncFromApi();
 
     const onStorage = (event: StorageEvent) => {
       if (event.key !== FAVORITES_STORAGE_KEY) {
         return;
       }
 
-      const refreshedFavorites = new Set(readFavoriteIds());
-      setIsFavorite(refreshedFavorites.has(listingId));
+      applyFavoriteIds(readFavoriteIds());
     };
 
     const onFavoritesUpdated = () => {
-      const refreshedFavorites = new Set(readFavoriteIds());
-      setIsFavorite(refreshedFavorites.has(listingId));
+      applyFavoriteIds(readFavoriteIds());
+    };
+
+    const onWindowFocus = () => {
+      applyFavoriteIds(readFavoriteIds());
+      syncFromApi();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        onWindowFocus();
+      }
     };
 
     window.addEventListener('storage', onStorage);
     window.addEventListener(FAVORITES_UPDATED_EVENT, onFavoritesUpdated as EventListener);
+    window.addEventListener('focus', onWindowFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
+      active = false;
       window.removeEventListener('storage', onStorage);
       window.removeEventListener(FAVORITES_UPDATED_EVENT, onFavoritesUpdated as EventListener);
+      window.removeEventListener('focus', onWindowFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [listingId]);
 
@@ -84,16 +110,28 @@ export function FavoriteHeartButton({ listingId }: FavoriteHeartButtonProps) {
 
     void toggleFavoriteIdWithApi(listingId, wasFavorite)
       .then((result) => {
-        setIsFavorite(result.favoriteIds.includes(listingId));
+        const isNowFavorite = result.favoriteIds.includes(listingId);
+        setIsFavorite(isNowFavorite);
         if (!result.persistedToAccount && !hasShownGuestHint) {
           setToast({
             open: true,
-            title: 'Preferiti salvati in locale',
-            description: 'Accedi per sincronizzare i preferiti su tutti i dispositivi.',
+            title: isNowFavorite ? 'Aggiunto ai preferiti' : 'Rimosso dai preferiti',
+            description:
+              'Salvato solo su questo dispositivo. Accedi per sincronizzare i preferiti.',
             variant: 'info',
           });
           setHasShownGuestHint(true);
+          return;
         }
+
+        setToast({
+          open: true,
+          title: isNowFavorite ? 'Aggiunto ai preferiti' : 'Rimosso dai preferiti',
+          description: isNowFavorite
+            ? 'Puoi ritrovarlo nella pagina Preferiti.'
+            : 'Puoi aggiungerlo di nuovo quando vuoi.',
+          variant: 'success',
+        });
       })
       .catch(() => {
         setIsFavorite(wasFavorite);

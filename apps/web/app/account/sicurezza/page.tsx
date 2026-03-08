@@ -1,10 +1,15 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@adottaungatto/ui';
+import type { Metadata } from 'next';
 import { AccountPhoneVerificationForms } from '../../../components/account-phone-verification-forms';
 import { AccountSecuritySessionControls } from '../../../components/account-security-session-controls';
 import { LinkButton } from '../../../components/link-button';
 import { WorkspacePageShell } from '../../../components/workspace-page-shell';
 import { isWebSocialProviderEnabled, requireWebSession } from '../../../lib/auth';
 import { fetchMyLinkedIdentities, fetchMyProfile, fetchMySessions } from '../../../lib/users';
+
+export const metadata: Metadata = {
+  title: 'Sicurezza account',
+};
 
 interface AccountSecurityPageProps {
   searchParams?: Promise<{
@@ -117,11 +122,7 @@ const resolvePhoneVerificationMessage = (
     };
   }
 
-  if (
-    status === 'request_failed' ||
-    status === 'confirm_failed' ||
-    status === 'missing_phone'
-  ) {
+  if (status === 'request_failed' || status === 'confirm_failed' || status === 'missing_phone') {
     return {
       variant: 'warning',
       text: 'Operazione non completata. Controlla il numero e riprova.',
@@ -144,7 +145,10 @@ export default async function AccountSecurityPage({ searchParams }: AccountSecur
   const retryAfterSeconds = parsePositiveIntegerParam(
     getFirstParamValue(resolvedSearchParams?.retryAfterSeconds),
   );
-  const verificationMessage = resolvePhoneVerificationMessage(verificationStatus, retryAfterSeconds);
+  const verificationMessage = resolvePhoneVerificationMessage(
+    verificationStatus,
+    retryAfterSeconds,
+  );
   const phoneIsVerified = Boolean(profile.phoneVerifiedAt && profile.phoneE164);
   const roleLabel = session.user.roles.length > 0 ? session.user.roles.join(', ') : 'utente';
   const enabledSocialProviders = ['google'].filter((provider) =>
@@ -227,7 +231,8 @@ export default async function AccountSecurityPage({ searchParams }: AccountSecur
           <CardContent className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
             <p>Le aree private restano disponibili solo quando la tua sessione e valida.</p>
             <p>
-              L accesso in corso e collegato a <span className="font-medium text-[var(--color-text)]">{session.user.email}</span>.
+              L accesso in corso e collegato a{' '}
+              <span className="font-medium text-[var(--color-text)]">{session.user.email}</span>.
             </p>
           </CardContent>
         </Card>
@@ -237,8 +242,14 @@ export default async function AccountSecurityPage({ searchParams }: AccountSecur
             <CardTitle>Messaggi e notifiche</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-            <p>Le conversazioni restano nella tua inbox privata e le notifiche email sono gestibili dalle impostazioni.</p>
-            <p>Se condividi il dispositivo, fai logout quando hai finito di consultare messaggi e annunci.</p>
+            <p>
+              Le conversazioni restano nella tua inbox privata e le notifiche email sono gestibili
+              dalle impostazioni.
+            </p>
+            <p>
+              Se condividi il dispositivo, fai logout quando hai finito di consultare messaggi e
+              annunci.
+            </p>
           </CardContent>
         </Card>
 
